@@ -4,20 +4,20 @@ The issues for [Slice 1](../PRD.md#slice-1--benchmark-and-core-lookup), written 
 
 ## Order
 
-An issue moves from Backlog to Agent Todo only when everything it depends on is merged.
+Filed 2026-09-22 as WTR-24..33, with Linear "blocked by" relations mirroring this table. An issue moves from Backlog to Agent Todo only when everything it depends on is merged.
 
-| # | Issue | Depends on | Wave |
-|---|---|---|---|
-| 1 | Scaffold the app and the check gate | — | 1 |
-| 2 | Domain types and the Index schema | 1 | 2 |
-| 5 | Polite fetcher, known-path probe and Spec sniffing | 1 | 2 |
-| 3 | Benchmark format and runner | 2 | 3 |
-| 4 | Judge interface, Jev adapter and fake judge | 2 | 3 |
-| 6 | APIs.guru Source | 2 | 3 |
-| 7 | WebSearch interface and Brave adapter | 2 | 3 |
-| 9 | Benchmark seed: about 40 entries | 3 | 4 |
-| 7b | Tavily adapter | 7 | 4 |
-| 8 | Lookup pipeline and `POST /api/lookup` | 3, 4, 5, 6, 7 | 5 |
+| # | Linear | Issue | Depends on | Wave |
+|---|---|---|---|---|
+| 1 | WTR-24 | Scaffold the app and the check gate | — | 1 |
+| 2 | WTR-25 | Domain types and the Index schema | 1 | 2 |
+| 5 | WTR-28 | Polite fetcher, known-path probe and Spec sniffing | 1 | 2 |
+| 3 | WTR-26 | Benchmark format and runner | 2 | 3 |
+| 4 | WTR-27 | Judge interface, Jev adapter and fake judge | 2 | 3 |
+| 6 | WTR-29 | APIs.guru Source | 2 | 3 |
+| 7 | WTR-30 | WebSearch interface and Brave adapter | 2 | 3 |
+| 9 | WTR-33 | Benchmark seed: about 40 entries | 3 | 4 |
+| 7b | WTR-31 | Tavily adapter | 7 | 4 |
+| 8 | WTR-32 | Lookup pipeline and `POST /api/lookup` | 3, 4, 5, 6, 7 | 5 |
 
 After #8 merges, the Slice 1 acceptance run (`pnpm bench` live, reviewed entries only) and threshold tuning are done by hand, not by the factory.
 
