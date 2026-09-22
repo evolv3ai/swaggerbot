@@ -2229,6 +2229,107 @@ describe("lookup with several API Versions", () => {
   });
 });
 
+describe("lookup with a deprecated Spec", () => {
+  const API_ID = "novvy.test/novvy-api";
+  const DEPRECATED = "DEPRECATED: Novvy API. Use /openapi.{json,yaml} instead.";
+  const API_JSON = "https://api.novvy.test/api-json";
+  const OPENAPI = "https://api.novvy.test/openapi.json";
+
+  /** A known-path hit serving API Version 3.19.2 with this `info`. */
+  const hit = (
+    url: string,
+    info: { title: string; description?: string },
+  ): KnownPathHit => {
+    const bytes = new TextEncoder().encode(
+      JSON.stringify({
+        openapi: "3.0.3",
+        info: { ...info, version: "3.19.2" },
+        paths: { "/events": { get: { tags: ["events"] } } },
+      }),
+    );
+    const sniff = sniffSpec(bytes, "application/json");
+    if (!sniff) throw new Error("not a Spec");
+    return { url, bytes, sniff, robotsDisallowed: false };
+  };
+
+  /** A Lookup whose only Specs are these known-path hits, in order. */
+  function setupHits(hits: KnownPathHit[]) {
+    const guru: ApiCandidate = {
+      key: "novvy.test",
+      apiId: API_ID,
+      name: "Novvy API",
+      vendor: { id: "novvy.test", name: "Novvy", domain: "novvy.test" },
+      preferredVersion: "3.19.2",
+      mirrorUrl: "http://apis-guru.test/novvy.test/openapi.json",
+      originUrls: [],
+      possiblyOfficialUrls: [],
+      updated: "2024-01-01T00:00:00.000Z",
+    };
+    return createLookup({
+      db: openDb(join(dir, "index.db")),
+      judge: new FakeJudge({
+        whichApi: {
+          novvy: {
+            probabilities: { [API_ID]: 0.95, none: 0.05 },
+            confidence: 0.95,
+          },
+        },
+        defaults: { specDescribesApi: yes },
+      }),
+      apisGuru: {
+        findCandidates: async () => [guru],
+        findVendorApis: async () => [guru],
+      },
+      webSearch: null,
+      fetcher: createFetcher({
+        allowPrivate: true,
+        lookup: fixtureLookup,
+        minIntervalMs: 0,
+      }),
+      now: () => new Date(NOW),
+      probe: async () => hits,
+      crawl: fakeCrawl().crawl,
+    });
+  }
+
+  const currentUrl = (outcome: Outcome) =>
+    outcome.outcome === "Resolved" ? outcome.sources[0]?.url : outcome.outcome;
+
+  it.each([
+    ["the deprecated Spec first", [API_JSON, OPENAPI]],
+    ["the deprecated Spec last", [OPENAPI, API_JSON]],
+  ])(
+    "does not answer a Spec its Vendor marks deprecated as Current (%s)",
+    async (_, order) => {
+      const title = (url: string) =>
+        url === API_JSON ? DEPRECATED : "Novvy API";
+      const lookup = setupHits(
+        order.map((url) => hit(url, { title: title(url) })),
+      );
+
+      expect(currentUrl(await ask(lookup, "novvy"))).toBe(OPENAPI);
+    },
+  );
+
+  it("answers a deprecated Spec when it is the only one", async () => {
+    const lookup = setupHits([hit(API_JSON, { title: DEPRECATED })]);
+
+    expect(currentUrl(await ask(lookup, "novvy"))).toBe(API_JSON);
+  });
+
+  it("does not count a mention of deprecated past the start of the description", async () => {
+    const description =
+      "The Novvy API sends notifications across every channel your product uses; some endpoints are deprecated.";
+    expect(description.indexOf("deprecated")).toBeGreaterThan(80);
+    const lookup = setupHits([
+      hit(OPENAPI, { title: "Novvy API", description }),
+      hit(API_JSON, { title: "Novvy API" }),
+    ]);
+
+    expect(currentUrl(await ask(lookup, "novvy"))).toBe(OPENAPI);
+  });
+});
+
 describe("provenanceOf", () => {
   const stripe = { id: "stripe.com", name: "stripe.com", domain: "stripe.com" };
 
