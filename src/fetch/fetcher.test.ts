@@ -233,6 +233,56 @@ describe("fetchUrl", () => {
   });
 });
 
+describe("robots-disallowed blanket", () => {
+  const url = () => `${server.origin("api.test")}/swagger.v1.json`;
+
+  it("is true when robots.txt disallows the site root", async () => {
+    server.send("api.test", "/robots.txt", "User-agent: *\nDisallow: /\n", "");
+
+    const error = await fetchError(testFetcher().fetchUrl(url()));
+
+    expect(error.kind).toBe("robots-disallowed");
+    expect(error.blanket).toBe(true);
+  });
+
+  it("is false when robots.txt disallows the path but allows the root", async () => {
+    // Codeberg's shape: a list of disallowed paths, the site root allowed.
+    server.send(
+      "api.test",
+      "/robots.txt",
+      "User-agent: *\nDisallow: /swagger.*.json\nDisallow: /api/\n",
+      "",
+    );
+
+    const error = await fetchError(testFetcher().fetchUrl(url()));
+
+    expect(error.kind).toBe("robots-disallowed");
+    expect(error.blanket).toBe(false);
+  });
+
+  it("is false when robots.txt answers 5xx", async () => {
+    server.route("api.test", "/robots.txt", (_req, res) => {
+      res.writeHead(503).end();
+    });
+
+    const error = await fetchError(testFetcher().fetchUrl(url()));
+
+    expect(error.kind).toBe("robots-disallowed");
+    expect(error.blanket).toBe(false);
+  });
+
+  it("is false when robots.txt cannot be fetched", async () => {
+    server.route("api.test", "/robots.txt", (req) => {
+      req.socket.destroy();
+    });
+
+    const error = await fetchError(testFetcher().fetchUrl(url()));
+
+    expect(error.kind).toBe("robots-disallowed");
+    expect(error.blanket).toBe(false);
+  });
+});
+
 describe("fetchUrl with ignoreRobots (ADR 0003)", () => {
   const disallowAll = (host: string) =>
     server.send(host, "/robots.txt", "User-agent: *\nDisallow: /\n", "");

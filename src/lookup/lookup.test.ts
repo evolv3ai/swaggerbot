@@ -63,8 +63,11 @@ function setup(
     webSearch,
     fetcher,
     now: () => new Date(NOW),
-    probe: (domain) =>
-      probeKnownPaths(`${domain}:${server.port}`, fetcher, { scheme: "http" }),
+    probe: (domain, opts) =>
+      probeKnownPaths(`${domain}:${server.port}`, fetcher, {
+        ...opts,
+        scheme: "http",
+      }),
     ...(github ? { github } : {}),
   });
   return { judge, lookup };
@@ -202,6 +205,53 @@ describe("lookup", () => {
         { id: "acme.test/api", name: "Acme API", vendor: "acme.test" },
       ],
     });
+  });
+
+  it("answers Resolved from a known path on a host whose robots.txt shuts it (ADR 0003)", async () => {
+    // api.val.town: `Disallow: /` for the whole app host, Spec at /openapi.json.
+    server.send(
+      "api.acme.test",
+      "/robots.txt",
+      "User-agent: *\nDisallow: /\n",
+      "",
+    );
+    server.send(
+      "api.acme.test",
+      "/openapi.json",
+      spec("Acme API"),
+      "application/json",
+    );
+    const search = new FakeWebSearch([
+      {
+        url: `${server.origin("www.acme.test")}/docs`,
+        title: "Acme API Reference",
+        snippet: "Build with Acme.",
+      },
+    ]);
+    const { lookup } = setup(
+      {
+        whichApi: {
+          acme: {
+            probabilities: { "acme.test/api": 0.9, none: 0.1 },
+            confidence: 0.9,
+          },
+        },
+        specDescribesApi: { "Acme API": yes },
+      },
+      search,
+    );
+
+    const outcome = await ask(lookup, "acme");
+
+    const url = `${server.origin("api.acme.test")}/openapi.json`;
+    expect(outcome).toMatchObject({
+      outcome: "Resolved",
+      provenance: "Official",
+      sources: [{ url, provenance: "Official" }],
+    });
+    expect(outcome.diagnostics).toEqual([
+      `robots.txt on api.acme.test:${server.port} disallowed ${url}; ADR 0003 allowed the single fetch`,
+    ]);
   });
 
   it("merges portal Candidates whose domains redirect to one Vendor", async () => {

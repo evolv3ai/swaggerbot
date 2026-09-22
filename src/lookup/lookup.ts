@@ -8,7 +8,11 @@ import {
 import type { Outcome } from "~/domain/outcome";
 import type { Provenance } from "~/domain/provenance";
 import { FetchError, type Fetcher } from "~/fetch/fetcher";
-import { type KnownPathHit, probeKnownPaths } from "~/fetch/known-paths";
+import {
+  type KnownPathHit,
+  type ProbeOptions,
+  probeKnownPaths,
+} from "~/fetch/known-paths";
 import { type SniffResult, sniffSpec } from "~/fetch/sniff";
 import type { Db } from "~/index-store/db";
 import { createRepo, normalizeName, specIdOf } from "~/index-store/repo";
@@ -52,7 +56,7 @@ export type LookupDeps = {
    * Checks a Vendor's domain for Specs at well-known paths. Defaults to
    * `probeKnownPaths` over https; tests point it at a fixture server.
    */
-  probe?: (domain: string) => Promise<KnownPathHit[]>;
+  probe?: (domain: string, opts: ProbeOptions) => Promise<KnownPathHit[]>;
   /**
    * Checks the repo behind a raw.githubusercontent.com origin URL: archived
    * repos are skipped, non-default branches rewritten. Absent, such URLs are
@@ -123,7 +127,9 @@ export function createLookup(deps: LookupDeps): Lookup {
   const t: Thresholds = { ...DEFAULT_THRESHOLDS, ...deps.thresholds };
   const now = deps.now ?? (() => new Date());
   const probe =
-    deps.probe ?? ((domain: string) => probeKnownPaths(domain, fetcher));
+    deps.probe ??
+    ((domain: string, opts: ProbeOptions) =>
+      probeKnownPaths(domain, fetcher, opts));
 
   return async function lookup({ name }) {
     const diagnostics: string[] = [];
@@ -439,7 +445,8 @@ export function createLookup(deps: LookupDeps): Lookup {
     if (!settled()) {
       let hits: KnownPathHit[] = [];
       try {
-        hits = await probe(choice.vendor.domain);
+        // The Vendor's own domain: ADR 0003 allows a shut host's Spec once.
+        hits = await probe(choice.vendor.domain, { allowBlanketRobots: true });
       } catch (error) {
         diagnostics.push(`known paths: ${message(error)}`);
       }
@@ -447,6 +454,7 @@ export function createLookup(deps: LookupDeps): Lookup {
         `known paths on ${choice.vendor.domain} (${hits.length} found)`,
       );
       for (const hit of hits) {
+        if (hit.robotsDisallowed) diagnostics.push(robotsDiagnostic(hit.url));
         await consider(
           hit.url,
           hit.bytes,
@@ -694,4 +702,9 @@ function uniqueById(choices: ApiChoice[]): ApiChoice[] {
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/** The diagnostic for a Spec fetched once despite its host's robots.txt. */
+function robotsDiagnostic(url: string): string {
+  return `robots.txt on ${new URL(url).host} disallowed ${url}; ADR 0003 allowed the single fetch`;
 }

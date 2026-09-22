@@ -37,18 +37,25 @@ export class FetchError extends Error {
   readonly url: string;
   /** The HTTP status, for `http-error`. */
   readonly status?: number;
+  /**
+   * For `robots-disallowed`: true when the host's own parsed robots.txt also
+   * disallows the site root, so the whole host is shut. False otherwise,
+   * including when robots.txt could not be fetched (5xx or unreachable).
+   */
+  readonly blanket: boolean;
 
   constructor(
     kind: FetchErrorKind,
     url: string,
     message: string,
-    opts: { status?: number; cause?: unknown } = {},
+    opts: { status?: number; blanket?: boolean; cause?: unknown } = {},
   ) {
     super(`${kind}: ${message} (${url})`, { cause: opts.cause });
     this.name = "FetchError";
     this.kind = kind;
     this.url = url;
     this.status = opts.status;
+    this.blanket = opts.blanket ?? false;
   }
 }
 
@@ -71,8 +78,9 @@ export type FetchUrlOptions = {
   signal?: AbortSignal;
   /**
    * Skip the robots.txt refusal for this request and its redirects (ADR 0003).
-   * Only for a single Spec document linked from an allowed Vendor page; every
-   * other guard still applies. Default false.
+   * Only for a single Spec document linked from an allowed Vendor page, or at
+   * a known path on the Vendor's own API host; every other guard still
+   * applies. Default false.
    */
   ignoreRobots?: boolean;
 };
@@ -246,9 +254,17 @@ export function createFetcher(opts: FetcherOptions = {}): Fetcher {
     }
   }
 
-  /** Whether robots.txt allows the URL, from the cached verdict per origin. */
-  async function robotsAllows(url: URL): Promise<boolean> {
-    if (url.pathname === "/robots.txt") return true;
+  /**
+   * Whether robots.txt allows the URL, from the cached verdict per origin, and
+   * whether it also disallows the site root. Only a robots.txt actually fetched
+   * and parsed can be blanket; the synthetic "disallow-all" of an unreachable
+   * one is not.
+   */
+  async function robotsCheck(
+    url: URL,
+  ): Promise<{ allowed: boolean; blanket: boolean }> {
+    if (url.pathname === "/robots.txt")
+      return { allowed: true, blanket: false };
     const origin = url.origin;
     let entry = robotsCache.get(origin);
     if (!entry || entry.expiresAt <= Date.now()) {
@@ -266,11 +282,12 @@ export function createFetcher(opts: FetcherOptions = {}): Fetcher {
       robotsCache.delete(origin);
       throw error;
     }
-    return verdict === "allow-all"
-      ? true
-      : verdict === "disallow-all"
-        ? false
-        : verdict.isAllowed(url.href, ROBOTS_AGENT) !== false;
+    if (verdict === "allow-all") return { allowed: true, blanket: false };
+    if (verdict === "disallow-all") return { allowed: false, blanket: false };
+    return {
+      allowed: verdict.isAllowed(url.href, ROBOTS_AGENT) !== false,
+      blanket: verdict.isAllowed(`${origin}/`, ROBOTS_AGENT) === false,
+    };
   }
 
   return {
@@ -285,12 +302,14 @@ export function createFetcher(opts: FetcherOptions = {}): Fetcher {
       let robotsDisallowed = false;
 
       for (let hop = 0; ; hop++) {
-        if (!(await robotsAllows(url))) {
+        const robots = await robotsCheck(url);
+        if (!robots.allowed) {
           if (!ignoreRobots) {
             throw new FetchError(
               "robots-disallowed",
               url.href,
               "robots.txt disallows it",
+              { blanket: robots.blanket },
             );
           }
           robotsDisallowed = true;

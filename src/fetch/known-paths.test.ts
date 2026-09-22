@@ -255,6 +255,132 @@ describe("probeKnownPaths", () => {
   });
 });
 
+describe("probeKnownPaths on a host whose robots.txt disallows it (ADR 0003)", () => {
+  const disallowAll = (host: string) =>
+    server.send(host, "/robots.txt", "User-agent: *\nDisallow: /\n", "");
+
+  it("fetches the Spec once on a host that disallows everything", async () => {
+    // api.val.town's shape: `Disallow: /` for the whole app host.
+    disallowAll("api.vendor.test");
+    server.send(
+      "api.vendor.test",
+      "/openapi.json",
+      spec("Shut"),
+      "application/json",
+    );
+
+    const hits = await probeKnownPaths(
+      `vendor.test:${server.port}`,
+      fetcher(),
+      { scheme: "http", allowBlanketRobots: true },
+    );
+
+    expect(
+      hits.map((h) => ({ url: h.url, robotsDisallowed: h.robotsDisallowed })),
+    ).toEqual([
+      {
+        url: `${server.origin("api.vendor.test")}/openapi.json`,
+        robotsDisallowed: true,
+      },
+    ]);
+  });
+
+  it("yields nothing from such a host by default", async () => {
+    disallowAll("api.vendor.test");
+    server.send(
+      "api.vendor.test",
+      "/openapi.json",
+      spec("Shut"),
+      "application/json",
+    );
+
+    const hits = await probeKnownPaths(
+      `vendor.test:${server.port}`,
+      fetcher(),
+      { scheme: "http" },
+    );
+
+    expect(hits).toEqual([]);
+    expect(
+      server.requests.filter(
+        (r) => r.host === "api.vendor.test" && r.path !== "/robots.txt",
+      ),
+    ).toEqual([]);
+  });
+
+  it("honours Codeberg's list of disallowed paths even with allowBlanketRobots", async () => {
+    // codeberg.org disallows /swagger.*.json and allows the site root;
+    // ADR 0003 keeps Codeberg as NoSpec.
+    server.send(
+      "vendor.test",
+      "/robots.txt",
+      "User-agent: *\nDisallow: /swagger.*.json\n",
+      "",
+    );
+    server.send(
+      "vendor.test",
+      "/swagger.v1.json",
+      spec("Codeberg"),
+      "application/json",
+    );
+    server.send(
+      "vendor.test",
+      "/apis.json",
+      JSON.stringify({
+        apis: [{ properties: [{ type: "Swagger", url: "/swagger.v1.json" }] }],
+      }),
+      "application/json",
+    );
+
+    const hits = await probeKnownPaths(
+      `vendor.test:${server.port}`,
+      fetcher(),
+      { scheme: "http", allowBlanketRobots: true },
+    );
+
+    expect(hits).toEqual([]);
+    expect(server.requests).not.toContainEqual(
+      expect.objectContaining({ path: "/swagger.v1.json" }),
+    );
+  });
+
+  it("retries a path at most once, and never on a dead host", async () => {
+    const asked: { url: string; ignoreRobots: boolean }[] = [];
+    const shutFetcher: Fetcher = {
+      async fetchUrl(url, opts) {
+        asked.push({ url, ignoreRobots: opts?.ignoreRobots ?? false });
+        if (new URL(url).hostname.startsWith("docs.")) {
+          throw new FetchError("network", url, "fake");
+        }
+        if (!opts?.ignoreRobots) {
+          throw new FetchError("robots-disallowed", url, "fake", {
+            blanket: true,
+          });
+        }
+        throw new FetchError("http-error", url, "fake", { status: 404 });
+      },
+    };
+
+    await probeKnownPaths("vendor.test", shutFetcher, {
+      allowBlanketRobots: true,
+    });
+
+    const onApi = asked.filter((a) => a.url.startsWith("https://api.vendor."));
+    expect(onApi).toHaveLength(KNOWN_PATHS.length * 2);
+    for (const path of KNOWN_PATHS) {
+      expect(
+        onApi.filter((a) => a.url === `https://api.vendor.test${path}`),
+      ).toEqual([
+        { url: `https://api.vendor.test${path}`, ignoreRobots: false },
+        { url: `https://api.vendor.test${path}`, ignoreRobots: true },
+      ]);
+    }
+    expect(asked.filter((a) => a.url.startsWith("https://docs."))).toEqual([
+      { url: "https://docs.vendor.test/openapi.json", ignoreRobots: false },
+    ]);
+  });
+});
+
 describe("apisJsonSpecUrls", () => {
   it("resolves OpenAPI and Swagger property URLs against the document", () => {
     const doc = JSON.stringify({
