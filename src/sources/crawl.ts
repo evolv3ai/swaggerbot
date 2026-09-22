@@ -16,6 +16,16 @@ export type CrawlHit = {
   robotsDisallowed: boolean;
 };
 
+export type CrawlResult = {
+  hits: CrawlHit[];
+  /**
+   * Registrable domains linked from a crawled page but not crawled, since
+   * the crawl stays on the start URL's: first seen first, at most 3. The
+   * Lookup probes known paths on them (`docs.machines.dev` from `fly.io`).
+   */
+  offHostHosts: string[];
+};
+
 export type CrawlOptions = {
   startUrl: string;
   api: ApiRef;
@@ -37,6 +47,7 @@ const MAX_DEPTH = 2;
 const MAX_LINKS_PER_PAGE = 60;
 const MAX_TEXT = 200;
 const MAX_CONTEXT = 300;
+const MAX_OFF_HOST_HOSTS = 3;
 const SPEC_PATH = /\.(json|ya?ml)$|openapi|swagger|api-spec|api_spec|api-docs/i;
 
 /**
@@ -62,9 +73,10 @@ type Page = {
  * HTML pages for links, asks the Judge once per page which links look like
  * the API's Spec, fetches the likely Spec documents and follows the likely
  * pages on the same registrable domain, up to `maxPages` pages, two links
- * deep, inside `budgetMs`. Never throws: failures skip a link or a page.
+ * deep, inside `budgetMs`, and reports the other registrable domains it saw
+ * linked. Never throws: failures skip a link or a page.
  */
-export async function crawlForSpecs(opts: CrawlOptions): Promise<CrawlHit[]> {
+export async function crawlForSpecs(opts: CrawlOptions): Promise<CrawlResult> {
   const threshold = opts.threshold ?? DEFAULT_THRESHOLD;
   const maxPages = opts.maxPages ?? DEFAULT_MAX_PAGES;
   const signal = AbortSignal.timeout(opts.budgetMs ?? DEFAULT_BUDGET_MS);
@@ -72,6 +84,7 @@ export async function crawlForSpecs(opts: CrawlOptions): Promise<CrawlHit[]> {
   const home = registrableDomain(opts.startUrl);
 
   const hits: CrawlHit[] = [];
+  const offHostHosts: string[] = [];
   const seen = new Set<string>([normalize(opts.startUrl)]);
   const queue: Page[] = [{ url: opts.startUrl, depth: 0, from: opts.startUrl }];
   let pagesFetched = 0;
@@ -107,6 +120,16 @@ export async function crawlForSpecs(opts: CrawlOptions): Promise<CrawlHit[]> {
       new TextDecoder().decode(res.bytes),
       res.finalUrl,
     ).filter((link) => !seen.has(normalize(link.url)));
+    for (const link of links) {
+      const domain = registrableDomain(link.url);
+      if (
+        domain !== null &&
+        domain !== home &&
+        offHostHosts.length < MAX_OFF_HOST_HOSTS &&
+        !offHostHosts.includes(domain)
+      )
+        offHostHosts.push(domain);
+    }
     const specs: SpecLink[] = [];
     const pages: SpecLink[] = [];
     for (const link of links) {
@@ -160,7 +183,7 @@ export async function crawlForSpecs(opts: CrawlOptions): Promise<CrawlHit[]> {
       }
     }
   }
-  return hits;
+  return { hits, offHostHosts };
 }
 
 /**

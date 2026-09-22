@@ -68,7 +68,7 @@ describe("crawlForSpecs", () => {
     page("docs.acme.test", "/api", `<a href="${specUrl}">OpenAPI spec</a>`);
     specAt("www.acme.test", "/api-spec.json");
 
-    const hits = await crawlForSpecs({
+    const { hits } = await crawlForSpecs({
       startUrl: start,
       api,
       fetcher: fetcher(),
@@ -97,7 +97,7 @@ describe("crawlForSpecs", () => {
     specAt("docs.acme.test", "/two.json", "Two");
     specAt("docs.acme.test", "/three.json", "Three");
 
-    const hits = await crawlForSpecs({
+    const { hits } = await crawlForSpecs({
       startUrl: `${o}/`,
       api,
       fetcher: fetcher(),
@@ -128,7 +128,7 @@ describe("crawlForSpecs", () => {
     page("community.other.test", "/guide", "<p>nothing</p>");
 
     const judge = judgeSaying({ [offSpec]: 0.9, [offPage]: 0.9 });
-    const hits = await crawlForSpecs({
+    const { hits } = await crawlForSpecs({
       startUrl: start,
       api,
       fetcher: fetcher(),
@@ -165,7 +165,7 @@ describe("crawlForSpecs", () => {
     specAt("docs.acme.test", "/high.json", "High");
     page("docs.acme.test", "/lowpage", "");
 
-    const hits = await crawlForSpecs({
+    const { hits } = await crawlForSpecs({
       startUrl: `${o}/`,
       api,
       fetcher: fetcher(),
@@ -223,7 +223,7 @@ describe("crawlForSpecs", () => {
       return areSpecLinks(a, links);
     };
 
-    const hits = await crawlForSpecs({
+    const { hits } = await crawlForSpecs({
       startUrl: `${o}/`,
       api,
       fetcher: fetcher(),
@@ -276,7 +276,7 @@ describe("crawlForSpecs", () => {
     specAt("docs.acme.test", "/late.json");
 
     const began = Date.now();
-    const hits = await crawlForSpecs({
+    const { hits } = await crawlForSpecs({
       startUrl: `${o}/`,
       api,
       fetcher: fetcher(),
@@ -316,7 +316,7 @@ describe("crawlForSpecs", () => {
       return areSpecLinks(a, links);
     };
 
-    const hits = await crawlForSpecs({
+    const { hits } = await crawlForSpecs({
       startUrl: `${o}/`,
       api,
       fetcher: fetcher(),
@@ -352,7 +352,7 @@ describe("crawlForSpecs", () => {
     specAt("api.val.test", "/openapi.json", "Val");
     page("docs.val.test", "/private/guide", "");
 
-    const hits = await crawlForSpecs({
+    const { hits } = await crawlForSpecs({
       startUrl: start,
       api,
       fetcher: fetcher(),
@@ -375,7 +375,7 @@ describe("crawlForSpecs", () => {
     );
     specAt("docs.val.test", "/openapi.json");
 
-    const hits = await crawlForSpecs({
+    const { hits } = await crawlForSpecs({
       startUrl: `${o}/`,
       api,
       fetcher: withoutRobotsException(fetcher()),
@@ -396,7 +396,7 @@ describe("crawlForSpecs", () => {
     );
     const judge = new FakeJudge();
 
-    const hits = await crawlForSpecs({
+    const { hits } = await crawlForSpecs({
       startUrl: start,
       api,
       fetcher: fetcher(),
@@ -418,7 +418,7 @@ describe("crawlForSpecs", () => {
     );
     specAt("app.acme.test", "/api/docs/json", "Acme");
 
-    const hits = await crawlForSpecs({
+    const { hits } = await crawlForSpecs({
       startUrl: `${o}/docs`,
       api,
       fetcher: fetcher(),
@@ -432,6 +432,37 @@ describe("crawlForSpecs", () => {
     });
   });
 
+  it("reports the off-host domains it saw, deduplicated, first seen first, at most 3", async () => {
+    const o = server.origin("fly.test");
+    page(
+      "fly.test",
+      "/docs/",
+      `<a href="${server.origin("docs.machines.test")}/#intro">Machines API</a>
+       <a href="/docs/more">More</a>
+       <a href="${server.origin("www.fly.test")}/pricing">Pricing</a>
+       <a href="${server.origin("api.machines.test")}/other">Same domain again</a>
+       <a href="${server.origin("github.test")}/superfly/docs">Edit</a>`,
+    );
+    page(
+      "fly.test",
+      "/docs/more",
+      `<a href="${server.origin("chat.test")}/">Ask</a>
+       <a href="${server.origin("fourth.test")}/">Fourth</a>`,
+    );
+
+    const { hits, offHostHosts } = await crawlForSpecs({
+      startUrl: `${o}/docs/`,
+      api,
+      fetcher: fetcher(),
+      judge: judgeSaying({ [`${o}/docs/more`]: 0.9 }),
+    });
+
+    expect(hits).toEqual([]);
+    expect(offHostHosts).toEqual(["machines.test", "github.test", "chat.test"]);
+    // Reported, never fetched.
+    expect(requested("docs.machines.test", "/")).toBe(false);
+  });
+
   it("never throws, even when the start URL is unreachable", async () => {
     await expect(
       crawlForSpecs({
@@ -440,7 +471,7 @@ describe("crawlForSpecs", () => {
         fetcher: fetcher(),
         judge: new FakeJudge(),
       }),
-    ).resolves.toEqual([]);
+    ).resolves.toEqual({ hits: [], offHostHosts: [] });
   });
 });
 

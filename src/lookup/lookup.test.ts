@@ -10,15 +10,17 @@ import {
 } from "~/fetch/__fixtures__/server";
 import { createFetcher } from "~/fetch/fetcher";
 import { probeKnownPaths } from "~/fetch/known-paths";
+import { sniffSpec } from "~/fetch/sniff";
 import { openDb } from "~/index-store/db";
 import { FakeJudge, type FakeJudgeScript } from "~/judge/fake";
 import { JudgeError, yesNo } from "~/judge/judge";
 import { createApisGuru } from "~/sources/apis-guru";
+import type { CrawlHit, CrawlResult } from "~/sources/crawl";
 import type { GitHubRepos, RepoInfo } from "~/sources/github";
 import { FakeWebSearch } from "~/sources/web-search/fake";
 import { SearchError, type WebSearch } from "~/sources/web-search/web-search";
 import { apisGuruList } from "./__fixtures__/apis-guru";
-import { createLookup, provenanceOf } from "./lookup";
+import { createLookup, type LookupDeps, provenanceOf } from "./lookup";
 
 const NOW = "2026-09-22T10:00:00.000Z";
 
@@ -42,10 +44,30 @@ const spec = (title: string) =>
     paths: { "/things": { get: { tags: ["things"] } } },
   });
 
+/**
+ * A fake crawl answering `result` (or throwing it, for an Error), recording
+ * each start URL.
+ */
+function fakeCrawl(result: Partial<CrawlResult> | Error = {}): {
+  crawl: NonNullable<LookupDeps["crawl"]>;
+  starts: string[];
+} {
+  const starts: string[] = [];
+  return {
+    starts,
+    async crawl({ startUrl }) {
+      starts.push(startUrl);
+      if (result instanceof Error) throw result;
+      return { hits: [], offHostHosts: [], ...result };
+    },
+  };
+}
+
 function setup(
   script: FakeJudgeScript,
   webSearch: WebSearch | null = new FakeWebSearch(),
   github?: GitHubRepos,
+  crawl = fakeCrawl(),
 ) {
   const judge = new FakeJudge(script);
   const fetcher = createFetcher({
@@ -53,6 +75,7 @@ function setup(
     lookup: fixtureLookup,
     minIntervalMs: 0,
   });
+  const probed: string[] = [];
   const lookup = createLookup({
     db: openDb(join(dir, "index.db")),
     judge,
@@ -63,11 +86,17 @@ function setup(
     webSearch,
     fetcher,
     now: () => new Date(NOW),
-    probe: (domain) =>
-      probeKnownPaths(`${domain}:${server.port}`, fetcher, { scheme: "http" }),
+    probe: (domain, opts) => {
+      probed.push(domain);
+      return probeKnownPaths(`${domain}:${server.port}`, fetcher, {
+        ...opts,
+        scheme: "http",
+      });
+    },
+    crawl: crawl.crawl,
     ...(github ? { github } : {}),
   });
-  return { judge, lookup };
+  return { judge, lookup, probed, crawls: crawl.starts };
 }
 
 /** Parses against the Outcome schema, so every answer is a valid Outcome. */
@@ -570,6 +599,219 @@ describe("lookup", () => {
       name: "nothing like it",
       diagnostics: ["web search: Brave search failed with HTTP 503"],
     });
+  });
+});
+
+describe("lookup with the Developer Portal crawl", () => {
+  const script: FakeJudgeScript = {
+    whichApi: {
+      nospec: {
+        probabilities: { "nospec.test/nospec-api": 0.95, none: 0.05 },
+        confidence: 0.95,
+      },
+    },
+    specDescribesApi: { "NoSpec API": yes, "NoSpec API (draft)": yesNo(0.55) },
+  };
+
+  /** A crawl hit for a Spec titled `title`, on the start URL's domain. */
+  function crawlHit(
+    url: string,
+    title = "NoSpec API",
+    extra: Partial<CrawlHit> = {},
+  ): CrawlHit {
+    const bytes = new TextEncoder().encode(spec(title));
+    const sniff = sniffSpec(bytes, "application/json");
+    if (!sniff) throw new Error("fixture is not a Spec");
+    return {
+      url,
+      bytes,
+      sniff,
+      linkedFrom: "https://nospec.test/docs",
+      offHost: false,
+      robotsDisallowed: false,
+      ...extra,
+    };
+  }
+
+  it("answers Resolved from a Spec only the crawl found, starting at the Vendor's domain", async () => {
+    const url = `${server.origin("docs.nospec.test")}/reference/openapi.json`;
+    const { lookup, crawls } = setup(
+      script,
+      undefined,
+      undefined,
+      fakeCrawl({ hits: [crawlHit(url)] }),
+    );
+
+    const outcome = await ask(lookup, "nospec");
+
+    expect(outcome).toMatchObject({
+      outcome: "Resolved",
+      api: { id: "nospec.test/nospec-api" },
+      provenance: "Official",
+      sources: [{ url, provenance: "Official" }],
+    });
+    expect(outcome.diagnostics?.join("\n")).not.toMatch(/crawl/);
+    expect(crawls).toEqual(["https://nospec.test"]);
+    // Settled by the crawl: the mirror is never fetched.
+    expect(server.requests.map((r) => r.host)).not.toContain("apis-guru.test");
+  });
+
+  it("does not crawl once the known-path probe has settled the answer", async () => {
+    server.send(
+      "api.nospec.test",
+      "/openapi.json",
+      spec("NoSpec API"),
+      "application/json",
+    );
+    const { lookup, crawls } = setup(script);
+
+    expect(await ask(lookup, "nospec")).toMatchObject({
+      outcome: "Resolved",
+      sources: [{ url: `${server.origin("api.nospec.test")}/openapi.json` }],
+    });
+    expect(crawls).toEqual([]);
+  });
+
+  it("starts the crawl at a portal Candidate's page", async () => {
+    const portal = `${server.origin("www.acme.test")}/docs`;
+    const search = new FakeWebSearch([
+      { url: portal, title: "Acme API Reference", snippet: "" },
+    ]);
+    const { lookup, crawls } = setup(
+      {
+        whichApi: {
+          acme: {
+            probabilities: { "acme.test/api": 0.9, none: 0.1 },
+            confidence: 0.9,
+          },
+        },
+      },
+      search,
+    );
+
+    const outcome = await ask(lookup, "acme");
+
+    expect(outcome).toMatchObject({ outcome: "NoSpec" });
+    expect(crawls).toEqual([portal]);
+  });
+
+  it("resolves from a robots-disallowed hit and says ADR 0003 allowed it", async () => {
+    const url = `${server.origin("api.nospec.test")}/openapi.json`;
+    const { lookup } = setup(
+      script,
+      undefined,
+      undefined,
+      fakeCrawl({
+        hits: [crawlHit(url, "NoSpec API", { robotsDisallowed: true })],
+      }),
+    );
+
+    const outcome = await ask(lookup, "nospec");
+
+    expect(outcome).toMatchObject({
+      outcome: "Resolved",
+      sources: [{ url, provenance: "Official" }],
+    });
+    expect(outcome.diagnostics).toContain(
+      `crawl: ${url}: its host's robots.txt disallowed it; ADR 0003 allowed the single fetch`,
+    );
+  });
+
+  it("keeps the previous answer when the crawl throws", async () => {
+    server.send(
+      "developer.nospec.test",
+      "/openapi.json",
+      spec("NoSpec API (draft)"),
+      "application/json",
+    );
+    const { lookup } = setup(
+      script,
+      undefined,
+      undefined,
+      fakeCrawl(new Error("portal exploded")),
+    );
+
+    const outcome = await ask(lookup, "nospec");
+
+    expect(outcome).toMatchObject({
+      outcome: "Unconfirmed",
+      sources: [
+        {
+          url: `${server.origin("developer.nospec.test")}/openapi.json`,
+          provenance: "Official",
+        },
+      ],
+    });
+    if (outcome.outcome !== "Unconfirmed") throw new Error("unreachable");
+    expect(outcome.diagnostics).toContain("crawl: portal exploded");
+    expect(outcome.reasons.join("\n")).toMatch(
+      /crawl from https:\/\/nospec\.test \(0 found\)/,
+    );
+  });
+
+  it("marks an off-host crawl hit a Mirror", async () => {
+    const url = `${server.origin("docs.nospec-cdn.test")}/openapi.json`;
+    const { lookup } = setup(
+      script,
+      undefined,
+      undefined,
+      fakeCrawl({ hits: [crawlHit(url, "NoSpec API", { offHost: true })] }),
+    );
+
+    const outcome = await ask(lookup, "nospec");
+
+    expect(outcome).toMatchObject({
+      outcome: "Unconfirmed",
+      sources: [{ url, provenance: "Mirror" }],
+    });
+  });
+
+  it("probes known paths on the off-host domains the crawl reports", async () => {
+    // As fly.io links docs.machines.dev, a Scalar page, never the Spec.
+    const url = `${server.origin("docs.machines.test")}/openapi.json`;
+    server.send(
+      "docs.machines.test",
+      "/openapi.json",
+      spec("NoSpec API"),
+      "application/json",
+    );
+    const { lookup, probed } = setup(
+      script,
+      undefined,
+      undefined,
+      fakeCrawl({
+        offHostHosts: ["nospec.test", "machines.test", "later.test"],
+      }),
+    );
+
+    const outcome = await ask(lookup, "nospec");
+
+    // A Mirror until WTR-48 makes it Endorsed, and so Resolved.
+    expect(outcome).toMatchObject({
+      outcome: "Unconfirmed",
+      spec: { specVersion: "3.0.3" },
+      sources: [{ url, provenance: "Mirror" }],
+    });
+    if (outcome.outcome !== "Unconfirmed") throw new Error("unreachable");
+    expect(outcome.reasons.join("\n")).toMatch(
+      /known paths on machines\.test \(from the crawl\)/,
+    );
+    // The Vendor's own domain was already probed; the rest are all tried
+    // while nothing is settled.
+    expect(probed).toEqual(["nospec.test", "machines.test", "later.test"]);
+  });
+
+  it("skips the off-host probe once the crawl has settled the answer", async () => {
+    const url = `${server.origin("docs.nospec.test")}/openapi.json`;
+    const { lookup, probed } = setup(
+      script,
+      undefined,
+      undefined,
+      fakeCrawl({ hits: [crawlHit(url)], offHostHosts: ["machines.test"] }),
+    );
+
+    expect(await ask(lookup, "nospec")).toMatchObject({ outcome: "Resolved" });
+    expect(probed).toEqual(["nospec.test"]);
   });
 });
 
