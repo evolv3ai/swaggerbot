@@ -1487,23 +1487,31 @@ describe("lookup with GitHub code search", () => {
 
   /**
    * A fake GitHubCodeSearch answering `org` for an org search and `global`
-   * for a search across GitHub, recording each `[org, name]`.
+   * for a search across GitHub, `repos` for a repo search and `trees[repo]`
+   * for a repo's tree, recording each `[org, name]` and each repo listed.
    */
-  function fakeSearch(org: SpecHit[] | null, global: SpecHit[] | null = []) {
+  function fakeSearch(
+    org: SpecHit[] | null,
+    global: SpecHit[] | null = [],
+    repos: string[] | null = [],
+    trees: Record<string, SpecHit[] | null> = {},
+  ) {
     const calls: [string | null, string][] = [];
+    const listed: string[] = [];
     const search: GitHubCodeSearch = {
       async searchSpecs(o, name) {
         calls.push([o, name]);
         return o === null ? global : org;
       },
       async searchSpecRepos() {
-        return [];
+        return repos;
       },
-      async specsInRepo() {
-        return [];
+      async specsInRepo(fullName) {
+        listed.push(fullName);
+        return fullName in trees ? (trees[fullName] ?? null) : [];
       },
     };
-    return { search, calls };
+    return { search, calls, listed };
   }
 
   const rawPaths = () =>
@@ -1750,6 +1758,167 @@ describe("lookup with GitHub code search", () => {
     ).toEqual([
       "GitHub code search: skipped (no GITHUB_TOKEN, rate-limited or failed)",
     ]);
+  });
+
+  it("judges a file from the repo tree that code search missed, and it can win", async () => {
+    const small1 = hit("nospec/api-schema", "reference/events-v1/openapi.json");
+    const small2 = hit("nospec/api-schema", "reference/events-v2/openapi.json");
+    const big = hit("nospec/api-schema", "reference/REST/openapi.json");
+    server.send(
+      RAW,
+      "/nospec/api-schema/HEAD/reference/REST/openapi.json",
+      spec("NoSpec API"),
+      "application/json",
+    );
+    const { search, calls, listed } = fakeSearch([small1, small2], [], [], {
+      "nospec/api-schema": [small1, small2, big],
+    });
+    const { lookup, judge } = setup(
+      {
+        ...script,
+        isSpecLink: { [small1.url]: yesNo(0.3), [small2.url]: yesNo(0.3) },
+      },
+      undefined,
+      undefined,
+      undefined,
+      search,
+    );
+
+    const outcome = await ask(lookup, "nospec");
+
+    expect(outcome).toMatchObject({
+      outcome: "Resolved",
+      provenance: "Official",
+      sources: [{ url: big.url, provenance: "Official" }],
+    });
+    // The repo is listed once, though two hits are in it; no global search.
+    expect(listed).toEqual(["nospec/api-schema"]);
+    expect(calls).toEqual([["nospec", "NoSpec API"]]);
+    // Duplicates between the hits and the tree are judged once.
+    expect(
+      judge.calls
+        .filter((c) => c.judgment === "isSpecLink")
+        .map((c) => (c.judgment === "isSpecLink" ? c.link.url : "")),
+    ).toEqual([small1.url, small2.url, big.url]);
+    expect(rawPaths()).toEqual([
+      "/nospec/api-schema/HEAD/reference/REST/openapi.json",
+    ]);
+  });
+
+  it("lists the trees of the org's Spec repos when code search finds nothing there", async () => {
+    const found = hit("nospec/api-schema", "reference/REST/openapi.json");
+    server.send(
+      RAW,
+      "/nospec/api-schema/HEAD/reference/REST/openapi.json",
+      spec("NoSpec API"),
+      "application/json",
+    );
+    const { search, calls, listed } = fakeSearch(
+      [],
+      [],
+      ["nospec/api-schema", "nospec/b", "nospec/c", "nospec/d"],
+      { "nospec/api-schema": [found] },
+    );
+    const { lookup } = setup(script, undefined, undefined, undefined, search);
+
+    const outcome = await ask(lookup, "nospec");
+
+    expect(outcome).toMatchObject({
+      outcome: "Resolved",
+      provenance: "Official",
+      sources: [{ url: found.url, provenance: "Official" }],
+    });
+    // At most three repos; the org's tree had a file, so no global search.
+    expect(listed).toEqual(["nospec/api-schema", "nospec/b", "nospec/c"]);
+    expect(calls).toEqual([["nospec", "NoSpec API"]]);
+  });
+
+  it("fetches the likeliest hit first, so a tree file can settle ahead of code search's hits", async () => {
+    // PagerDuty: code search finds the Events Spec, the tree adds the REST
+    // Spec; both pass the link threshold, and whichever is fetched first
+    // settles the Lookup.
+    const events = hit("nospec/api-schema", "reference/events/openapi.json");
+    const rest = hit("nospec/api-schema", "reference/REST/openapi.json");
+    for (const h of [events, rest]) {
+      server.send(
+        RAW,
+        `/nospec/api-schema/HEAD/${h.path}`,
+        spec("NoSpec API"),
+        "application/json",
+      );
+    }
+    const { search } = fakeSearch([events], [], [], {
+      "nospec/api-schema": [events, rest],
+    });
+    const { lookup } = setup(
+      {
+        ...script,
+        isSpecLink: { [events.url]: yesNo(0.7), [rest.url]: yesNo(0.95) },
+      },
+      undefined,
+      undefined,
+      undefined,
+      search,
+    );
+
+    const outcome = await ask(lookup, "nospec");
+
+    expect(outcome).toMatchObject({
+      outcome: "Resolved",
+      sources: [{ url: rest.url, provenance: "Official" }],
+    });
+    expect(rawPaths()).toEqual([
+      "/nospec/api-schema/HEAD/reference/REST/openapi.json",
+    ]);
+  });
+
+  it("carries on with the hits after a diagnostic when a repo tree can't be read", async () => {
+    const found = hit("nospec/openapi");
+    server.send(
+      RAW,
+      "/nospec/openapi/HEAD/openapi.json",
+      spec("NoSpec API"),
+      "application/json",
+    );
+    const { search } = fakeSearch([found], [], [], { "nospec/openapi": null });
+    const { lookup } = setup(script, undefined, undefined, undefined, search);
+
+    const outcome = await ask(lookup, "nospec");
+
+    expect(outcome).toMatchObject({
+      outcome: "Resolved",
+      sources: [{ url: found.url, provenance: "Official" }],
+    });
+    expect(
+      outcome.diagnostics?.filter((d) => d.startsWith("GitHub repo tree")),
+    ).toEqual(["GitHub repo tree nospec/openapi: skipped (failed)"]);
+  });
+
+  it("searches across GitHub after a diagnostic when the repo search can't run", async () => {
+    const found = hit("fans/nospec-specs");
+    server.send(
+      RAW,
+      "/fans/nospec-specs/HEAD/openapi.json",
+      spec("NoSpec API"),
+      "application/json",
+    );
+    const { search, calls, listed } = fakeSearch([], [found], null);
+    const { lookup } = setup(script, undefined, undefined, undefined, search);
+
+    const outcome = await ask(lookup, "nospec", { allowCommunity: true });
+
+    expect(outcome).toMatchObject({
+      outcome: "Resolved",
+      provenance: "Community",
+    });
+    expect(listed).toEqual([]);
+    expect(calls).toEqual([
+      ["nospec", "NoSpec API"],
+      [null, "NoSpec API"],
+    ]);
+    expect(outcome.diagnostics).toContain(
+      "GitHub repo search: skipped (no GITHUB_TOKEN, rate-limited or failed)",
+    );
   });
 
   it("does not search once the crawl has settled the answer", async () => {

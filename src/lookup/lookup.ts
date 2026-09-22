@@ -126,6 +126,13 @@ const CRAWL_STEP_BUDGET_MS = 20_000;
 const GITHUB_SEARCH_SKIPPED =
   "GitHub code search: skipped (no GITHUB_TOKEN, rate-limited or failed)";
 
+/** The diagnostic when GitHub repo search answers `null`, which gives no reason. */
+const GITHUB_REPO_SEARCH_SKIPPED =
+  "GitHub repo search: skipped (no GITHUB_TOKEN, rate-limited or failed)";
+
+/** The GitHub search step lists the trees of at most this many repos. */
+const MAX_REPO_TREES_LISTED = 3;
+
 /** A merged APIs.guru choice keeps at most this many origin URLs. */
 const MAX_MERGED_ORIGIN_URLS = 8;
 
@@ -689,7 +696,8 @@ export function createLookup(deps: LookupDeps): Lookup {
     /**
      * Searches GitHub for Spec files in the Vendor's org (its id's first
      * label), or across GitHub by the API's name when the org has none. The
-     * Judge ranks the hits as links first; those likely enough are fetched
+     * trees of the org's Spec repos (those with hits, or found by repo search)
+     * add the files code search can't index. The Judge ranks the hits as links first; those likely enough are fetched
      * as origins, so archived repos are skipped and `HEAD` becomes the
      * default branch. Stops once settled.
      */
@@ -707,10 +715,58 @@ export function createLookup(deps: LookupDeps): Lookup {
         return hits;
       };
 
+      /**
+       * The repos to list: those among the org's hits, or, when it had none,
+       * the org's repos that look like they hold a Spec. `[]` after one
+       * diagnostic when the repo search can't run.
+       */
+      const reposToList = async (org: string, hits: SpecHit[]) => {
+        if (hits.length > 0) return [...new Set(hits.map((h) => h.fullName))];
+        let repos: string[] | null;
+        try {
+          repos = await search.searchSpecRepos(org, choice.api.name);
+        } catch (error) {
+          diagnostics.push(`GitHub repo search: ${message(error)}`);
+          return [];
+        }
+        if (repos === null) diagnostics.push(GITHUB_REPO_SEARCH_SKIPPED);
+        return repos ?? [];
+      };
+      /** A repo's Spec-looking files from its tree; `[]` after one diagnostic on failure. */
+      const specsInRepo = async (fullName: string) => {
+        let files: SpecHit[] | null;
+        try {
+          files = await search.specsInRepo(fullName);
+        } catch (error) {
+          diagnostics.push(`GitHub repo tree ${fullName}: ${message(error)}`);
+          return [];
+        }
+        if (files === null) {
+          diagnostics.push(`GitHub repo tree ${fullName}: skipped (failed)`);
+          return [];
+        }
+        checked.push(`GitHub repo tree ${fullName} (${files.length} files)`);
+        return files;
+      };
+
       const org = vendorLabel(choice.vendor);
       let hits = await searchSpecs(org);
       if (hits === null) return;
       checked.push(`GitHub code search in org ${org} (${hits.length} hits)`);
+      // Code search leaves out files it can't index (over its size limit),
+      // so the trees of the org's Spec repos are listed as well.
+      const repos = (await reposToList(org, hits)).slice(
+        0,
+        MAX_REPO_TREES_LISTED,
+      );
+      const seen = new Set(hits.map((h) => h.url));
+      for (const fullName of repos) {
+        for (const file of await specsInRepo(fullName)) {
+          if (seen.has(file.url)) continue;
+          seen.add(file.url);
+          hits.push(file);
+        }
+      }
       if (hits.length === 0) {
         hits = await searchSpecs(null);
         if (hits === null) return;
@@ -734,8 +790,15 @@ export function createLookup(deps: LookupDeps): Lookup {
         diagnostics.push(`Judge areSpecLinks: ${message(error)}`);
         return;
       }
-      for (const [i, hit] of hits.entries()) {
-        if ((probabilities[i] ?? 0) < t.specLink || !goOn(hit.url)) continue;
+      // Likeliest first: the first Spec fetched may settle the Lookup, and a
+      // repo tree lists the right Spec after code search's wrong ones
+      // (PagerDuty's Events Specs before its REST Spec).
+      const ranked = hits
+        .map((hit, i) => ({ hit, p: probabilities[i] ?? 0 }))
+        .filter(({ p }) => p >= t.specLink)
+        .sort((a, b) => b.p - a.p);
+      for (const { hit } of ranked) {
+        if (!goOn(hit.url)) continue;
         await fetchOrigin(hit.url);
       }
     }
