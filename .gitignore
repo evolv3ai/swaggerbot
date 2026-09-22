@@ -2,3 +2,12 @@
 .env.*
 !.env.example
 node_modules/
+
+# build output
+.output/
+.nitro/
+.tanstack/
+dist/
+
+# local Index database
+data/
