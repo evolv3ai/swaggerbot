@@ -15,7 +15,7 @@ Where the twelve long-tail Specs actually live, checked live:
 | Novu, Replicate | — | already Resolved |
 | Supabase | `supabase.com/openapi.json` | already Resolved (known path) |
 | Loops | `app.loops.so/openapi.json` | #2, the `app.` host prefix |
-| Mux | `www.mux.com/api-spec.json` | #6, portal crawl |
+| Mux | `www.mux.com/api-spec.json` | #6 + **WTR-55**: the crawl reaches it from the docs page, but Mux's Candidate carries the marketing homepage as its `portalUrl`, so WTR-55 finds the documentation first (verified live 2026-09-22) |
 | Firecrawl | `docs.firecrawl.dev/api-reference/v2-openapi.json` | #6 |
 | Render | `api-docs.render.com/openapi/render-public-api-1.json` | #6 |
 | Neon | `neon.com/api_spec/release/v2.json` | #6, plus #10 for the `neon.tech` split |
