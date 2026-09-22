@@ -20,7 +20,7 @@ Where the twelve long-tail Specs actually live, checked live:
 | Render | `api-docs.render.com/openapi/render-public-api-1.json` | #6 |
 | Neon | `neon.com/api_spec/release/v2.json` | #6, plus #10 for the `neon.tech` split |
 | Infisical | `app.infisical.com/api/docs/json` | #6 |
-| Fly.io | `docs.machines.dev/openapi.json` (another domain fly.io links to) | #6, as an **Endorsed** Source |
+| Fly.io | `docs.machines.dev/openapi.json` (another domain fly.io links to) | #6, as an **Endorsed** Source — by known-path probe on the off-host host, not by a link hop; see the note under #6 |
 | Val Town | `api.val.town/openapi.json` | #6 + #4, the ADR 0003 exception |
 | Codeberg | `codeberg.org/swagger.v1.json` | never: re-labelled NoSpec, see ADR 0003 |
 
@@ -237,7 +237,7 @@ How it works:
 - Ask the Judge once per page: `areSpecLinks(api, [...specCandidates, ...pageCandidates])`. One call, answers in order, so the same judgment ranks both sets.
 - Fetch Spec candidates scoring at or above `threshold`, highest first, and `sniffSpec` the bytes. A hit is kept; a non-Spec is not, and does not count against `maxPages`.
 - Follow page candidates scoring at or above `threshold`, highest first, until `maxPages` or the budget.
-- **Off-host links.** A Spec candidate on another registrable domain is followed **one hop** and flagged `offHost: true` — this is how Fly.io's Spec on `docs.machines.dev` is reached, and #8 turns that flag into Endorsed Provenance. An off-host *page* candidate is never crawled.
+- **Off-host links.** A Spec candidate on another registrable domain is followed **one hop** and flagged `offHost: true`, and #8 turns that flag into Endorsed Provenance. An off-host *page* candidate is never crawled. This is **not** how Fly.io is reached: verified live on 2026-09-22, `fly.io/docs/machines/api/` links only `docs.machines.dev/`, a Scalar SPA whose Spec is in a JS bundle, so no link hop reaches `docs.machines.dev/openapi.json`. The known-path probe does (200, 156,029 bytes), so Fly.io needs #6 to probe known paths on an off-host portal host — see WTR-46.
 - **Disallowed Spec candidates.** When fetching a Spec candidate throws `robots-disallowed`, retry it once with `ignoreRobots: true` (#4) and set `robotsDisallowed` from the result. This applies only to a Spec document reached by a link from an allowed page, which is exactly ADR 0003's exception. A *page* that is disallowed is never fetched.
 - A fetch error, a Judge error or a 404 skips that link and the crawl continues; a Judge error on a page means that page contributes nothing. Nothing here throws: the worst case is an empty array.
 - The fetcher's per-host spacing and the honest User-Agent do the rate limiting; don't add another.
