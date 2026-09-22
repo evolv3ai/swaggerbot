@@ -110,3 +110,27 @@ The umbrella rule in `umbrellaCandidates` (`src/lookup/lookup.ts`) fires only wh
 - `src/lookup/lookup.test.ts`: "google" with two `googleapis.com` Candidates → Ambiguous without calling `whichApi`; a vendor name judged 0.9 with three APIs.guru APIs → Ambiguous; judged 0.9 but with one API → today's Outcome; judged 0.3 → today's Outcome.
 - `src/judge/jev.test.ts` covers the new question's request and mapping, and the live smoke script prints `isVendorName("mailchimp", …)`.
 - `pnpm check` and `pnpm build` green.
+
+---
+
+## Result (2026-09-22, after WTR-37..40 merged)
+
+Live `pnpm bench`, Brave, all 40 entries, about 86 s:
+
+| | Before the round | After WTR-37..40 | + hand tuning (`apiPick` 0.75 → 0.7) |
+|---|---|---|---|
+| False Resolution | 8/9 (89%; 3/9 = 33% under the new scoring) | 1/8 (12.5%) | **1/9 (11%)** |
+| Longtail coverage | 0/12 | 2/12 | **3/12** |
+| Outcome accuracy | 47.5% | 47.5% | **50%** |
+
+- **The only False Resolution left is Stripe** (legacy `openapi/spec3.yaml` rather than the recommended `latest/`). The gate stays failed until that's decided: either curate the Index or relax the label. Every other failure is a safe miss (Unconfirmed, NoSpec or Ambiguous), which is what the precision-over-coverage principle asks for.
+- **What the round fixed:** OpenAI (branch rewrite); Asana and Slack now go to Unconfirmed on their archived repos rather than resolving; Novu, Replicate and Loops now resolve; Reddit and Dropbox are correct NoSpec; Google, Azure and Cisco are Ambiguous.
+- **Hand tuning:** only `apiPick` moved (it fixed Loops at 0.72, with no new False Resolution). `vendorName` at 0.65 changed nothing, so it stays at 0.7. `apis.io` was added to `NON_VENDOR_DOMAINS` (it showed up as a Cisco Candidate).
+- **Still open, not threshold problems:**
+  - Mailchimp, Zoho and Intuit return NoSpec: `whichApi` picks their single portal Candidate outright, so the vendor-name check (which only runs when unsettled) never fires.
+  - Atlassian returns Unknown.
+  - Neon is still split between `neon.tech` and `neon.com`, although the fetcher follows the redirect.
+  - GitHub REST API is split between two APIs.guru entries.
+  - Steam picks up third-party hosts.
+  - 9 longtail/popular entries need Spec finding beyond known paths (Slice 2).
+- **Latency:** most Lookups take 1.5–4 s, but some Discovery runs took 16–19 s (Mux, Dropbox) with the extra portal fetches. That's over the 15 s p90 target, which is Slice 3's to meet.
