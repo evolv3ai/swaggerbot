@@ -15,6 +15,11 @@ import { createRepo, normalizeName, specIdOf } from "~/index-store/repo";
 import { type ApiRef, type Judge, NONE } from "~/judge/judge";
 import type { ApiCandidate, ApisGuru } from "~/sources/apis-guru";
 import { registrableDomain } from "~/sources/domain";
+import {
+  type GitHubRepos,
+  parseRawGitHubUrl,
+  rawGitHubUrl,
+} from "~/sources/github";
 import { findPortalCandidates, type PortalCandidate } from "~/sources/portal";
 import type { WebSearch } from "~/sources/web-search";
 import { DEFAULT_THRESHOLDS, type Thresholds } from "./thresholds";
@@ -48,6 +53,12 @@ export type LookupDeps = {
    * `probeKnownPaths` over https; tests point it at a fixture server.
    */
   probe?: (domain: string) => Promise<KnownPathHit[]>;
+  /**
+   * Checks the repo behind a raw.githubusercontent.com origin URL: archived
+   * repos are skipped, non-default branches rewritten. Absent, such URLs are
+   * fetched as they are.
+   */
+  github?: GitHubRepos;
 };
 
 /** Umbrella names list at most this many Candidates. */
@@ -95,14 +106,16 @@ type SpecCandidate = {
  * 2. APIs.guru Candidates, judged by `whichApi`;
  * 3. Developer Portal Candidates from web search, one per Vendor after
  *    following redirects, judged with step 2's;
- * 4. for the identified API, its Spec: APIs.guru origin URLs, then known
- *    paths on the Vendor's domain, then the APIs.guru mirror.
+ * 4. for the identified API, its Spec: APIs.guru origin URLs (a GitHub
+ *    one skipped when its repo is archived, read from the default branch
+ *    when it names another), then known paths on the Vendor's domain, then
+ *    the APIs.guru mirror.
  *
  * A Judge, search or fetch error skips that step and is reported in
  * `diagnostics`; it never makes the Lookup throw.
  */
 export function createLookup(deps: LookupDeps): Lookup {
-  const { judge, fetcher, webSearch, apisGuru } = deps;
+  const { judge, fetcher, webSearch, apisGuru, github } = deps;
   const repo = createRepo(deps.db);
   const t: Thresholds = { ...DEFAULT_THRESHOLDS, ...deps.thresholds };
   const now = deps.now ?? (() => new Date());
@@ -305,23 +318,65 @@ export function createLookup(deps: LookupDeps): Lookup {
       candidates.push({ url, bytes, specId, sniff, provenance, probability });
     }
 
-    async function fetchAndConsider(url: string, mirror: boolean) {
+    /**
+     * Fetches a URL and considers the Spec there; `false` when none was found.
+     * `githubOrg` is the GitHub org the URL's repo is in now, after a move.
+     */
+    async function fetchAndConsider(
+      url: string,
+      mirror: boolean,
+      githubOrg?: string,
+    ): Promise<boolean> {
       try {
         const res = await fetcher.fetchUrl(url);
         const sniff = sniffSpec(res.bytes, res.contentType);
         if (!sniff) {
           checked.push(`${url} (not a Spec)`);
-          return;
+          return false;
         }
         checked.push(url);
         const provenance = mirror
           ? "Mirror"
-          : provenanceOf(res.finalUrl, choice.vendor);
+          : provenanceOf(res.finalUrl, choice.vendor, githubOrg);
         await consider(res.finalUrl, res.bytes, sniff, provenance);
+        return true;
       } catch (error) {
         checked.push(`${url} (unreachable)`);
         diagnostics.push(`fetch: ${message(error)}`);
+        return false;
       }
+    }
+
+    /**
+     * An origin URL. On raw.githubusercontent.com its repo is looked up
+     * first: an archived repo's Spec is never used, and a URL on another
+     * branch is read from the default one, falling back to the URL as given.
+     * When GitHub can't say, the URL is fetched as it is.
+     */
+    async function fetchOrigin(url: string) {
+      const raw = parseRawGitHubUrl(url);
+      const info =
+        raw && github ? await github.repoInfo(raw.owner, raw.repo) : null;
+      if (!raw || !info) {
+        await fetchAndConsider(url, false);
+        return;
+      }
+      if (info.archived) {
+        checked.push(`${url} (archived repo ${info.fullName})`);
+        diagnostics.push(`archived repo ${info.fullName}`);
+        return;
+      }
+      const org = info.fullName.split("/")[0]?.toLowerCase();
+      if (raw.ref !== info.defaultBranch) {
+        const onDefault = rawGitHubUrl(
+          url,
+          info.fullName,
+          info.defaultBranch,
+          raw.path,
+        );
+        if (await fetchAndConsider(onDefault, false, org)) return;
+      }
+      await fetchAndConsider(url, false, org);
     }
 
     const confirmed = () =>
@@ -329,7 +384,7 @@ export function createLookup(deps: LookupDeps): Lookup {
     const settled = () => (confirmed()?.probability ?? 0) >= t.describes;
 
     for (const url of choice.originUrls) {
-      await fetchAndConsider(url, false);
+      await fetchOrigin(url);
       if (settled()) break;
     }
     if (!settled()) {
@@ -460,12 +515,18 @@ function best(candidates: SpecCandidate[]): SpecCandidate | undefined {
 /**
  * Slice 1 Provenance: Official when the Source's registrable domain is the
  * Vendor's, or it sits in the Vendor's GitHub org; any other copy is a Mirror.
+ * `currentOrg` replaces the org in a GitHub URL whose repo has moved since.
  */
-export function provenanceOf(url: string, vendor: Vendor): Provenance {
+export function provenanceOf(
+  url: string,
+  vendor: Vendor,
+  currentOrg?: string,
+): Provenance {
   const domain = registrableDomain(url);
   const vendorDomain = registrableDomain(vendor.domain) ?? vendor.domain;
   if (domain !== null && domain === vendorDomain) return "Official";
-  const org = githubOrg(url);
+  let org = githubOrg(url);
+  if (org !== null && currentOrg) org = currentOrg.toLowerCase();
   return org !== null && org === vendorLabel(vendor) ? "Official" : "Mirror";
 }
 

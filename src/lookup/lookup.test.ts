@@ -14,6 +14,7 @@ import { openDb } from "~/index-store/db";
 import { FakeJudge, type FakeJudgeScript } from "~/judge/fake";
 import { JudgeError, yesNo } from "~/judge/judge";
 import { createApisGuru } from "~/sources/apis-guru";
+import type { GitHubRepos, RepoInfo } from "~/sources/github";
 import { FakeWebSearch } from "~/sources/web-search/fake";
 import { SearchError, type WebSearch } from "~/sources/web-search/web-search";
 import { apisGuruList } from "./__fixtures__/apis-guru";
@@ -44,6 +45,7 @@ const spec = (title: string) =>
 function setup(
   script: FakeJudgeScript,
   webSearch: WebSearch | null = new FakeWebSearch(),
+  github?: GitHubRepos,
 ) {
   const judge = new FakeJudge(script);
   const fetcher = createFetcher({
@@ -63,6 +65,7 @@ function setup(
     now: () => new Date(NOW),
     probe: (domain) =>
       probeKnownPaths(`${domain}:${server.port}`, fetcher, { scheme: "http" }),
+    ...(github ? { github } : {}),
   });
   return { judge, lookup };
 }
@@ -501,6 +504,135 @@ describe("lookup", () => {
       outcome: "Unknown",
       name: "nothing like it",
       diagnostics: ["web search: Brave search failed with HTTP 503"],
+    });
+  });
+});
+
+describe("lookup with a GitHub origin", () => {
+  const RAW = "raw.githubusercontent.com";
+  const MASTER = "/ghco/openapi/master/openapi.json";
+  const MAIN = "/ghco/openapi/main/openapi.json";
+
+  /** A fake GitHubRepos answering `info` for every repo. */
+  function fakeGitHub(info: RepoInfo | null) {
+    const calls: string[] = [];
+    const github: GitHubRepos = {
+      async repoInfo(owner, repo) {
+        calls.push(`${owner}/${repo}`);
+        return info;
+      },
+    };
+    return { github, calls };
+  }
+
+  const script: FakeJudgeScript = {
+    whichApi: {
+      ghco: {
+        probabilities: { "ghco.test/ghco-api": 0.95, none: 0.05 },
+        confidence: 0.95,
+      },
+    },
+    specDescribesApi: { "GhCo API": yes, "GhCo API (stale)": yes },
+  };
+  const rawPaths = () =>
+    server.requests.filter((r) => r.host === RAW).map((r) => r.path);
+
+  it("skips an archived repo's Spec with a diagnostic", async () => {
+    server.send(RAW, MASTER, spec("GhCo API"), "application/json");
+    const { github, calls } = fakeGitHub({
+      fullName: "GhCoArchive/openapi",
+      defaultBranch: "master",
+      archived: true,
+    });
+    const { lookup } = setup(script, new FakeWebSearch(), github);
+
+    const outcome = await ask(lookup, "ghco");
+
+    expect(calls).toEqual(["ghco/openapi"]);
+    expect(outcome.outcome).not.toBe("Resolved");
+    expect(outcome.diagnostics).toContain("archived repo GhCoArchive/openapi");
+    expect(rawPaths()).toEqual([]);
+  });
+
+  it("fetches a master URL from main when main is the default branch", async () => {
+    server.send(RAW, MASTER, spec("GhCo API (stale)"), "application/json");
+    server.send(RAW, MAIN, spec("GhCo API"), "application/json");
+    const { github } = fakeGitHub({
+      fullName: "ghco/openapi",
+      defaultBranch: "main",
+      archived: false,
+    });
+    const { lookup } = setup(script, new FakeWebSearch(), github);
+
+    const outcome = await ask(lookup, "ghco");
+
+    expect(outcome).toMatchObject({
+      outcome: "Resolved",
+      currentSpec: { specVersion: "3.0.3" },
+      sources: [
+        { url: `${server.origin(RAW)}${MAIN}`, provenance: "Official" },
+      ],
+    });
+    expect(rawPaths()).not.toContain(MASTER);
+  });
+
+  it("falls back to the original URL when the default branch has no Spec there", async () => {
+    server.send(RAW, MASTER, spec("GhCo API"), "application/json");
+    const { github } = fakeGitHub({
+      fullName: "ghco/openapi",
+      defaultBranch: "main",
+      archived: false,
+    });
+    const { lookup } = setup(script, new FakeWebSearch(), github);
+
+    const outcome = await ask(lookup, "ghco");
+
+    expect(outcome).toMatchObject({
+      outcome: "Resolved",
+      sources: [
+        { url: `${server.origin(RAW)}${MASTER}`, provenance: "Official" },
+      ],
+    });
+    expect(rawPaths().filter((p) => p !== "/robots.txt")).toEqual([
+      MAIN,
+      MASTER,
+    ]);
+  });
+
+  it("fetches the URL as it is when GitHub can't say", async () => {
+    server.send(RAW, MASTER, spec("GhCo API"), "application/json");
+    const { github, calls } = fakeGitHub(null);
+    const { lookup } = setup(script, new FakeWebSearch(), github);
+
+    const outcome = await ask(lookup, "ghco");
+
+    expect(calls).toEqual(["ghco/openapi"]);
+    expect(outcome).toMatchObject({
+      outcome: "Resolved",
+      sources: [
+        { url: `${server.origin(RAW)}${MASTER}`, provenance: "Official" },
+      ],
+    });
+    expect(outcome.diagnostics).toBeUndefined();
+    expect(rawPaths().filter((p) => p !== "/robots.txt")).toEqual([MASTER]);
+  });
+
+  it("judges the GitHub org after a move by the repo's new owner", async () => {
+    server.send(RAW, MASTER, spec("GhCo API"), "application/json");
+    const { github } = fakeGitHub({
+      fullName: "someone-else/openapi",
+      defaultBranch: "master",
+      archived: false,
+    });
+    const { lookup } = setup(script, new FakeWebSearch(), github);
+
+    const outcome = await ask(lookup, "ghco");
+
+    expect(outcome).toMatchObject({
+      outcome: "Unconfirmed",
+      sources: [
+        { url: `${server.origin(RAW)}${MASTER}`, provenance: "Mirror" },
+      ],
     });
   });
 });
