@@ -14,6 +14,8 @@ const MAX_CANDIDATES = 10;
 
 /** An API Candidate proposed by APIs.guru, not yet judged. */
 export type ApiCandidate = {
+  /** The APIs.guru list key (`github.com`, `github.com:ghec`). */
+  key: string;
   apiId: string;
   name: string;
   vendor: Vendor;
@@ -183,6 +185,7 @@ function toListedApi(
   return {
     key,
     candidate: {
+      key,
       apiId: `${vendorId}/${slugify(service ?? info.title)}`,
       name: info.title,
       vendor: { id: vendorId, name: vendorId, domain: vendorId },

@@ -37,6 +37,7 @@ describe("createApisGuru", () => {
     it("ranks an exact match first", async () => {
       const [first] = await withFixture().findCandidates("Stripe");
       expect(first).toEqual({
+        key: "stripe.com",
         apiId: "stripe.com/stripe-api",
         name: "Stripe API",
         vendor: { id: "stripe.com", name: "stripe.com", domain: "stripe.com" },
