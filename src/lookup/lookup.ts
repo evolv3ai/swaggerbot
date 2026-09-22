@@ -294,6 +294,14 @@ export function createLookup(deps: LookupDeps): Lookup {
    * search domain. When the page can't be fetched, the site's origin is tried;
    * when that fails too, the Candidate keeps its search domain, with a
    * diagnostic.
+   *
+   * Then, when the Candidates are on more than one domain, each domain's apex
+   * (`https://<domain>/`) is fetched once: when it ends on another Candidate's
+   * domain, that domain's Candidates move there too. `api-docs.neon.tech`
+   * stays put, but `neon.tech` redirects to `neon.com`, so both are one
+   * Vendor; `neoncrm.com` redirects to `neonone.com`, which no Candidate has,
+   * so it stays a Vendor of its own. An apex that can't be fetched moves
+   * nothing, silently.
    */
   async function followPortals(
     portals: PortalCandidate[],
@@ -331,12 +339,27 @@ export function createLookup(deps: LookupDeps): Lookup {
       }
       return domain;
     };
-    return Promise.all(
+    const settled = await Promise.all(
       portals.map(async (p) => {
         const domain = await finalDomain(p);
         return domain && domain !== p.domain ? { ...p, domain } : p;
       }),
     );
+    const domains = new Set(settled.map((p) => p.domain));
+    if (domains.size < 2) return settled;
+    const apexDomains = new Map(
+      await Promise.all(
+        [...domains].map(
+          async (d) => [d, await settle(`https://${d}/`, d)] as const,
+        ),
+      ),
+    );
+    return settled.map((p) => {
+      const apex = apexDomains.get(p.domain);
+      return apex && apex !== p.domain && domains.has(apex)
+        ? { ...p, domain: apex }
+        : p;
+    });
   }
 
   /**
