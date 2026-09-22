@@ -63,7 +63,7 @@ The Source chain runs in order and stops when the Outcome is settled:
 Code retrieves Candidates; Jev judges them (ADR 0001). Low-confidence judgments come back to the Caller as Ambiguous or Unconfirmed. They are never escalated to an LLM on the server.
 
 Crawling etiquette:
-- respect `robots.txt`;
+- respect `robots.txt`, with the one exception in [ADR 0003](adr/0003-robots-txt-exception-for-vendor-linked-specs.md): a single Spec document linked from an allowed Vendor page is fetched once even when its own host disallows it, and never crawled on from;
 - identify ourselves honestly in the User-Agent;
 - keep a rate limit per host;
 - never fetch a URL that a Caller supplies.

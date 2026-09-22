@@ -178,9 +178,13 @@
     "group": "longtail",
     "expected": "Resolved",
     "apiId": "supabase.com/management-api",
-    "specSources": ["https://api.supabase.com/api/v1-json"],
+    "specSources": [
+      "https://api.supabase.com/api/v1-json",
+      "https://supabase.com/openapi.json"
+    ],
     "evidenceUrl": "https://supabase.com/docs/reference/api/introduction",
-    "reviewed": true
+    "reviewed": true,
+    "notes": "`supabase.com/openapi.json` serves the same document as the api.supabase.com URL (Supabase API (v1), 115 paths) from the Vendor's own domain; accepted as a second Official Source by Wes 2026-09-22."
   },
   {
     "name": "Loops",
@@ -213,12 +217,12 @@
   {
     "name": "Codeberg API",
     "group": "longtail",
-    "expected": "Resolved",
+    "expected": "NoSpec",
     "apiId": "codeberg.org/codeberg-api",
     "specSources": ["https://codeberg.org/swagger.v1.json"],
     "evidenceUrl": "https://codeberg.org/api/swagger",
     "reviewed": true,
-    "notes": "Swagger 2.0, titled \"Forgejo API\": Codeberg runs Forgejo, and every Forgejo/Gitea instance serves a similar spec. The API here is Codeberg's hosted instance."
+    "notes": "Swagger 2.0, titled \"Forgejo API\": Codeberg runs Forgejo, and every Forgejo/Gitea instance serves a similar spec. The API here is Codeberg's hosted instance. Expected NoSpec, not Resolved: `codeberg.org/robots.txt` disallows `/swagger.*.json` by name and also `/api/`, which is the page that links it, so ADR 0003's Vendor-linked exception does not reach it. The Spec exists and is listed above for the day that changes."
   },
   {
     "name": "Infisical",
@@ -270,7 +274,7 @@
     "specSources": ["https://api.val.town/openapi.json"],
     "evidenceUrl": "https://docs.val.town/openapi",
     "reviewed": true,
-    "notes": "The evidence page is Val Town's API-reference viewer, which loads this spec URL."
+    "notes": "The evidence page is Val Town's API-reference viewer, which links this spec URL. `api.val.town/robots.txt` disallows `/`, so this entry can only be Resolved through ADR 0003's Vendor-linked exception: `docs.val.town` allows crawling and its `/openapi` page carries the link."
   },
   {
     "name": "Google",
