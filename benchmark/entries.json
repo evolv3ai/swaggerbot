@@ -1,0 +1,35 @@
+[
+  {
+    "name": "Stripe",
+    "group": "popular",
+    "expected": "Resolved",
+    "apiId": "stripe.com/stripe-api",
+    "specSources": [
+      "https://raw.githubusercontent.com/stripe/openapi/master/openapi/spec3.json",
+      "https://raw.githubusercontent.com/stripe/openapi/master/openapi/spec3.yaml"
+    ],
+    "evidenceUrl": "https://github.com/stripe/openapi",
+    "reviewed": false,
+    "notes": "Example entry from WTR-26; replaced by the seed in WTR-33."
+  },
+  {
+    "name": "Atlassian",
+    "group": "ambiguous",
+    "expected": "Ambiguous",
+    "candidates": [
+      "atlassian.com/jira-cloud-platform",
+      "atlassian.com/confluence-cloud"
+    ],
+    "evidenceUrl": "https://developer.atlassian.com/",
+    "reviewed": false,
+    "notes": "Example entry from WTR-26; replaced by the seed in WTR-33."
+  },
+  {
+    "name": "Frobnicator Quantum Ledger",
+    "group": "negative",
+    "expected": "Unknown",
+    "evidenceUrl": "https://apis.guru/",
+    "reviewed": false,
+    "notes": "Example entry from WTR-26: a made-up name that matches no API."
+  }
+]
