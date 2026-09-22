@@ -47,6 +47,11 @@ export const specs = sqliteTable(
     format: text("format", { enum: ["json", "yaml"] }).notNull(),
     byteLength: integer("byte_length").notNull(),
     publishedBytes: blob("published_bytes", { mode: "buffer" }).notNull(),
+    /**
+     * When a Lookup confirmed that this Spec describes its API; null while it
+     * is only Unconfirmed. Only a confirmed Spec is answered Resolved from the Index.
+     */
+    confirmedAt: text("confirmed_at"),
     createdAt: text("created_at").notNull().default(now),
   },
   (t) => [index("specs_api_id_idx").on(t.apiId)],

@@ -1,0 +1,1 @@
+ALTER TABLE `specs` ADD `confirmed_at` text;

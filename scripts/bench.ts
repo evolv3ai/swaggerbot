@@ -8,14 +8,12 @@ import { parseArgs } from "node:util";
 import { BenchmarkEntries } from "~/benchmark/entry";
 import { type BenchmarkLookup, runBenchmark } from "~/benchmark/run";
 import type { BenchmarkReport } from "~/benchmark/score";
+import { createAppLookup } from "~/lookup/app";
 
 const FALSE_RESOLUTION_GATE = 0.02;
 
-// ---------------------------------------------------------------------------
-// WTR-32 plugs in here: replace this stub with the real Lookup from
-// `createAppLookup()` in `src/lookup/app.ts`. Until then every name is Unknown.
-const lookup: BenchmarkLookup = async (name) => ({ outcome: "Unknown", name });
-// ---------------------------------------------------------------------------
+const appLookup = createAppLookup();
+const lookup: BenchmarkLookup = (name) => appLookup({ name });
 
 const { values } = parseArgs({
   options: {

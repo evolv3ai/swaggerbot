@@ -2,6 +2,12 @@ import { z } from "zod";
 import { Api, Source, Spec, Timestamp, Vendor } from "./catalog";
 import { Provenance } from "./provenance";
 
+/**
+ * What went wrong along the way (a Judge or search error, a Source that could
+ * not be fetched), for the Caller to read. Present only when something did.
+ */
+const diagnostics = z.array(z.string().min(1)).optional();
+
 export const Resolved = z.object({
   outcome: z.literal("Resolved"),
   api: Api,
@@ -13,6 +19,7 @@ export const Resolved = z.object({
   // Validity Issues arrive in a later slice; until then the list is empty.
   validityIssues: z.array(z.never()),
   verifiedAt: Timestamp,
+  diagnostics,
 });
 
 export const Ambiguous = z.object({
@@ -27,6 +34,7 @@ export const Ambiguous = z.object({
       }),
     )
     .min(2),
+  diagnostics,
 });
 
 export const Unconfirmed = z.object({
@@ -37,6 +45,7 @@ export const Unconfirmed = z.object({
   sources: z.array(Source).min(1),
   reasons: z.array(z.string().min(1)).min(1),
   verifiedAt: Timestamp,
+  diagnostics,
 });
 
 export const NoSpec = z.object({
@@ -44,11 +53,13 @@ export const NoSpec = z.object({
   api: Api,
   vendor: Vendor,
   communityAvailable: z.boolean(),
+  diagnostics,
 });
 
 export const Unknown = z.object({
   outcome: z.literal("Unknown"),
   name: z.string(),
+  diagnostics,
 });
 
 export const Outcome = z.discriminatedUnion("outcome", [
