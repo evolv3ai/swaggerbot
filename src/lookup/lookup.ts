@@ -18,6 +18,7 @@ import type { Db } from "~/index-store/db";
 import { createRepo, normalizeName, specIdOf } from "~/index-store/repo";
 import { type ApiRef, type Judge, NONE } from "~/judge/judge";
 import type { ApiCandidate, ApisGuru } from "~/sources/apis-guru";
+import { type CrawlResult, crawlForSpecs } from "~/sources/crawl";
 import { registrableDomain } from "~/sources/domain";
 import {
   type GitHubRepos,
@@ -58,12 +59,23 @@ export type LookupDeps = {
    */
   probe?: (domain: string, opts: ProbeOptions) => Promise<KnownPathHit[]>;
   /**
+   * A shallow crawl of a Developer Portal for Specs. Defaults to
+   * `crawlForSpecs` with this Lookup's fetcher and Judge; tests inject a fake.
+   */
+  crawl?: (opts: { startUrl: string; api: ApiRef }) => Promise<CrawlResult>;
+  /**
    * Checks the repo behind a raw.githubusercontent.com origin URL: archived
    * repos are skipped, non-default branches rewritten. Absent, such URLs are
    * fetched as they are.
    */
   github?: GitHubRepos;
 };
+
+/**
+ * The crawl step's budget: the crawl's own 20 s, and the known-path probes
+ * on the off-host domains it reports share what is left of it.
+ */
+const CRAWL_STEP_BUDGET_MS = 20_000;
 
 /** Umbrella names list at most this many Candidates. */
 const MAX_UMBRELLA_CANDIDATES = 10;
@@ -77,6 +89,8 @@ type ApiChoice = {
   originUrls: string[];
   /** The APIs.guru copy of the Spec: a Mirror, tried last. */
   mirrorUrl?: string;
+  /** The Developer Portal page the Candidate came from; where the crawl starts. */
+  portalUrl?: string;
 };
 
 type AmbiguousCandidate = {
@@ -101,6 +115,10 @@ type SpecCandidate = {
   provenance: Provenance;
   /** `specDescribesApi`. */
   probability: number;
+  /** Found by the crawl off the portal's registrable domain. */
+  offHost?: boolean;
+  /** Its host's robots.txt disallowed it; fetched under ADR 0003. */
+  robotsDisallowed?: boolean;
 };
 
 /**
@@ -116,7 +134,8 @@ type SpecCandidate = {
  * 5. for the identified API, its Spec: APIs.guru origin URLs (a GitHub
  *    one skipped when its repo is archived, read from the default branch
  *    when it names another), then known paths on the Vendor's domain, then
- *    the APIs.guru mirror.
+ *    a shallow crawl of the Developer Portal and known paths on the other
+ *    domains it links to, then the APIs.guru mirror.
  *
  * A Judge, search or fetch error skips that step and is reported in
  * `diagnostics`; it never makes the Lookup throw.
@@ -130,6 +149,10 @@ export function createLookup(deps: LookupDeps): Lookup {
     deps.probe ??
     ((domain: string, opts: ProbeOptions) =>
       probeKnownPaths(domain, fetcher, opts));
+  const crawl =
+    deps.crawl ??
+    ((opts: { startUrl: string; api: ApiRef }) =>
+      crawlForSpecs({ ...opts, fetcher, judge }));
 
   return async function lookup({ name }) {
     const diagnostics: string[] = [];
@@ -353,6 +376,7 @@ export function createLookup(deps: LookupDeps): Lookup {
       bytes: Uint8Array,
       sniff: SniffResult,
       provenance: Provenance,
+      found: Pick<SpecCandidate, "offHost" | "robotsDisallowed"> = {},
     ) {
       if (candidates.some((c) => c.url === url)) return;
       const specId = specIdOf(bytes);
@@ -370,7 +394,15 @@ export function createLookup(deps: LookupDeps): Lookup {
           return;
         }
       }
-      candidates.push({ url, bytes, specId, sniff, provenance, probability });
+      candidates.push({
+        url,
+        bytes,
+        specId,
+        sniff,
+        provenance,
+        probability,
+        ...found,
+      });
     }
 
     /**
@@ -434,6 +466,58 @@ export function createLookup(deps: LookupDeps): Lookup {
       await fetchAndConsider(url, false, org);
     }
 
+    /**
+     * Crawls the Developer Portal, then probes known paths on the other
+     * domains it links to, stopping once settled. Hits off the portal's
+     * domain are Mirrors for now (WTR-48 makes them Endorsed).
+     */
+    async function crawlStep() {
+      const deadline = Date.now() + CRAWL_STEP_BUDGET_MS;
+      const startUrl = choice.portalUrl ?? `https://${choice.vendor.domain}`;
+      let result: CrawlResult = { hits: [], offHostHosts: [] };
+      try {
+        result = await crawl({ startUrl, api: ref });
+      } catch (error) {
+        diagnostics.push(`crawl: ${message(error)}`);
+      }
+      checked.push(`crawl from ${startUrl} (${result.hits.length} found)`);
+      for (const hit of result.hits) {
+        if (hit.robotsDisallowed) diagnostics.push(robotsDiagnostic(hit.url));
+        await consider(
+          hit.url,
+          hit.bytes,
+          hit.sniff,
+          hit.offHost ? "Mirror" : provenanceOf(hit.url, choice.vendor),
+          { offHost: hit.offHost, robotsDisallowed: hit.robotsDisallowed },
+        );
+        if (settled()) return;
+      }
+
+      const vendorDomain =
+        registrableDomain(choice.vendor.domain) ?? choice.vendor.domain;
+      for (const host of result.offHostHosts) {
+        // The Vendor's own domain was probed in the step before.
+        if (host === vendorDomain) continue;
+        const budgetMs = deadline - Date.now();
+        if (budgetMs <= 0) break;
+        checked.push(`known paths on ${host} (from the crawl)`);
+        let hits: KnownPathHit[] = [];
+        try {
+          // Out of time is a miss, not an error.
+          hits =
+            (await withDeadline(probe(host, { budgetMs }), budgetMs)) ?? [];
+        } catch (error) {
+          diagnostics.push(`known paths on ${host}: ${message(error)}`);
+        }
+        for (const hit of hits) {
+          await consider(hit.url, hit.bytes, hit.sniff, "Mirror", {
+            offHost: true,
+          });
+          if (settled()) return;
+        }
+      }
+    }
+
     const confirmed = () =>
       best(candidates.filter((c) => c.provenance === "Official"));
     const settled = () => (confirmed()?.probability ?? 0) >= t.describes;
@@ -460,10 +544,12 @@ export function createLookup(deps: LookupDeps): Lookup {
           hit.bytes,
           hit.sniff,
           provenanceOf(hit.url, choice.vendor),
+          { robotsDisallowed: hit.robotsDisallowed },
         );
         if (settled()) break;
       }
     }
+    if (!settled()) await crawlStep();
     if (!settled() && choice.mirrorUrl)
       await fetchAndConsider(choice.mirrorUrl, true);
 
@@ -671,6 +757,7 @@ function fromPortal(p: PortalCandidate): ApiChoice | null {
     vendor: { id: vendorId, name: p.domain, domain: p.domain },
     ...(p.snippet ? { description: p.snippet } : {}),
     originUrls: [],
+    portalUrl: p.url,
   };
 }
 
@@ -698,6 +785,22 @@ function ambiguousCandidate(
 function uniqueById(choices: ApiChoice[]): ApiChoice[] {
   const seen = new Set<string>();
   return choices.filter((c) => !seen.has(c.api.id) && seen.add(c.api.id));
+}
+
+/** `promise`'s value, or `null` once `ms` have passed without one. */
+async function withDeadline<T>(
+  promise: Promise<T>,
+  ms: number,
+): Promise<T | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), ms);
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function message(error: unknown): string {
