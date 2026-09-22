@@ -9,6 +9,7 @@ import { parseArgs } from "node:util";
 import { BenchmarkEntries } from "~/benchmark/entry";
 import { type BenchmarkLookup, runBenchmark } from "~/benchmark/run";
 import type { BenchmarkReport } from "~/benchmark/score";
+import { createAppLookup } from "~/lookup/app";
 import { SEARCH_PROVIDERS } from "~/sources/web-search";
 
 const FALSE_RESOLUTION_GATE = 0.02;
@@ -34,11 +35,8 @@ if (
 // Set before the Lookup is built, so its WebSearch picks this provider.
 if (provider) process.env.SEARCH_PROVIDER = provider;
 
-// ---------------------------------------------------------------------------
-// WTR-32 plugs in here: replace this stub with the real Lookup from
-// `createAppLookup()` in `src/lookup/app.ts`. Until then every name is Unknown.
-const lookup: BenchmarkLookup = async (name) => ({ outcome: "Unknown", name });
-// ---------------------------------------------------------------------------
+const appLookup = createAppLookup();
+const lookup: BenchmarkLookup = (name) => appLookup({ name });
 
 const path = new URL("../benchmark/entries.json", import.meta.url);
 const entries = BenchmarkEntries.parse(

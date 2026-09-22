@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import {
   Api,
   type Source,
@@ -20,7 +20,8 @@ export type SpecMeta = {
 export type ApiWithSpecs = {
   api: Api;
   vendor: Vendor;
-  specs: { spec: Spec; sources: Source[] }[];
+  /** Oldest first. `confirmedAt` is null for a Spec that is only Unconfirmed. */
+  specs: { spec: Spec; sources: Source[]; confirmedAt: string | null }[];
 };
 
 /**
@@ -122,12 +123,39 @@ export function createRepo(db: Db) {
       return spec;
     },
 
-    /** Records where a Spec was found. Adding the same url again returns the existing Source. */
-    addSource(specId: string, url: string, provenance: Provenance): Source {
-      db.insert(sources)
-        .values({ specId, url, provenance: Provenance.parse(provenance) })
-        .onConflictDoNothing({ target: [sources.specId, sources.url] })
+    /** Marks a Spec as confirmed to describe its API; the first confirmation is kept. */
+    confirmSpec(specId: string, at: string): void {
+      db.update(specs)
+        .set({ confirmedAt: at })
+        .where(and(eq(specs.id, specId), isNull(specs.confirmedAt)))
         .run();
+    },
+
+    /**
+     * Records where a Spec was found. Adding the same url again returns the
+     * existing Source. With `verifiedAt` (an ISO timestamp), a new Source is
+     * first seen then, and an existing one is marked verified then.
+     */
+    addSource(
+      specId: string,
+      url: string,
+      provenance: Provenance,
+      verifiedAt?: string,
+    ): Source {
+      const insert = db.insert(sources).values({
+        specId,
+        url,
+        provenance: Provenance.parse(provenance),
+        ...(verifiedAt
+          ? { firstSeenAt: verifiedAt, lastVerifiedAt: verifiedAt }
+          : {}),
+      });
+      const target = [sources.specId, sources.url];
+      if (verifiedAt)
+        insert
+          .onConflictDoUpdate({ target, set: { lastVerifiedAt: verifiedAt } })
+          .run();
+      else insert.onConflictDoNothing({ target }).run();
       const source = db
         .select()
         .from(sources)
@@ -164,14 +192,18 @@ export function createRepo(db: Db) {
         .get();
       if (!row) return undefined;
       const apiSpecs = db
-        .select(specColumns)
+        .select({ spec: specColumns, confirmedAt: specs.confirmedAt })
         .from(specs)
         .where(eq(specs.apiId, apiId))
         .orderBy(asc(specs.createdAt), asc(specs.id))
         .all();
       return {
         ...row,
-        specs: apiSpecs.map((spec) => ({ spec, sources: sourcesOf(spec.id) })),
+        specs: apiSpecs.map(({ spec, confirmedAt }) => ({
+          spec,
+          sources: sourcesOf(spec.id),
+          confirmedAt,
+        })),
       };
     },
   };

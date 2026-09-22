@@ -104,6 +104,40 @@ describe("repo", () => {
     ]);
   });
 
+  it("stamps a Source with the time it was verified", () => {
+    const spec = repo.putSpec(stripeApi.id, specBytes, specMeta);
+    const url = "https://raw.githubusercontent.com/stripe/openapi/spec3.json";
+    const first = repo.addSource(
+      spec.id,
+      url,
+      "Official",
+      "2026-09-01T00:00:00.000Z",
+    );
+    const again = repo.addSource(
+      spec.id,
+      url,
+      "Official",
+      "2026-09-22T00:00:00.000Z",
+    );
+
+    expect(first.firstSeenAt).toBe("2026-09-01T00:00:00.000Z");
+    expect(again).toEqual({
+      ...first,
+      lastVerifiedAt: "2026-09-22T00:00:00.000Z",
+    });
+  });
+
+  it("keeps a Spec unconfirmed until it is confirmed, then keeps the first confirmation", () => {
+    const spec = repo.putSpec(stripeApi.id, specBytes, specMeta);
+    const confirmed = () =>
+      repo.getApiWithSpecs(stripeApi.id)?.specs[0]?.confirmedAt;
+
+    expect(confirmed()).toBeNull();
+    repo.confirmSpec(spec.id, "2026-09-01T00:00:00.000Z");
+    repo.confirmSpec(spec.id, "2026-09-22T00:00:00.000Z");
+    expect(confirmed()).toBe("2026-09-01T00:00:00.000Z");
+  });
+
   it("finds an API by a remembered name, however it is written", () => {
     repo.rememberName("stripe", stripeApi.id);
 

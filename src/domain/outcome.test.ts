@@ -69,6 +69,17 @@ describe("Outcome", () => {
     expect(parsed).toEqual(value);
   });
 
+  it("accepts diagnostics on any Outcome", () => {
+    const value = {
+      ...variants.Unknown,
+      diagnostics: ["Judge: whichApi failed (timeout)"],
+    };
+    expect(Outcome.parse(value)).toEqual(value);
+    expect(
+      Outcome.safeParse({ ...variants.NoSpec, diagnostics: [""] }).success,
+    ).toBe(false);
+  });
+
   it.each([
     ["an unknown outcome", { outcome: "NotFound", name: "x" }],
     ["Resolved without Sources", { ...variants.Resolved, sources: [] }],
