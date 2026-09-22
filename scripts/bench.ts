@@ -1,28 +1,44 @@
 /**
- * Run the Benchmark: `pnpm bench [--only-reviewed] [--json]`.
+ * Run the Benchmark: `pnpm bench [--only-reviewed] [--json] [--search brave|tavily]`.
  * Prints a table (or the report as JSON) and exits 1 when the
- * False Resolution rate is at or above the 2% release gate.
+ * False Resolution rate is at or above the 2% release gate. `--search` sets
+ * `SEARCH_PROVIDER` for this run, so portal finding can be compared.
  */
 import { readFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import { BenchmarkEntries } from "~/benchmark/entry";
 import { type BenchmarkLookup, runBenchmark } from "~/benchmark/run";
 import type { BenchmarkReport } from "~/benchmark/score";
+import { SEARCH_PROVIDERS } from "~/sources/web-search";
 
 const FALSE_RESOLUTION_GATE = 0.02;
+
+const { values } = parseArgs({
+  options: {
+    "only-reviewed": { type: "boolean", default: false },
+    json: { type: "boolean", default: false },
+    search: { type: "string" },
+  },
+});
+
+const provider = values.search;
+if (
+  provider !== undefined &&
+  !(SEARCH_PROVIDERS as readonly string[]).includes(provider)
+) {
+  console.error(
+    `--search must be one of: ${SEARCH_PROVIDERS.join(", ")} (got "${provider}")`,
+  );
+  process.exit(2);
+}
+// Set before the Lookup is built, so its WebSearch picks this provider.
+if (provider) process.env.SEARCH_PROVIDER = provider;
 
 // ---------------------------------------------------------------------------
 // WTR-32 plugs in here: replace this stub with the real Lookup from
 // `createAppLookup()` in `src/lookup/app.ts`. Until then every name is Unknown.
 const lookup: BenchmarkLookup = async (name) => ({ outcome: "Unknown", name });
 // ---------------------------------------------------------------------------
-
-const { values } = parseArgs({
-  options: {
-    "only-reviewed": { type: "boolean", default: false },
-    json: { type: "boolean", default: false },
-  },
-});
 
 const path = new URL("../benchmark/entries.json", import.meta.url);
 const entries = BenchmarkEntries.parse(
@@ -42,7 +58,7 @@ function table(r: BenchmarkReport): string {
   const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
   const gate = r.falseResolutionRate >= FALSE_RESOLUTION_GATE ? "FAIL" : "ok";
   const lines = [
-    `Benchmark: ${r.entries} entries${values["only-reviewed"] ? " (reviewed only)" : ""}`,
+    `Benchmark: ${r.entries} entries${values["only-reviewed"] ? " (reviewed only)" : ""}${provider ? `, search: ${provider}` : ""}`,
     "",
     `False Resolution rate  ${pct(r.falseResolutionRate).padStart(6)}  (${r.falseResolutions}/${r.resolved} Resolved, gate < ${pct(FALSE_RESOLUTION_GATE)}: ${gate})`,
     `Long-tail coverage     ${pct(r.longtailCoverage).padStart(6)}`,
