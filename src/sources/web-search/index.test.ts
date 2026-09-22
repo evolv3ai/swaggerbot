@@ -28,6 +28,35 @@ describe("createWebSearch", () => {
     }
   });
 
+  it("picks Tavily when SEARCH_PROVIDER=tavily", async () => {
+    const fetch = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response(JSON.stringify({ results: [] })));
+    try {
+      const search = createWebSearch({
+        env: { SEARCH_PROVIDER: "Tavily", TAVILY_API_KEY: "k" },
+      });
+      await search?.search("q", { count: 1 });
+      expect(String(fetch.mock.calls[0]?.[0])).toBe(
+        "https://api.tavily.com/search",
+      );
+    } finally {
+      fetch.mockRestore();
+    }
+  });
+
+  it("wants TAVILY_API_KEY, not BRAVE_API_KEY, for Tavily", () => {
+    const warn = vi.fn();
+    expect(
+      createWebSearch({
+        env: { SEARCH_PROVIDER: "tavily", BRAVE_API_KEY: "k" },
+        warn,
+      }),
+    ).toBeNull();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0]?.[0]).toMatch(/TAVILY_API_KEY/);
+  });
+
   it("returns null and warns once when the key is missing", () => {
     const warn = vi.fn();
     expect(

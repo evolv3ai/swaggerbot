@@ -1,10 +1,11 @@
 import { createBraveSearch } from "./brave";
+import { createTavilySearch } from "./tavily";
 import type { WebSearch } from "./web-search";
 
 export type { SearchOptions, SearchResult, WebSearch } from "./web-search";
 export { SearchError } from "./web-search";
 
-export const SEARCH_PROVIDERS = ["brave"] as const;
+export const SEARCH_PROVIDERS = ["brave", "tavily"] as const;
 export type SearchProvider = (typeof SEARCH_PROVIDERS)[number];
 
 export interface CreateWebSearchOptions {
@@ -32,6 +33,16 @@ export function createWebSearch({
         return null;
       }
       return createBraveSearch({ apiKey });
+    }
+    case "tavily": {
+      const apiKey = env.TAVILY_API_KEY?.trim();
+      if (!apiKey) {
+        warn(
+          "TAVILY_API_KEY is not set: web search is off and Lookups skip the Developer Portal step.",
+        );
+        return null;
+      }
+      return createTavilySearch({ apiKey });
     }
     default:
       throw new Error(
