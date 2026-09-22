@@ -56,7 +56,25 @@ const answer = (name: string, outcome: Outcome): BenchmarkAnswer => ({
 });
 
 describe("score", () => {
-  it("counts a Resolved answer with the wrong API as a False Resolution", () => {
+  it("counts a Resolved answer with another API slug but the same Vendor and a listed Source as correct", () => {
+    const e = entry({ name: "Stripe" });
+    const report = score(
+      [e],
+      [
+        answer(
+          "Stripe",
+          resolvedTo("Stripe", "stripe.com/stripe", [
+            "https://stripe.com/openapi.json",
+          ]),
+        ),
+      ],
+    );
+    expect(report.falseResolutions).toBe(0);
+    expect(report.outcomeAccuracy).toBe(1);
+    expect(report.failures).toEqual([]);
+  });
+
+  it("counts a Resolved answer with the wrong Vendor as a False Resolution even when its Source is listed", () => {
     const e = entry({ name: "Stripe" });
     const report = score(
       [e],
@@ -77,12 +95,12 @@ describe("score", () => {
         name: "Stripe",
         expected: "Resolved",
         got: "Resolved",
-        why: expect.stringContaining("wrong API"),
+        why: "wrong Vendor: got stripe.net, expected stripe.com",
       },
     ]);
   });
 
-  it("counts a Resolved answer with a Source outside specSources as a False Resolution", () => {
+  it("counts a Resolved answer with the right Vendor but a Source outside specSources as a False Resolution", () => {
     const e = entry({ name: "Stripe" });
     const report = score(
       [e],

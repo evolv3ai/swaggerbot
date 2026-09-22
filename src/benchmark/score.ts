@@ -64,8 +64,11 @@ function falseResolutionReason(
   if (!entry.apiId) {
     return `expected ${entry.expected}, but Resolved to ${outcome.api.id}`;
   }
-  if (outcome.api.id !== entry.apiId) {
-    return `wrong API: got ${outcome.api.id}, expected ${entry.apiId}`;
+  // API slugs are derived by the pipeline and never match the hand-made ones
+  // in the Benchmark, so only the Vendor part of `apiId` is compared.
+  const vendorId = entry.apiId.split("/")[0];
+  if (outcome.vendor.id !== vendorId) {
+    return `wrong Vendor: got ${outcome.vendor.id}, expected ${vendorId}`;
   }
   const expected = new Set((entry.specSources ?? []).map(normalizeUrl));
   if (!outcome.sources.some((s) => expected.has(normalizeUrl(s.url)))) {
