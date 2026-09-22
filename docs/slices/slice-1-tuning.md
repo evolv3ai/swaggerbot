@@ -174,3 +174,28 @@ The rate did not move because a **different** entry took Stripe's place:
   The polite fetcher obeys, as the PRD's crawling etiquette requires, so those
   two can never be Resolved while that principle stands. Their labels expect
   Resolved; that needs deciding, not coding.
+
+### Slice 1 accepted (2026-09-22, fresh Index)
+
+Re-run with `DATABASE_PATH` pointed at an empty file, so every name went through
+Discovery and nothing was replayed from the Index:
+
+```
+False Resolution rate    0.0%  (0/9 Resolved, gate < 2.0%: ok)
+Long-tail coverage      27.3%
+Outcome accuracy        50.0%
+```
+
+**Slice 1's acceptance criterion — False Resolution < 2% — is met**, and `pnpm bench`
+exits 0. Every remaining failure is a safe miss: Unconfirmed, NoSpec or Ambiguous
+where Resolved was wanted. Nothing is Resolved wrongly, which is what
+precision over coverage asks for.
+
+Long-tail coverage of 27.3% against Slice 2's ≥60% target is the gap that
+[`slice-2-backlog.md`](slice-2-backlog.md) exists to close.
+
+One caution for whoever reads these numbers next: between three live runs an hour
+apart, Supabase moved Resolved → NoSpec, Loops moved NoSpec → Ambiguous → Resolved
+and Cisco moved Ambiguous → Unknown, with no code change in between. Both Supabase
+and Loops sit behind the known-path probe's 12 s budget (WTR-42). Treat a single
+run as a sample, not a measurement.
