@@ -10,7 +10,7 @@ import {
   startFixtureServer,
 } from "~/fetch/__fixtures__/server";
 import { createFetcher } from "~/fetch/fetcher";
-import { probeKnownPaths } from "~/fetch/known-paths";
+import { type KnownPathHit, probeKnownPaths } from "~/fetch/known-paths";
 import { sniffSpec } from "~/fetch/sniff";
 import { openDb } from "~/index-store/db";
 import { FakeJudge, type FakeJudgeScript } from "~/judge/fake";
@@ -1807,7 +1807,11 @@ describe("lookup with several API Versions", () => {
     updated: "2024-01-01T00:00:00.000Z",
   };
 
-  function setupVersions() {
+  /**
+   * A Lookup whose APIs.guru entry lists every Version's origin, or, with a
+   * `probe`, none: the Specs are then only at the Vendor's known paths.
+   */
+  function setupVersions(probe?: LookupDeps["probe"]) {
     for (const v of VERSIONS)
       server.send(HOST, path(v), versionSpec(v), "application/json");
     const judge = new FakeJudge({
@@ -1821,7 +1825,9 @@ describe("lookup with several API Versions", () => {
     });
     const guru = {
       ...candidate,
-      originUrls: VERSIONS.map((v) => `${server.origin(HOST)}${path(v)}`),
+      originUrls: probe
+        ? []
+        : VERSIONS.map((v) => `${server.origin(HOST)}${path(v)}`),
     };
     const lookup = createLookup({
       db: openDb(join(dir, "index.db")),
@@ -1837,7 +1843,7 @@ describe("lookup with several API Versions", () => {
         minIntervalMs: 0,
       }),
       now: () => new Date(NOW),
-      probe: async () => [],
+      probe: probe ?? (async () => []),
       crawl: fakeCrawl().crawl,
     });
     return { judge, lookup };
@@ -1947,6 +1953,59 @@ describe("lookup with several API Versions", () => {
     expect(await ask(lookup, "boxy", { apiVersion: "2024.0" })).toMatchObject({
       outcome: "Resolved",
       currentSpec: { apiVersion: "2024.0", supersededAt: NOW },
+    });
+  });
+
+  describe("from known paths", () => {
+    /** A known-path hit serving `version`, as the probe returns it. */
+    const hit = (url: string, version: string): KnownPathHit => {
+      const bytes = new TextEncoder().encode(versionSpec(version));
+      const sniff = sniffSpec(bytes, "application/json");
+      if (!sniff) throw new Error("not a Spec");
+      return { url, bytes, sniff, robotsDisallowed: false };
+    };
+    // A stale copy on the docs host beside the current Spec on the API host,
+    // as Novu serves them; neither URL names an API Version.
+    const DOCS = "https://docs.boxy.test/openapi.json";
+    const API = "https://api.boxy.test/openapi.json";
+
+    it.each([
+      ["the stale copy first", [DOCS, API]],
+      ["the current Spec first", [API, DOCS]],
+    ])("judges every hit, not only the first (%s)", async (_, order) => {
+      const versions: Record<string, string> = {
+        [DOCS]: "3.15.0",
+        [API]: "3.19.2",
+      };
+      const { lookup, judge } = setupVersions(async () =>
+        order.map((url) => hit(url, versions[url] ?? "")),
+      );
+
+      const outcome = await ask(lookup, "boxy");
+
+      expect(versionsOf(outcome)).toEqual({
+        current: "3.19.2",
+        alternates: ["3.15.0"],
+      });
+      expect(outcome).toMatchObject({ sources: [{ url: API }] });
+      expect(
+        judge.calls.filter((c) => c.judgment === "specDescribesApi"),
+      ).toHaveLength(2);
+    });
+
+    it("judges identical bytes from two hits once", async () => {
+      const { lookup, judge } = setupVersions(async () => [
+        hit(API, "3.19.2"),
+        hit("https://api.boxy.test/api-json", "3.19.2"),
+      ]);
+
+      expect(await ask(lookup, "boxy")).toMatchObject({
+        outcome: "Resolved",
+        currentSpec: { apiVersion: "3.19.2" },
+      });
+      expect(
+        judge.calls.filter((c) => c.judgment === "specDescribesApi"),
+      ).toHaveLength(1);
     });
   });
 });

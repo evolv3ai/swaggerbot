@@ -779,8 +779,9 @@ export function createLookup(deps: LookupDeps): Lookup {
       checked.push(
         `known paths on ${choice.vendor.domain} (${hits.length} found)`,
       );
+      // Every hit, even once settled: the bytes are in hand, and a stale copy
+      // on one host (docs.) may answer before the current Spec on another.
       for (const hit of hits) {
-        if (!goOn(hit.url)) continue;
         if (hit.robotsDisallowed) diagnostics.push(robotsDiagnostic(hit.url));
         await consider(
           hit.url,
