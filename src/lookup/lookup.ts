@@ -51,7 +51,11 @@ import {
 } from "~/sources/github";
 import { findPortalCandidates, type PortalCandidate } from "~/sources/portal";
 import type { WebSearch } from "~/sources/web-search";
-import { DEFAULT_THRESHOLDS, type Thresholds } from "./thresholds";
+import {
+  DEFAULT_THRESHOLDS,
+  PARTIAL_SPEC_RATIO,
+  type Thresholds,
+} from "./thresholds";
 
 export type LookupRequest = {
   name: string;
@@ -844,7 +848,7 @@ export function createLookup(deps: LookupDeps): Lookup {
             otherVersions(chosen, pool, (c) => c).map((c) => storedOf(c).spec),
           );
       } else {
-        const picked = currentAndAlternates(pool, (c) => c);
+        const picked = currentAndFull(pool);
         if (picked)
           return resolved(
             choice.api,
@@ -991,6 +995,32 @@ function otherVersions<T>(
     versionOf,
   );
   return picked ? [picked.current, ...picked.alternates] : [];
+}
+
+/**
+ * `currentAndAlternates`, except that a Spec with under `PARTIAL_SPEC_RATIO`
+ * of the pool's largest path count is not taken as Current: a versioned
+ * add-on file (Box's `openapi-v2026.0.json`) beside the full Spec. It may
+ * still be an Alternate. A Spec with no paths is ranked as before.
+ */
+function currentAndFull(
+  pool: SpecCandidate[],
+): { current: SpecCandidate; alternates: SpecCandidate[] } | null {
+  const paths = (c: SpecCandidate) => c.sniff.extract.pathCount;
+  const most = Math.max(0, ...pool.map(paths));
+  const partial = (c: SpecCandidate) =>
+    paths(c) > 0 && paths(c) < PARTIAL_SPEC_RATIO * most;
+  const full = currentAndAlternates(
+    pool.filter((c) => !partial(c)),
+    (c) => c,
+  );
+  if (!full || !pool.some(partial)) return currentAndAlternates(pool, (c) => c);
+  const others = otherVersions(
+    full.current,
+    pool.filter((c) => c.apiVersion !== null),
+    (c) => c,
+  );
+  return { current: full.current, alternates: others };
 }
 
 /** The first candidate for each Spec id. */

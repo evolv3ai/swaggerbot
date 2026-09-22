@@ -1786,11 +1786,19 @@ describe("lookup with several API Versions", () => {
   const HOST = "api.boxy.test";
   const API_ID = "boxy.test/boxy-api";
   const path = (version: string) => `/openapi/openapi-v${version}.json`;
-  const versionSpec = (version: string) =>
+  /** A Spec of `version` with `paths` paths (one by default; 0 for none). */
+  const versionSpec = (version: string, paths = 1) =>
     JSON.stringify({
       openapi: "3.0.3",
       info: { title: "Boxy API", version },
-      paths: { "/files": { get: { tags: ["files"] } } },
+      ...(paths > 0 && {
+        paths: Object.fromEntries(
+          Array.from({ length: paths }, (_, i) => [
+            i === 0 ? "/files" : `/files/${i}`,
+            { get: { tags: ["files"] } },
+          ]),
+        ),
+      }),
     });
   // Three live API Versions and a Preview, side by side as Box publishes them.
   const VERSIONS = ["2025.0", "2026.0", "2024.0", "2027.0-beta"];
@@ -1810,10 +1818,20 @@ describe("lookup with several API Versions", () => {
   /**
    * A Lookup whose APIs.guru entry lists every Version's origin, or, with a
    * `probe`, none: the Specs are then only at the Vendor's known paths.
+   * `pathCounts` serves other Versions, each with that many paths.
    */
-  function setupVersions(probe?: LookupDeps["probe"]) {
-    for (const v of VERSIONS)
-      server.send(HOST, path(v), versionSpec(v), "application/json");
+  function setupVersions(
+    probe?: LookupDeps["probe"],
+    pathCounts?: Record<string, number>,
+  ) {
+    const versions = pathCounts ? Object.keys(pathCounts) : VERSIONS;
+    for (const v of versions)
+      server.send(
+        HOST,
+        path(v),
+        versionSpec(v, pathCounts?.[v]),
+        "application/json",
+      );
     const judge = new FakeJudge({
       whichApi: Object.fromEntries(
         ["boxy", "boxy files"].map((name) => [
@@ -1827,7 +1845,7 @@ describe("lookup with several API Versions", () => {
       ...candidate,
       originUrls: probe
         ? []
-        : VERSIONS.map((v) => `${server.origin(HOST)}${path(v)}`),
+        : versions.map((v) => `${server.origin(HOST)}${path(v)}`),
     };
     const lookup = createLookup({
       db: openDb(join(dir, "index.db")),
@@ -1877,6 +1895,38 @@ describe("lookup with several API Versions", () => {
       server.requests.filter((r) => r.host === HOST).map((r) => r.path),
     ).toEqual(expect.arrayContaining(VERSIONS.map(path)));
     expect(server.requests.map((r) => r.host)).not.toContain("apis-guru.test");
+  });
+
+  it("does not answer a partial Spec as Current over a fuller one", async () => {
+    // Box: each versioned file holds only the APIs added in that version.
+    const { lookup } = setupVersions(undefined, {
+      "2026.0": 5,
+      "2025.0": 24,
+      "2024.0": 187,
+    });
+
+    expect(versionsOf(await ask(lookup, "boxy"))).toEqual({
+      current: "2024.0",
+      alternates: ["2026.0", "2025.0"],
+    });
+  });
+
+  it("answers the highest API Version when the Specs are about the same size", async () => {
+    const { lookup } = setupVersions(undefined, { "3": 100, "4": 110 });
+
+    expect(versionsOf(await ask(lookup, "boxy"))).toEqual({
+      current: "4",
+      alternates: ["3"],
+    });
+  });
+
+  it("ranks a Spec with no path count by API Version alone", async () => {
+    const { lookup } = setupVersions(undefined, { "3": 100, "4": 0 });
+
+    expect(versionsOf(await ask(lookup, "boxy"))).toEqual({
+      current: "4",
+      alternates: ["3"],
+    });
   });
 
   it("answers the same from the Index, still leaving the Preview out", async () => {
