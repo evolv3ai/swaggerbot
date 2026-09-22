@@ -1,0 +1,60 @@
+{
+  "tracker": "linear",
+  "pollSeconds": 30,
+  "lookbackDays": 30,
+  "maxConcurrent": 3,
+  "mergeLabel": null,
+  "readiness": {
+    "threshold": 0.5
+  },
+  "idleCheck": {
+    "model": "jev-latest"
+  },
+  "relayReplies": {
+    "threshold": 0.5
+  },
+  "defaults": {
+    "worktree": "self",
+    "branch": "{{issueBranchName}}{{roleSuffix}}",
+    "permissionMode": "auto",
+    "agentKind": "claude",
+    "maxConcurrent": 3,
+    "instructionsFile": "instructions.md",
+    "claimLabel": "herdr",
+    "skipIfAssignedToOthers": true,
+    "onPickup": {
+      "comment": true,
+      "state": "Agent Working",
+      "assignToMe": true
+    },
+    "onDone": {
+      "comment": true,
+      "state": "Agent Review",
+      "notify": true,
+      "closeWorkspace": false
+    },
+    "onBlocked": {
+      "comment": true,
+      "state": "Agent Needs Input",
+      "notify": true
+    },
+    "onIdle": {
+      "comment": true,
+      "state": "Agent Needs Input",
+      "notify": true
+    },
+    "onMerged": {
+      "comment": false,
+      "notify": true,
+      "exitAgent": true,
+      "closeWorkspace": true,
+      "removeWorktree": true
+    }
+  },
+  "rules": [
+    {
+      "name": "swaggerbot",
+      "match": "label:ai and label:swaggerbot and team:WTR and state:\"Agent Todo\""
+    }
+  ]
+}
