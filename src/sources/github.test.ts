@@ -162,7 +162,7 @@ const codeSearch = (
 };
 
 describe("createGitHubCodeSearch", () => {
-  it("builds the org query and the global query, URL-encoded, 20 per page", async () => {
+  it("builds the org query and the global query, URL-encoded, 100 per page", async () => {
     const fetchJson = answering(200, { total_count: 0, items: [] });
     const { search } = codeSearch(fetchJson);
 
@@ -172,8 +172,8 @@ describe("createGitHubCodeSearch", () => {
     expect(await search.searchSpecs(null, "Cloudflare API")).toEqual([]);
 
     expect(fetchJson.mock.calls.map(([url]) => url)).toEqual([
-      "https://api.github.com/search/code?q=org%3Acloudflare%20openapi%20in%3Apath&per_page=20",
-      "https://api.github.com/search/code?q=Cloudflare%20API%20openapi%20in%3Apath&per_page=20",
+      "https://api.github.com/search/code?q=org%3Acloudflare%20openapi%20in%3Apath&per_page=100",
+      "https://api.github.com/search/code?q=Cloudflare%20API%20openapi%20in%3Apath&per_page=100",
     ]);
     expect(fetchJson.mock.calls[0]?.[1]).toMatchObject({
       Accept: "application/vnd.github+json",
@@ -225,6 +225,31 @@ describe("createGitHubCodeSearch", () => {
     const hits = await search.searchSpecs("box", "Box API");
     expect(hits).toHaveLength(10);
     expect(hits?.[9]?.path).toBe("openapi/v9.json");
+  });
+
+  it("finds a JSON hit below a first 20 that are all .ts", async () => {
+    const items = [
+      ...Array.from({ length: 20 }, (_, i) =>
+        hit("cloudflare/cloudflare-docs", `src/openapi/page${i}.ts`),
+      ),
+      hit("cloudflare/cloudflare-docs", "src/content/openapi.json"),
+    ];
+    // Like GitHub, the stub serves only the page asked for.
+    const { search } = codeSearch(async (url) => ({
+      status: 200,
+      body: {
+        items: items.slice(
+          0,
+          Number(new URL(url).searchParams.get("per_page")),
+        ),
+      },
+    }));
+
+    expect(
+      (await search.searchSpecs("cloudflare", "Cloudflare API"))?.map(
+        (h) => h.path,
+      ),
+    ).toEqual(["src/content/openapi.json"]);
   });
 
   it("builds the raw URL on HEAD from the repo's full name and the path", async () => {
@@ -321,6 +346,227 @@ describe("createGitHubCodeSearch", () => {
     const start = 1_000_000;
     expect(times).toEqual([start, start + 6_000, start + 16_000]);
     expect(clock.sleeps).toEqual([6_000]);
+  });
+});
+
+describe("searchSpecRepos", () => {
+  const repoItems = (...names: string[]) => ({
+    items: names.map((full_name) => ({ full_name })),
+  });
+
+  it("builds the repository query and returns full names in rank order, at most 5", async () => {
+    const fetchJson = answering(
+      200,
+      repoItems("c/api-schemas", "c/a", "c/b", "c/c", "c/d", "c/e", "c/f"),
+    );
+    const { search } = codeSearch(fetchJson);
+
+    expect(
+      await search.searchSpecRepos("cloudflare", "Cloudflare API"),
+    ).toEqual(["c/api-schemas", "c/a", "c/b", "c/c", "c/d"]);
+    expect(fetchJson.mock.calls[0]?.[0]).toBe(
+      "https://api.github.com/search/repositories?q=org%3Acloudflare%20openapi%20OR%20api-schemas%20OR%20api-spec&per_page=10",
+    );
+    expect(fetchJson.mock.calls[0]?.[1]).toMatchObject({
+      Authorization: "Bearer ghp_test",
+    });
+  });
+
+  it("is null without a token, making no request", async () => {
+    const fetchJson = answering(200, repoItems("c/a"));
+    const { search, warn } = codeSearch(fetchJson, { token: undefined });
+
+    expect(await search.searchSpecRepos("cloudflare", "Cloudflare")).toBeNull();
+    expect(fetchJson).not.toHaveBeenCalled();
+    expect(warn.mock.calls[0]?.[0]).toMatch(/no GITHUB_TOKEN/);
+  });
+
+  it("is null on 403 and stays null for the rest of the minute", async () => {
+    const fetchJson = answering(403, { message: "API rate limit exceeded" });
+    const { search, clock } = codeSearch(fetchJson);
+
+    expect(await search.searchSpecRepos("cloudflare", "Cloudflare")).toBeNull();
+    clock.advance(59_000);
+    expect(await search.searchSpecRepos("cloudflare", "Cloudflare")).toBeNull();
+    expect(fetchJson).toHaveBeenCalledTimes(1);
+  });
+
+  it("is null on an unparsable body", async () => {
+    const { search, warn } = codeSearch(
+      answering(200, { items: [{ name: "api-schemas" }] }),
+    );
+    expect(await search.searchSpecRepos("cloudflare", "Cloudflare")).toBeNull();
+    expect(warn.mock.calls[0]?.[0]).toMatch(/unexpected response body/);
+  });
+
+  it("has its own rate-limit slot, apart from code search's", async () => {
+    const times: Record<string, number[]> = { code: [], repos: [] };
+    const clock = fakeClock();
+    let rateLimitCode = false;
+    const search = createGitHubCodeSearch({
+      fetchJson: async (url) => {
+        const kind = url.includes("/search/code") ? "code" : "repos";
+        times[kind]?.push(clock.now());
+        if (kind === "code" && rateLimitCode)
+          return { status: 403, body: null };
+        return { status: 200, body: { items: [] } };
+      },
+      token: "ghp_test",
+      now: clock.now,
+      sleep: clock.sleep,
+      warn: () => {},
+    });
+
+    const start = 1_000_000;
+    await search.searchSpecs("box", "Box API");
+    await search.searchSpecRepos("box", "Box API");
+    await search.searchSpecRepos("box", "Box API");
+    expect(times.code).toEqual([start]);
+    expect(times.repos).toEqual([start, start + 2_000]);
+
+    // A code-search rate limit doesn't pause repository search.
+    rateLimitCode = true;
+    expect(await search.searchSpecs("box", "Box API")).toBeNull();
+    expect(await search.searchSpecs("box", "Box API")).toBeNull();
+    expect(times.code).toHaveLength(2);
+    expect(await search.searchSpecRepos("box", "Box API")).toEqual([]);
+    expect(times.repos).toHaveLength(3);
+  });
+});
+
+describe("specsInRepo", () => {
+  const blob = (path: string) => ({ path, type: "blob" });
+  const tree = (
+    entries: { path: string; type: string }[],
+    truncated = false,
+  ) => ({
+    sha: "abc",
+    tree: entries,
+    truncated,
+  });
+  const box = {
+    fullName: "box/box-openapi",
+    defaultBranch: "main",
+    archived: false,
+  };
+  const withRepos = (
+    fetchJson: FetchJson,
+    info: typeof box | null = box,
+    extra: Parameters<typeof createGitHubCodeSearch>[0] = {},
+  ) =>
+    codeSearch(fetchJson, {
+      repos: { repoInfo: async () => info },
+      ...extra,
+    });
+
+  it("reads the default branch's tree and keeps Spec-looking blobs at most 3 deep", async () => {
+    const fetchJson = answering(
+      200,
+      tree([
+        blob("openapi.json"),
+        blob("specs/v1/schema.yaml"),
+        blob("specs/v1/deep/openapi.json"),
+        blob("src/index.ts"),
+        blob("test/openapi.json"),
+        { path: "specs.json", type: "tree" },
+      ]),
+    );
+    const { search } = withRepos(fetchJson, {
+      ...box,
+      fullName: "Box/Box-OpenAPI",
+      defaultBranch: "release",
+    });
+
+    expect(await search.specsInRepo("box/box-openapi")).toEqual([
+      {
+        fullName: "Box/Box-OpenAPI",
+        path: "openapi.json",
+        url: "https://raw.githubusercontent.com/Box/Box-OpenAPI/HEAD/openapi.json",
+      },
+      {
+        fullName: "Box/Box-OpenAPI",
+        path: "specs/v1/schema.yaml",
+        url: "https://raw.githubusercontent.com/Box/Box-OpenAPI/HEAD/specs/v1/schema.yaml",
+      },
+    ]);
+    expect(fetchJson.mock.calls[0]?.[0]).toBe(
+      "https://api.github.com/repos/Box/Box-OpenAPI/git/trees/release?recursive=1",
+    );
+  });
+
+  it("works without a token", async () => {
+    const fetchJson = answering(200, tree([blob("openapi.json")]));
+    const { search } = withRepos(fetchJson, box, { token: undefined });
+
+    expect(await search.specsInRepo("box/box-openapi")).toHaveLength(1);
+  });
+
+  it("puts openapi, swagger and api basenames first, then caps at 10", async () => {
+    const others = Array.from({ length: 10 }, (_, i) =>
+      blob(`data/d${i}.json`),
+    );
+    const { search } = withRepos(
+      answering(
+        200,
+        tree([
+          ...others,
+          blob("v2/swagger.yaml"),
+          blob("schemas/api.json"),
+          blob("openapi.json"),
+        ]),
+      ),
+    );
+
+    const paths = (await search.specsInRepo("box/box-openapi"))?.map(
+      (h) => h.path,
+    );
+    expect(paths).toEqual([
+      "v2/swagger.yaml",
+      "schemas/api.json",
+      "openapi.json",
+      ...others.slice(0, 7).map((b) => b.path),
+    ]);
+  });
+
+  it("returns what a truncated tree has, with a warning", async () => {
+    const { search, warn } = withRepos(
+      answering(200, tree([blob("openapi.json")], true)),
+    );
+
+    expect(
+      (await search.specsInRepo("box/box-openapi"))?.map((h) => h.path),
+    ).toEqual(["openapi.json"]);
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/truncated/));
+  });
+
+  it("is null when the repo is unknown, the tree fails or its body is unparsable", async () => {
+    const unknown = answering(200, tree([blob("openapi.json")]));
+    expect(
+      await withRepos(unknown, null).search.specsInRepo("nobody/nothing"),
+    ).toBeNull();
+    expect(unknown).not.toHaveBeenCalled();
+
+    expect(
+      await withRepos(answering(404)).search.specsInRepo("box/box-openapi"),
+    ).toBeNull();
+    expect(
+      await withRepos(answering(403)).search.specsInRepo("box/box-openapi"),
+    ).toBeNull();
+    expect(
+      await withRepos(async () => {
+        throw new Error("offline");
+      }).search.specsInRepo("box/box-openapi"),
+    ).toBeNull();
+    expect(
+      await withRepos(answering(200, { tree: "nope" })).search.specsInRepo(
+        "box/box-openapi",
+      ),
+    ).toBeNull();
+    expect(
+      await withRepos(answering(200, tree([]))).search.specsInRepo(
+        "not-a-repo",
+      ),
+    ).toBeNull();
   });
 });
 
