@@ -6,11 +6,13 @@
     "apiId": "stripe.com/stripe-api",
     "specSources": [
       "https://raw.githubusercontent.com/stripe/openapi/master/latest/openapi.spec3.json",
-      "https://raw.githubusercontent.com/stripe/openapi/master/latest/openapi.spec3.yaml"
+      "https://raw.githubusercontent.com/stripe/openapi/master/latest/openapi.spec3.yaml",
+      "https://raw.githubusercontent.com/stripe/openapi/master/openapi/spec3.json",
+      "https://raw.githubusercontent.com/stripe/openapi/master/openapi/spec3.yaml"
     ],
     "evidenceUrl": "https://github.com/stripe/openapi",
     "reviewed": true,
-    "notes": "The repo README marks /latest/ as recommended (v1 + v2 endpoints). The legacy v1-only /openapi/spec3.json is still updated but left out of specSources."
+    "notes": "The repo README marks /latest/ as recommended (v1 + v2 endpoints). The legacy v1-only /openapi/spec3.{json,yaml} is still updated and served from the same Official repo; accepted as a correct Spec Source by Wes 2026-09-22, since code cannot infer the README's recommendation from APIs.guru's link."
   },
   {
     "name": "GitHub REST API",

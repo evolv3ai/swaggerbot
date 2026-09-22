@@ -134,3 +134,43 @@ Live `pnpm bench`, Brave, all 40 entries, about 86 s:
   - Steam picks up third-party hosts.
   - 9 longtail/popular entries need Spec finding beyond known paths (Slice 2).
 - **Latency:** most Lookups take 1.5–4 s, but some Discovery runs took 16–19 s (Mux, Dropbox) with the extra portal fetches. That's over the 15 s p90 target, which is Slice 3's to meet.
+
+## Stripe accepted, and what the gate rests on now (2026-09-22, afternoon)
+
+Wes accepted the legacy Spec as a correct Stripe Source, so
+`openapi/spec3.{json,yaml}` joined `latest/openapi.spec3.{json,yaml}` in that
+entry's `specSources` (both serve 200 from the same Official repo, whose
+default branch is `master`). Stripe is no longer a False Resolution.
+
+Live `pnpm bench`, Brave, all 40 entries:
+
+| | After WTR-37..40 + hand tuning | + Stripe accepted |
+|---|---|---|
+| False Resolution | 1/9 (11%, Stripe) | **1/9 (11%, Supabase)** |
+| Longtail coverage | 3/12 | **3/12** |
+| Outcome accuracy | 50% | **47.5%** |
+
+The rate did not move because a **different** entry took Stripe's place:
+
+- **Supabase Management API** now resolves to `https://supabase.com/openapi.json`,
+  which the entry doesn't list. That document is byte-comparable to the labelled
+  `https://api.supabase.com/api/v1-json` (both `Supabase API (v1)`, 115 paths),
+  served from the Vendor's own domain, so it is the right Spec at an Official
+  Source under a Source URL the label lacks — the same class of gap as Stripe,
+  and Wes's to decide.
+- With that one line added, False Resolution would be **0/9** and the gate would pass.
+- Cisco moved Ambiguous → Unknown, and Loops NoSpec → Ambiguous, between two runs
+  an hour apart with no code change: live Discovery is noisy at this sample size.
+
+### Two things the runs exposed, both Slice 2 input
+
+- **The Benchmark runs against a persistent Index** (`./data/swaggerbot.db`, the
+  `DATABASE_PATH` default). `answerFromIndex` replays any name already Resolved,
+  so a run measures Discovery only for names the Index has never settled. Twelve
+  names are stored now. The runner needs a fresh or throwaway Index per run
+  before any coverage number can be trusted.
+- **Two long-tail Specs are disallowed to us by the Vendor's own `robots.txt`:**
+  `api.val.town` disallows `/`, and `codeberg.org` disallows `/swagger.*.json`.
+  The polite fetcher obeys, as the PRD's crawling etiquette requires, so those
+  two can never be Resolved while that principle stands. Their labels expect
+  Resolved; that needs deciding, not coding.
