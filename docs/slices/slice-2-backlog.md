@@ -30,19 +30,21 @@ So the **portal crawl carries the gate** and code search carries precision on th
 
 ## Order
 
+Filed 2026-09-22 as WTR-41..51, with Linear "blocked by" relations mirroring this table. An issue moves from Backlog to Agent Todo only when everything it depends on is merged.
+
 | # | Linear | Issue | Depends on | Wave |
 |---|---|---|---|---|
-| 1 | | Benchmark: a throwaway Index per run | — | 1 |
-| 2 | | Known-path probe: more hosts and paths, and keep what was found | — | 1 |
-| 3 | | GitHub code search | — | 1 |
-| 4 | | Fetch a Vendor-linked Spec once despite `robots.txt` | — | 2 |
-| 5 | | Shallow Developer Portal crawl, with link selection by Jev | — | 2 |
-| 6 | | Wire the crawl into the Source chain | 4, 5 | 3 |
-| 7 | | Wire GitHub code search into the Source chain | 3, 6 | 4 |
-| 8 | | Provenance: Endorsed and Community, and `allowCommunity` | 7 | 5 |
-| 9 | | API Versions: Current, Alternate, Superseded, Preview | 8 | 6 |
-| 10 | | Candidate identity: the Neon split and GitHub's 20 APIs.guru entries | 7 | 5 |
-| 11 | | A Vendor's APIs from its Developer Portal | 6 | 5 |
+| 1 | WTR-41 | Benchmark: a throwaway Index per run | — | 1 |
+| 2 | WTR-42 | Known-path probe: more hosts and paths, and keep what was found | — | 1 |
+| 3 | WTR-43 | GitHub code search | — | 1 |
+| 4 | WTR-44 | Fetch a Vendor-linked Spec once despite `robots.txt` | — | 2 |
+| 5 | WTR-45 | Shallow Developer Portal crawl, with link selection by Jev | — | 2 |
+| 6 | WTR-46 | Wire the crawl into the Source chain | 4, 5 | 3 |
+| 7 | WTR-47 | Wire GitHub code search into the Source chain | 3, 6 | 4 |
+| 8 | WTR-48 | Provenance: Endorsed and Community, and `allowCommunity` | 7 | 5 |
+| 9 | WTR-49 | API Versions: Current, Alternate, Superseded, Preview | 8 | 6 |
+| 10 | WTR-50 | Candidate identity: the Neon split and GitHub's 20 APIs.guru entries | 7 | 5 |
+| 11 | WTR-51 | A Vendor's APIs from its Developer Portal | 6 | 5 |
 
 #6, #7, #8, #10 and #11 all touch `findSpec`/`lookup` in `src/lookup/lookup.ts`, so they are queued one wave at a time and rebased in arrival order rather than run together.
 
