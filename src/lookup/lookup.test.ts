@@ -233,6 +233,53 @@ describe("lookup", () => {
     });
   });
 
+  it("answers Resolved from a known path on a host whose robots.txt shuts it (ADR 0003)", async () => {
+    // api.val.town: `Disallow: /` for the whole app host, Spec at /openapi.json.
+    server.send(
+      "api.acme.test",
+      "/robots.txt",
+      "User-agent: *\nDisallow: /\n",
+      "",
+    );
+    server.send(
+      "api.acme.test",
+      "/openapi.json",
+      spec("Acme API"),
+      "application/json",
+    );
+    const search = new FakeWebSearch([
+      {
+        url: `${server.origin("www.acme.test")}/docs`,
+        title: "Acme API Reference",
+        snippet: "Build with Acme.",
+      },
+    ]);
+    const { lookup } = setup(
+      {
+        whichApi: {
+          acme: {
+            probabilities: { "acme.test/api": 0.9, none: 0.1 },
+            confidence: 0.9,
+          },
+        },
+        specDescribesApi: { "Acme API": yes },
+      },
+      search,
+    );
+
+    const outcome = await ask(lookup, "acme");
+
+    const url = `${server.origin("api.acme.test")}/openapi.json`;
+    expect(outcome).toMatchObject({
+      outcome: "Resolved",
+      provenance: "Official",
+      sources: [{ url, provenance: "Official" }],
+    });
+    expect(outcome.diagnostics).toEqual([
+      `robots.txt on api.acme.test:${server.port} disallowed ${url}; ADR 0003 allowed the single fetch`,
+    ]);
+  });
+
   it("merges portal Candidates whose domains redirect to one Vendor", async () => {
     // neon-tech.test redirects to neon.test, as neon.tech does to neon.com.
     server.route("www.neon-tech.test", "/", (_req, res) => {
@@ -713,7 +760,7 @@ describe("lookup with the Developer Portal crawl", () => {
       sources: [{ url, provenance: "Official" }],
     });
     expect(outcome.diagnostics).toContain(
-      `crawl: ${url}: its host's robots.txt disallowed it; ADR 0003 allowed the single fetch`,
+      `robots.txt on ${new URL(url).host} disallowed ${url}; ADR 0003 allowed the single fetch`,
     );
   });
 

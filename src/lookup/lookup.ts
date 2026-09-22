@@ -8,7 +8,11 @@ import {
 import type { Outcome } from "~/domain/outcome";
 import type { Provenance } from "~/domain/provenance";
 import { FetchError, type Fetcher } from "~/fetch/fetcher";
-import { type KnownPathHit, probeKnownPaths } from "~/fetch/known-paths";
+import {
+  type KnownPathHit,
+  type ProbeOptions,
+  probeKnownPaths,
+} from "~/fetch/known-paths";
 import { type SniffResult, sniffSpec } from "~/fetch/sniff";
 import type { Db } from "~/index-store/db";
 import { createRepo, normalizeName, specIdOf } from "~/index-store/repo";
@@ -53,10 +57,7 @@ export type LookupDeps = {
    * Checks a Vendor's domain for Specs at well-known paths. Defaults to
    * `probeKnownPaths` over https; tests point it at a fixture server.
    */
-  probe?: (
-    domain: string,
-    opts?: { budgetMs?: number },
-  ) => Promise<KnownPathHit[]>;
+  probe?: (domain: string, opts: ProbeOptions) => Promise<KnownPathHit[]>;
   /**
    * A shallow crawl of a Developer Portal for Specs. Defaults to
    * `crawlForSpecs` with this Lookup's fetcher and Judge; tests inject a fake.
@@ -146,7 +147,7 @@ export function createLookup(deps: LookupDeps): Lookup {
   const now = deps.now ?? (() => new Date());
   const probe =
     deps.probe ??
-    ((domain: string, opts?: { budgetMs?: number }) =>
+    ((domain: string, opts: ProbeOptions) =>
       probeKnownPaths(domain, fetcher, opts));
   const crawl =
     deps.crawl ??
@@ -481,10 +482,7 @@ export function createLookup(deps: LookupDeps): Lookup {
       }
       checked.push(`crawl from ${startUrl} (${result.hits.length} found)`);
       for (const hit of result.hits) {
-        if (hit.robotsDisallowed)
-          diagnostics.push(
-            `crawl: ${hit.url}: its host's robots.txt disallowed it; ADR 0003 allowed the single fetch`,
-          );
+        if (hit.robotsDisallowed) diagnostics.push(robotsDiagnostic(hit.url));
         await consider(
           hit.url,
           hit.bytes,
@@ -531,7 +529,8 @@ export function createLookup(deps: LookupDeps): Lookup {
     if (!settled()) {
       let hits: KnownPathHit[] = [];
       try {
-        hits = await probe(choice.vendor.domain);
+        // The Vendor's own domain: ADR 0003 allows a shut host's Spec once.
+        hits = await probe(choice.vendor.domain, { allowBlanketRobots: true });
       } catch (error) {
         diagnostics.push(`known paths: ${message(error)}`);
       }
@@ -539,11 +538,13 @@ export function createLookup(deps: LookupDeps): Lookup {
         `known paths on ${choice.vendor.domain} (${hits.length} found)`,
       );
       for (const hit of hits) {
+        if (hit.robotsDisallowed) diagnostics.push(robotsDiagnostic(hit.url));
         await consider(
           hit.url,
           hit.bytes,
           hit.sniff,
           provenanceOf(hit.url, choice.vendor),
+          { robotsDisallowed: hit.robotsDisallowed },
         );
         if (settled()) break;
       }
@@ -804,4 +805,9 @@ async function withDeadline<T>(
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/** The diagnostic for a Spec fetched once despite its host's robots.txt. */
+function robotsDiagnostic(url: string): string {
+  return `robots.txt on ${new URL(url).host} disallowed ${url}; ADR 0003 allowed the single fetch`;
 }
