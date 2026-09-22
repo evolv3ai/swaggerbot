@@ -52,11 +52,26 @@ export type FetchResult = {
   status: number;
   contentType: string | null;
   bytes: Uint8Array;
+  /**
+   * True when `ignoreRobots` was set and robots.txt would have refused the URL
+   * or one of its redirect hops; false otherwise.
+   */
+  robotsDisallowed: boolean;
+};
+
+export type FetchUrlOptions = {
+  signal?: AbortSignal;
+  /**
+   * Skip the robots.txt refusal for this request and its redirects (ADR 0003).
+   * Only for a single Spec document linked from an allowed Vendor page; every
+   * other guard still applies. Default false.
+   */
+  ignoreRobots?: boolean;
 };
 
 export type Fetcher = {
   /** Fetches a URL politely; throws a `FetchError` on any failure. */
-  fetchUrl(url: string, opts?: { signal?: AbortSignal }): Promise<FetchResult>;
+  fetchUrl(url: string, opts?: FetchUrlOptions): Promise<FetchResult>;
 };
 
 export type FetcherOptions = {
@@ -214,8 +229,9 @@ export function createFetcher(opts: FetcherOptions = {}): Fetcher {
     }
   }
 
-  async function checkRobots(url: URL) {
-    if (url.pathname === "/robots.txt") return;
+  /** Whether robots.txt allows the URL, from the cached verdict per origin. */
+  async function robotsAllows(url: URL): Promise<boolean> {
+    if (url.pathname === "/robots.txt") return true;
     const origin = url.origin;
     let entry = robotsCache.get(origin);
     if (!entry || entry.expiresAt <= Date.now()) {
@@ -233,23 +249,15 @@ export function createFetcher(opts: FetcherOptions = {}): Fetcher {
       robotsCache.delete(origin);
       throw error;
     }
-    const allowed =
-      verdict === "allow-all"
-        ? true
-        : verdict === "disallow-all"
-          ? false
-          : verdict.isAllowed(url.href, ROBOTS_AGENT) !== false;
-    if (!allowed) {
-      throw new FetchError(
-        "robots-disallowed",
-        url.href,
-        "robots.txt disallows it",
-      );
-    }
+    return verdict === "allow-all"
+      ? true
+      : verdict === "disallow-all"
+        ? false
+        : verdict.isAllowed(url.href, ROBOTS_AGENT) !== false;
   }
 
   return {
-    async fetchUrl(input, { signal } = {}) {
+    async fetchUrl(input, { signal, ignoreRobots = false } = {}) {
       let url: URL;
       try {
         url = new URL(input);
@@ -257,9 +265,19 @@ export function createFetcher(opts: FetcherOptions = {}): Fetcher {
         throw new FetchError("refused", input, "not a URL", { cause: error });
       }
       url = checkTarget(url, input);
+      let robotsDisallowed = false;
 
       for (let hop = 0; ; hop++) {
-        await checkRobots(url);
+        if (!(await robotsAllows(url))) {
+          if (!ignoreRobots) {
+            throw new FetchError(
+              "robots-disallowed",
+              url.href,
+              "robots.txt disallows it",
+            );
+          }
+          robotsDisallowed = true;
+        }
         const res = await requestOnce(url, maxBytes, signal);
         if (REDIRECT_STATUSES.has(res.status) && res.location) {
           if (hop >= maxRedirects) {
@@ -277,6 +295,7 @@ export function createFetcher(opts: FetcherOptions = {}): Fetcher {
             status: res.status,
             contentType: res.contentType,
             bytes: res.bytes,
+            robotsDisallowed,
           };
         }
         throw new FetchError("http-error", url.href, `HTTP ${res.status}`, {
