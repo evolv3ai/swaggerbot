@@ -16,7 +16,12 @@ import { FakeJudge, type FakeJudgeScript } from "~/judge/fake";
 import { JudgeError, yesNo } from "~/judge/judge";
 import { createApisGuru } from "~/sources/apis-guru";
 import type { CrawlHit, CrawlResult } from "~/sources/crawl";
-import type { GitHubRepos, RepoInfo } from "~/sources/github";
+import type {
+  GitHubCodeSearch,
+  GitHubRepos,
+  RepoInfo,
+  SpecHit,
+} from "~/sources/github";
 import { FakeWebSearch } from "~/sources/web-search/fake";
 import { SearchError, type WebSearch } from "~/sources/web-search/web-search";
 import { apisGuruList } from "./__fixtures__/apis-guru";
@@ -68,6 +73,7 @@ function setup(
   webSearch: WebSearch | null = new FakeWebSearch(),
   github?: GitHubRepos,
   crawl = fakeCrawl(),
+  githubSearch?: GitHubCodeSearch,
 ) {
   const judge = new FakeJudge(script);
   const fetcher = createFetcher({
@@ -95,6 +101,7 @@ function setup(
     },
     crawl: crawl.crawl,
     ...(github ? { github } : {}),
+    ...(githubSearch ? { githubSearch } : {}),
   });
   return { judge, lookup, probed, crawls: crawl.starts };
 }
@@ -988,6 +995,248 @@ describe("lookup with a GitHub origin", () => {
         { url: `${server.origin(RAW)}${MASTER}`, provenance: "Mirror" },
       ],
     });
+  });
+});
+
+describe("lookup with GitHub code search", () => {
+  const RAW = "raw.githubusercontent.com";
+
+  const script: FakeJudgeScript = {
+    whichApi: {
+      nospec: {
+        probabilities: { "nospec.test/nospec-api": 0.95, none: 0.05 },
+        confidence: 0.95,
+      },
+    },
+    specDescribesApi: { "NoSpec API": yes, "NoSpec API (draft)": yesNo(0.55) },
+    defaults: { isSpecLink: yes },
+  };
+
+  /** A hit in `fullName` on `HEAD`, as `searchSpecs` gives it, on the fixture server. */
+  const hit = (fullName: string, path = "openapi.json"): SpecHit => ({
+    fullName,
+    path,
+    url: `${server.origin(RAW)}/${fullName}/HEAD/${path}`,
+  });
+
+  /**
+   * A fake GitHubCodeSearch answering `org` for an org search and `global`
+   * for a search across GitHub, recording each `[org, name]`.
+   */
+  function fakeSearch(org: SpecHit[] | null, global: SpecHit[] | null = []) {
+    const calls: [string | null, string][] = [];
+    const search: GitHubCodeSearch = {
+      async searchSpecs(o, name) {
+        calls.push([o, name]);
+        return o === null ? global : org;
+      },
+      async searchSpecRepos() {
+        return [];
+      },
+      async specsInRepo() {
+        return [];
+      },
+    };
+    return { search, calls };
+  }
+
+  const rawPaths = () =>
+    server.requests
+      .filter((r) => r.host === RAW && r.path !== "/robots.txt")
+      .map((r) => r.path);
+
+  it("resolves from a hit in the org named after the Vendor id", async () => {
+    const found = hit("nospec/openapi");
+    server.send(
+      RAW,
+      "/nospec/openapi/HEAD/openapi.json",
+      spec("NoSpec API"),
+      "application/json",
+    );
+    const { search, calls } = fakeSearch([found]);
+    const { lookup } = setup(script, undefined, undefined, undefined, search);
+
+    const outcome = await ask(lookup, "nospec");
+
+    expect(outcome).toMatchObject({
+      outcome: "Resolved",
+      provenance: "Official",
+      sources: [{ url: found.url, provenance: "Official" }],
+    });
+    // `nospec.test` → org `nospec`; the org had a hit, so no global search.
+    expect(calls).toEqual([["nospec", "NoSpec API"]]);
+    // Settled by the search: the mirror is never fetched.
+    expect(server.requests.map((r) => r.host)).not.toContain("apis-guru.test");
+  });
+
+  it("searches across GitHub by the API's name only when the org has nothing", async () => {
+    const found = hit("fans/nospec-specs");
+    server.send(
+      RAW,
+      "/fans/nospec-specs/HEAD/openapi.json",
+      spec("NoSpec API"),
+      "application/json",
+    );
+    const { search, calls } = fakeSearch([], [found]);
+    const { lookup } = setup(script, undefined, undefined, undefined, search);
+
+    const outcome = await ask(lookup, "nospec");
+
+    expect(calls).toEqual([
+      ["nospec", "NoSpec API"],
+      [null, "NoSpec API"],
+    ]);
+    // Outside the Vendor's org: a Mirror.
+    expect(outcome).toMatchObject({
+      outcome: "Unconfirmed",
+      sources: [{ url: found.url, provenance: "Mirror" }],
+    });
+    if (outcome.outcome !== "Unconfirmed") throw new Error("unreachable");
+    const reasons = outcome.reasons.join("\n");
+    expect(reasons).toMatch(/GitHub code search in org nospec \(0 hits\)/);
+    expect(reasons).toMatch(/GitHub code search for "NoSpec API" \(1 hits\)/);
+  });
+
+  it("never fetches a hit the Judge ranks below specLink", async () => {
+    const weak = hit("nospec/sdk", "src/openapi-client.json");
+    const strong = hit("nospec/openapi");
+    server.send(
+      RAW,
+      "/nospec/sdk/HEAD/src/openapi-client.json",
+      spec("NoSpec API"),
+      "application/json",
+    );
+    server.send(
+      RAW,
+      "/nospec/openapi/HEAD/openapi.json",
+      spec("NoSpec API"),
+      "application/json",
+    );
+    const { search } = fakeSearch([weak, strong]);
+    const { lookup, judge } = setup(
+      { ...script, isSpecLink: { [weak.url]: yesNo(0.3) } },
+      undefined,
+      undefined,
+      undefined,
+      search,
+    );
+
+    const outcome = await ask(lookup, "nospec");
+
+    expect(outcome).toMatchObject({
+      outcome: "Resolved",
+      sources: [{ url: strong.url }],
+    });
+    expect(rawPaths()).toEqual(["/nospec/openapi/HEAD/openapi.json"]);
+    // Each hit judged as a link: its path, in its repo.
+    expect(
+      judge.calls.filter((c) => c.judgment === "isSpecLink"),
+    ).toMatchObject([
+      { link: { url: weak.url, text: weak.path, context: "nospec/sdk" } },
+      {
+        link: { url: strong.url, text: strong.path, context: "nospec/openapi" },
+      },
+    ]);
+  });
+
+  it("skips an archived repo among the hits and reads the rest from their default branch", async () => {
+    const archived = hit("nospec/old-specs");
+    const live = hit("nospec/openapi");
+    server.send(
+      RAW,
+      "/nospec/old-specs/HEAD/openapi.json",
+      spec("NoSpec API"),
+      "application/json",
+    );
+    server.send(
+      RAW,
+      "/nospec/openapi/main/openapi.json",
+      spec("NoSpec API"),
+      "application/json",
+    );
+    const github: GitHubRepos = {
+      async repoInfo(owner, repo) {
+        return {
+          fullName: `${owner}/${repo}`,
+          defaultBranch: "main",
+          archived: repo === "old-specs",
+        };
+      },
+    };
+    const { search } = fakeSearch([archived, live]);
+    const { lookup } = setup(script, undefined, github, undefined, search);
+
+    const outcome = await ask(lookup, "nospec");
+
+    expect(outcome).toMatchObject({
+      outcome: "Resolved",
+      sources: [
+        {
+          url: `${server.origin(RAW)}/nospec/openapi/main/openapi.json`,
+          provenance: "Official",
+        },
+      ],
+    });
+    expect(outcome.diagnostics).toContain("archived repo nospec/old-specs");
+    expect(rawPaths()).toEqual(["/nospec/openapi/main/openapi.json"]);
+  });
+
+  it("keeps the previous answer with a diagnostic when the search can't run", async () => {
+    server.send(
+      "developer.nospec.test",
+      "/openapi.json",
+      spec("NoSpec API (draft)"),
+      "application/json",
+    );
+    const { search, calls } = fakeSearch(null);
+    const { lookup } = setup(script, undefined, undefined, undefined, search);
+
+    const outcome = await ask(lookup, "nospec");
+
+    expect(calls).toEqual([["nospec", "NoSpec API"]]);
+    expect(outcome).toMatchObject({
+      outcome: "Unconfirmed",
+      sources: [
+        {
+          url: `${server.origin("developer.nospec.test")}/openapi.json`,
+          provenance: "Official",
+        },
+      ],
+    });
+    expect(
+      outcome.diagnostics?.filter((d) => d.startsWith("GitHub code search")),
+    ).toEqual([
+      "GitHub code search: skipped (no GITHUB_TOKEN, rate-limited or failed)",
+    ]);
+  });
+
+  it("does not search once the crawl has settled the answer", async () => {
+    const url = `${server.origin("docs.nospec.test")}/openapi.json`;
+    const bytes = new TextEncoder().encode(spec("NoSpec API"));
+    const sniff = sniffSpec(bytes, "application/json");
+    if (!sniff) throw new Error("fixture is not a Spec");
+    const { search, calls } = fakeSearch([hit("nospec/openapi")]);
+    const { lookup } = setup(
+      script,
+      undefined,
+      undefined,
+      fakeCrawl({
+        hits: [
+          {
+            url,
+            bytes,
+            sniff,
+            linkedFrom: "https://nospec.test/docs",
+            offHost: false,
+            robotsDisallowed: false,
+          },
+        ],
+      }),
+      search,
+    );
+
+    expect(await ask(lookup, "nospec")).toMatchObject({ outcome: "Resolved" });
+    expect(calls).toEqual([]);
   });
 });
 

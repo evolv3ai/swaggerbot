@@ -16,14 +16,16 @@ import {
 import { type SniffResult, sniffSpec } from "~/fetch/sniff";
 import type { Db } from "~/index-store/db";
 import { createRepo, normalizeName, specIdOf } from "~/index-store/repo";
-import { type ApiRef, type Judge, NONE } from "~/judge/judge";
+import { type ApiRef, type Judge, NONE, type SpecLink } from "~/judge/judge";
 import type { ApiCandidate, ApisGuru } from "~/sources/apis-guru";
 import { type CrawlResult, crawlForSpecs } from "~/sources/crawl";
 import { registrableDomain } from "~/sources/domain";
 import {
+  type GitHubCodeSearch,
   type GitHubRepos,
   parseRawGitHubUrl,
   rawGitHubUrl,
+  type SpecHit,
 } from "~/sources/github";
 import { findPortalCandidates, type PortalCandidate } from "~/sources/portal";
 import type { WebSearch } from "~/sources/web-search";
@@ -69,6 +71,11 @@ export type LookupDeps = {
    * fetched as they are.
    */
   github?: GitHubRepos;
+  /**
+   * GitHub code search for Spec files in the Vendor's org, then across
+   * GitHub. Absent (no `GITHUB_TOKEN`), the step is skipped.
+   */
+  githubSearch?: GitHubCodeSearch;
 };
 
 /**
@@ -76,6 +83,10 @@ export type LookupDeps = {
  * on the off-host domains it reports share what is left of it.
  */
 const CRAWL_STEP_BUDGET_MS = 20_000;
+
+/** The diagnostic when GitHub code search answers `null`, which gives no reason. */
+const GITHUB_SEARCH_SKIPPED =
+  "GitHub code search: skipped (no GITHUB_TOKEN, rate-limited or failed)";
 
 /** Umbrella names list at most this many Candidates. */
 const MAX_UMBRELLA_CANDIDATES = 10;
@@ -135,13 +146,14 @@ type SpecCandidate = {
  *    one skipped when its repo is archived, read from the default branch
  *    when it names another), then known paths on the Vendor's domain, then
  *    a shallow crawl of the Developer Portal and known paths on the other
- *    domains it links to, then the APIs.guru mirror.
+ *    domains it links to, then GitHub code search in the Vendor's org or
+ *    else across GitHub, then the APIs.guru mirror.
  *
  * A Judge, search or fetch error skips that step and is reported in
  * `diagnostics`; it never makes the Lookup throw.
  */
 export function createLookup(deps: LookupDeps): Lookup {
-  const { judge, fetcher, webSearch, apisGuru, github } = deps;
+  const { judge, fetcher, webSearch, apisGuru, github, githubSearch } = deps;
   const repo = createRepo(deps.db);
   const t: Thresholds = { ...DEFAULT_THRESHOLDS, ...deps.thresholds };
   const now = deps.now ?? (() => new Date());
@@ -518,6 +530,61 @@ export function createLookup(deps: LookupDeps): Lookup {
       }
     }
 
+    /**
+     * Searches GitHub for Spec files in the Vendor's org (its id's first
+     * label), or across GitHub by the API's name when the org has none. The
+     * Judge ranks the hits as links first; those likely enough are fetched
+     * as origins, so archived repos are skipped and `HEAD` becomes the
+     * default branch. Stops once settled.
+     */
+    async function githubSearchStep(search: GitHubCodeSearch) {
+      /** The hits, or `null` after one diagnostic when the search can't run. */
+      const searchSpecs = async (org: string | null) => {
+        let hits: SpecHit[] | null;
+        try {
+          hits = await search.searchSpecs(org, choice.api.name);
+        } catch (error) {
+          diagnostics.push(`GitHub code search: ${message(error)}`);
+          return null;
+        }
+        if (hits === null) diagnostics.push(GITHUB_SEARCH_SKIPPED);
+        return hits;
+      };
+
+      const org = vendorLabel(choice.vendor);
+      let hits = await searchSpecs(org);
+      if (hits === null) return;
+      checked.push(`GitHub code search in org ${org} (${hits.length} hits)`);
+      if (hits.length === 0) {
+        hits = await searchSpecs(null);
+        if (hits === null) return;
+        checked.push(
+          `GitHub code search for "${choice.api.name}" (${hits.length} hits)`,
+        );
+      }
+      if (hits.length === 0) return;
+
+      const links: SpecLink[] = hits.map((hit) => ({
+        url: hit.url,
+        text: hit.path,
+        context: hit.fullName,
+      }));
+      let probabilities: number[];
+      try {
+        probabilities = (await judge.areSpecLinks(ref, links)).map(
+          (j) => j.probability,
+        );
+      } catch (error) {
+        diagnostics.push(`Judge areSpecLinks: ${message(error)}`);
+        return;
+      }
+      for (const [i, hit] of hits.entries()) {
+        if ((probabilities[i] ?? 0) < t.specLink) continue;
+        await fetchOrigin(hit.url);
+        if (settled()) return;
+      }
+    }
+
     const confirmed = () =>
       best(candidates.filter((c) => c.provenance === "Official"));
     const settled = () => (confirmed()?.probability ?? 0) >= t.describes;
@@ -550,6 +617,7 @@ export function createLookup(deps: LookupDeps): Lookup {
       }
     }
     if (!settled()) await crawlStep();
+    if (!settled() && githubSearch) await githubSearchStep(githubSearch);
     if (!settled() && choice.mirrorUrl)
       await fetchAndConsider(choice.mirrorUrl, true);
 
