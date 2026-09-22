@@ -47,6 +47,9 @@ export function apisGuruList(origin: (host: string) => string) {
     ...entry("nospec.test", "NoSpec API", [
       `${origin("developer.nospec.test")}/gone.json`,
     ]),
+    ...entry("ghco.test", "GhCo API", [
+      `${origin("raw.githubusercontent.com")}/ghco/openapi/master/openapi.json`,
+    ]),
     ...entry("google.com:drive", "Drive API", [], "Manages files in Drive."),
     ...entry("google.com:gmail", "Gmail API", [], "Reads and sends mail."),
     ...entry("chatly.test", "Chatly Messaging", []),
