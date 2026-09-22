@@ -1,3 +1,4 @@
+import { setTimeout as delay } from "node:timers/promises";
 import { z } from "zod";
 import { USER_AGENT } from "~/fetch/fetcher";
 
@@ -45,6 +46,15 @@ async function defaultFetchJson(
   return { status: res.status, body: res.ok ? await res.json() : null };
 }
 
+function githubHeaders(token: string | undefined): Record<string, string> {
+  return {
+    Accept: "application/vnd.github+json",
+    "User-Agent": USER_AGENT,
+    "X-GitHub-Api-Version": "2022-11-28",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
+
 /**
  * GitHub's repo metadata, from `GET /repos/{owner}/{repo}`, cached in memory
  * for 24 h. Any failure is `null`; a rate limit (403/429), another error
@@ -67,12 +77,7 @@ export function createGitHubRepos({
     );
   };
 
-  const headers: Record<string, string> = {
-    Accept: "application/vnd.github+json",
-    "User-Agent": USER_AGENT,
-    "X-GitHub-Api-Version": "2022-11-28",
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
+  const headers = githubHeaders(token);
 
   return {
     async repoInfo(owner, repo) {
@@ -106,6 +111,154 @@ export function createGitHubRepos({
       };
       cache.set(key, { at: Date.now(), info });
       return info;
+    },
+  };
+}
+
+/** A Spec-looking file found by GitHub code search. */
+export type SpecHit = {
+  /** `owner/repo`. */
+  fullName: string;
+  /** The file's path in the repo. */
+  path: string;
+  /** The raw file on `HEAD`; the caller resolves the default branch through `repoInfo`. */
+  url: string;
+};
+
+export type GitHubCodeSearch = {
+  /**
+   * Spec-looking files in an org, or across GitHub when `org` is null. `null`
+   * when the search can't run: no token, rate-limited, or any other failure.
+   */
+  searchSpecs(org: string | null, name: string): Promise<SpecHit[] | null>;
+};
+
+export type GitHubCodeSearchOptions = {
+  fetchJson?: FetchJson;
+  /** `GITHUB_TOKEN`: required, as GitHub refuses code search unauthenticated. */
+  token?: string;
+  /** Minimum spacing between searches. Default 6 s: GitHub allows 10 a minute. */
+  minIntervalMs?: number;
+  warn?: (message: string) => void;
+  /** Tests inject these to avoid waiting. */
+  sleep?: (ms: number) => Promise<void>;
+  now?: () => number;
+};
+
+const CodeSearchResponse = z.object({
+  items: z.array(
+    z.object({
+      path: z.string(),
+      repository: z.object({ full_name: z.string() }),
+    }),
+  ),
+});
+
+const SPEC_EXTENSION = /\.(json|ya?ml)$/i;
+const IGNORED_SEGMENTS = new Set([
+  "node_modules",
+  "test",
+  "tests",
+  "fixture",
+  "fixtures",
+  "example",
+  "examples",
+  "vendor",
+  "dist",
+]);
+const MAX_HITS = 10;
+const RATE_LIMIT_PAUSE_MS = 60_000;
+
+function looksLikeSpec(path: string): boolean {
+  return (
+    SPEC_EXTENSION.test(path) &&
+    !path
+      .split("/")
+      .some((segment) => IGNORED_SEGMENTS.has(segment.toLowerCase()))
+  );
+}
+
+/**
+ * GitHub code search (`GET /search/code`) for Spec-looking files: `openapi`
+ * in the path, a JSON or YAML extension, outside test, example and build
+ * folders, at most 10. Searches are spaced `minIntervalMs` apart; a rate limit
+ * (403/429) makes every search `null` for the next minute. Every failure is
+ * `null`, and the first is warned about, once per instance.
+ */
+export function createGitHubCodeSearch({
+  fetchJson = defaultFetchJson,
+  token,
+  minIntervalMs = 6_000,
+  warn = console.warn,
+  sleep = (ms) => delay(ms),
+  now = Date.now,
+}: GitHubCodeSearchOptions = {}): GitHubCodeSearch {
+  let warned = false;
+  const warnOnce = (message: string) => {
+    if (warned) return;
+    warned = true;
+    warn(
+      `GitHub code search: ${message}; the search is skipped while it fails.`,
+    );
+  };
+
+  const headers = githubHeaders(token);
+  let nextSlot = 0;
+  let blockedUntil = 0;
+
+  /** Reserves the next slot and waits for it. */
+  async function waitTurn() {
+    const at = Math.max(now(), nextSlot);
+    nextSlot = at + minIntervalMs;
+    const wait = at - now();
+    if (wait > 0) await sleep(wait);
+  }
+
+  return {
+    async searchSpecs(org, name) {
+      if (!token) {
+        warnOnce("no GITHUB_TOKEN");
+        return null;
+      }
+      if (now() < blockedUntil) return null;
+
+      const query = org
+        ? `org:${org} openapi in:path`
+        : `${name} openapi in:path`;
+      const url = `${GITHUB_API}/search/code?q=${encodeURIComponent(query)}&per_page=20`;
+      await waitTurn();
+      let res: { status: number; body: unknown };
+      try {
+        res = await fetchJson(url, headers);
+      } catch (error) {
+        warnOnce(error instanceof Error ? error.message : String(error));
+        return null;
+      }
+      if (res.status === 403 || res.status === 429) {
+        blockedUntil = now() + RATE_LIMIT_PAUSE_MS;
+        warnOnce(`rate-limited (HTTP ${res.status})`);
+        return null;
+      }
+      if (res.status !== 200) {
+        warnOnce(`HTTP ${res.status}`);
+        return null;
+      }
+      const parsed = CodeSearchResponse.safeParse(res.body);
+      if (!parsed.success) {
+        warnOnce("unexpected response body");
+        return null;
+      }
+      return parsed.data.items
+        .filter((item) => looksLikeSpec(item.path))
+        .slice(0, MAX_HITS)
+        .map((item) => {
+          const fullName = item.repository.full_name;
+          return {
+            fullName,
+            path: item.path,
+            url: `https://raw.githubusercontent.com/${fullName}/HEAD/${item.path}`,
+          };
+        });
     },
   };
 }
