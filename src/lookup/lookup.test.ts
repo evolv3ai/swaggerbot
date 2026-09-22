@@ -327,24 +327,89 @@ describe("lookup", () => {
   it("answers Ambiguous for an umbrella name without asking whichApi", async () => {
     const { lookup, judge } = setup({});
 
-    expect(await ask(lookup, "Google")).toEqual({
+    expect(await ask(lookup, "Umbra")).toEqual({
       outcome: "Ambiguous",
       candidates: [
         {
-          apiId: "google.com/drive",
-          name: "Drive API",
-          vendor: "google.com",
+          apiId: "umbra.test/alpha",
+          name: "Umbra Alpha",
+          vendor: "umbra.test",
           probability: 0.5,
         },
         {
-          apiId: "google.com/gmail",
-          name: "Gmail API",
-          vendor: "google.com",
+          apiId: "umbra.test/beta",
+          name: "Umbra Beta",
+          vendor: "umbra.test",
           probability: 0.5,
         },
       ],
     });
     expect(judge.calls).toEqual([]);
+  });
+
+  it("answers Ambiguous for a name that prefixes an `apis` Vendor label", async () => {
+    const { lookup, judge } = setup({});
+
+    expect(await ask(lookup, "google")).toEqual({
+      outcome: "Ambiguous",
+      candidates: [
+        {
+          apiId: "googleapis.com/drive",
+          name: "Drive API",
+          vendor: "googleapis.com",
+          probability: 0.5,
+        },
+        {
+          apiId: "googleapis.com/gmail",
+          name: "Gmail API",
+          vendor: "googleapis.com",
+          probability: 0.5,
+        },
+      ],
+    });
+    expect(judge.calls).toEqual([]);
+  });
+
+  it("answers Ambiguous over the Vendor's APIs for a name judged the Vendor's", async () => {
+    const { lookup, judge } = setup({ isVendorName: { Zenith: yesNo(0.9) } });
+
+    expect(await ask(lookup, "Zenith")).toEqual({
+      outcome: "Ambiguous",
+      candidates: ["Nova", "Orbit", "Pulse"].map((service) => ({
+        apiId: `zenithcorp.test/${service.toLowerCase()}`,
+        name: `Zenith ${service}`,
+        vendor: "zenithcorp.test",
+        probability: 1 / 3,
+      })),
+    });
+    expect(judge.calls.map((c) => c.judgment)).toEqual([
+      "whichApi",
+      "isVendorName",
+    ]);
+    expect(judge.calls[1]).toEqual({
+      judgment: "isVendorName",
+      name: "Zenith",
+      vendor: { id: "zenithcorp.test", name: "zenithcorp.test" },
+    });
+  });
+
+  it("keeps Unknown for a Vendor name when the Vendor has one API", async () => {
+    const { lookup } = setup({ isVendorName: { payco: yesNo(0.9) } });
+
+    expect(await ask(lookup, "payco")).toEqual({
+      outcome: "Unknown",
+      name: "payco",
+    });
+  });
+
+  it("keeps Unknown when the name is unlikely to be the Vendor's", async () => {
+    const { lookup, judge } = setup({ isVendorName: { Zenith: yesNo(0.3) } });
+
+    expect(await ask(lookup, "Zenith")).toEqual({
+      outcome: "Unknown",
+      name: "Zenith",
+    });
+    expect(judge.calls.map((c) => c.judgment)).toContain("isVendorName");
   });
 
   it("answers Unknown when whichApi says none", async () => {

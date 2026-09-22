@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import type { SpecExtract } from "../domain/spec-extract";
 import {
   IS_SPEC_LINK_QUESTION,
+  IS_VENDOR_NAME_QUESTION,
   JevJudge,
   SPEC_DESCRIBES_API_QUESTION,
   type SystemOneClient,
@@ -180,6 +181,43 @@ describe("JevJudge.specDescribesApi", () => {
       instructions: SPEC_DESCRIBES_API_QUESTION.instructions,
       criteria: SPEC_DESCRIBES_API_QUESTION.criteria,
     });
+  });
+});
+
+describe("JevJudge.isVendorName", () => {
+  it("asks one noul over the name and the Vendor and maps it", async () => {
+    const { client, requests } = stubClient({
+      answers: { vendor: { type: "noul", noul: 0.85 } },
+    });
+    const result = await new JevJudge(client).isVendorName("mailchimp", {
+      id: "mailchimp.com",
+      name: "Mailchimp",
+    });
+
+    expect(result).toEqual({ probability: 0.85, confidence: 0.85 });
+    expect(requests).toHaveLength(1);
+    expect(requests[0]).toEqual({
+      state: {
+        name: "mailchimp",
+        vendor: { id: "mailchimp.com", name: "Mailchimp" },
+      },
+      questions: {
+        vendor: {
+          type: "noul",
+          instructions: IS_VENDOR_NAME_QUESTION.instructions,
+          criteria: IS_VENDOR_NAME_QUESTION.criteria,
+        },
+      },
+    });
+  });
+
+  it("rejects an answer of the wrong type", async () => {
+    const { client } = stubClient({ answers: { vendor: { type: "score" } } });
+    const err = await new JevJudge(client)
+      .isVendorName("mailchimp", { id: "mailchimp.com", name: "Mailchimp" })
+      .catch((e) => e);
+    expect(err).toBeInstanceOf(JudgeError);
+    expect(err.kind).toBe("bad-response");
   });
 });
 

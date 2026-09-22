@@ -50,8 +50,18 @@ export function apisGuruList(origin: (host: string) => string) {
     ...entry("ghco.test", "GhCo API", [
       `${origin("raw.githubusercontent.com")}/ghco/openapi/master/openapi.json`,
     ]),
-    ...entry("google.com:drive", "Drive API", [], "Manages files in Drive."),
-    ...entry("google.com:gmail", "Gmail API", [], "Reads and sends mail."),
+    ...entry("umbra.test:alpha", "Umbra Alpha", []),
+    ...entry("umbra.test:beta", "Umbra Beta", []),
+    ...entry(
+      "googleapis.com:drive",
+      "Drive API",
+      [],
+      "Manages files in Drive.",
+    ),
+    ...entry("googleapis.com:gmail", "Gmail API", [], "Reads and sends mail."),
+    ...entry("zenithcorp.test:nova", "Zenith Nova", []),
+    ...entry("zenithcorp.test:orbit", "Zenith Orbit", []),
+    ...entry("zenithcorp.test:pulse", "Zenith Pulse", []),
     ...entry("chatly.test", "Chatly Messaging", []),
     ...entry("talkr.test", "Talkr Messaging", []),
   };

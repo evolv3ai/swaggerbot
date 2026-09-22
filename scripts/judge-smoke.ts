@@ -18,3 +18,11 @@ const result = await judge.whichApi("stripe", [
   },
 ]);
 console.log(JSON.stringify(result, null, 2));
+
+const vendorName = await judge.isVendorName("mailchimp", {
+  id: "mailchimp.com",
+  name: "Mailchimp",
+});
+console.log(
+  `isVendorName("mailchimp", mailchimp.com): ${JSON.stringify(vendorName)}`,
+);

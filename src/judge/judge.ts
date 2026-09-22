@@ -11,6 +11,12 @@ export type ApiRef = {
   description?: string;
 };
 
+/** A Vendor as a Judge sees it. */
+export type VendorRef = {
+  id: string;
+  name: string;
+};
+
 /** A link found on a page (or a document) that may be the Spec for an API. */
 export type SpecLink = {
   url: string;
@@ -50,6 +56,8 @@ export interface Judge {
   areSpecLinks(api: ApiRef, links: SpecLink[]): Promise<YesNoJudgment[]>;
   /** Whether the Spec, seen through its extract, describes the API. */
   specDescribesApi(api: ApiRef, extract: SpecExtract): Promise<YesNoJudgment>;
+  /** Whether the name means the Vendor as a whole rather than one of its APIs. */
+  isVendorName(name: string, vendor: VendorRef): Promise<YesNoJudgment>;
 }
 
 /** Why a Judge could not answer. */
