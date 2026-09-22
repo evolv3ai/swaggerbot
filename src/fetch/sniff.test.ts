@@ -65,7 +65,26 @@ describe("sniffSpec", () => {
         samplePaths: ["/things"],
         pathCount: 1,
       },
+      versionInfo: { version: "1", preview: false },
     });
+  });
+
+  it("reads info.version and info.x-preview for the API Version", () => {
+    const doc = (info: object) =>
+      bytes(JSON.stringify({ openapi: "3.0.0", info, paths: {} }));
+
+    expect(
+      sniffSpec(doc({ version: " 2026.0 ", "x-preview": true }), null)
+        ?.versionInfo,
+    ).toEqual({ version: "2026.0", preview: true });
+    expect(sniffSpec(doc({ title: "No version" }), null)?.versionInfo).toEqual({
+      version: null,
+      preview: false,
+    });
+    expect(
+      sniffSpec(bytes("openapi: 3.0.0\ninfo:\n  version: 2\npaths: {}\n"), null)
+        ?.versionInfo.version,
+    ).toBe("2");
   });
 
   it("returns null for an HTML page", () => {

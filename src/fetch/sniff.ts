@@ -1,4 +1,5 @@
 import { parseDocument } from "yaml";
+import type { VersionInfo } from "~/domain/api-version";
 import { SPEC_EXTRACT_LIMITS, type SpecExtract } from "~/domain/spec-extract";
 
 export type SpecFormat = "json" | "yaml";
@@ -8,6 +9,8 @@ export type SniffResult = {
   specVersion: string;
   format: SpecFormat;
   extract: SpecExtract;
+  /** For `apiVersionOf`; kept out of `extract`, which the Judge sees. */
+  versionInfo: VersionInfo;
 };
 
 type Obj = Record<string, unknown>;
@@ -47,7 +50,26 @@ export function sniffSpec(
   }
   if (!isObj(doc.paths) && !isObj(doc.info)) return null;
 
-  return { specVersion, format: parsed.format, extract: extractFrom(doc) };
+  return {
+    specVersion,
+    format: parsed.format,
+    extract: extractFrom(doc),
+    versionInfo: versionInfoFrom(doc),
+  };
+}
+
+function versionInfoFrom(doc: Obj): VersionInfo {
+  const info = isObj(doc.info) ? doc.info : {};
+  const raw = info.version;
+  // YAML reads an unquoted `version: 2.0` as a number.
+  const version =
+    typeof raw === "string" || typeof raw === "number"
+      ? String(raw).trim()
+      : "";
+  return {
+    version: version === "" ? null : version,
+    preview: info["x-preview"] === true,
+  };
 }
 
 function decode(bytes: Uint8Array): string {

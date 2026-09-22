@@ -1536,6 +1536,175 @@ describe("lookup with GitHub code search", () => {
   });
 });
 
+describe("lookup with several API Versions", () => {
+  const HOST = "api.boxy.test";
+  const API_ID = "boxy.test/boxy-api";
+  const path = (version: string) => `/openapi/openapi-v${version}.json`;
+  const versionSpec = (version: string) =>
+    JSON.stringify({
+      openapi: "3.0.3",
+      info: { title: "Boxy API", version },
+      paths: { "/files": { get: { tags: ["files"] } } },
+    });
+  // Three live API Versions and a Preview, side by side as Box publishes them.
+  const VERSIONS = ["2025.0", "2026.0", "2024.0", "2027.0-beta"];
+
+  const candidate: ApiCandidate = {
+    key: "boxy.test",
+    apiId: API_ID,
+    name: "Boxy API",
+    vendor: { id: "boxy.test", name: "Boxy", domain: "boxy.test" },
+    preferredVersion: "2026.0",
+    mirrorUrl: `http://apis-guru.test/boxy.test/openapi.json`,
+    originUrls: [],
+    possiblyOfficialUrls: [],
+    updated: "2024-01-01T00:00:00.000Z",
+  };
+
+  function setupVersions() {
+    for (const v of VERSIONS)
+      server.send(HOST, path(v), versionSpec(v), "application/json");
+    const judge = new FakeJudge({
+      whichApi: Object.fromEntries(
+        ["boxy", "boxy files"].map((name) => [
+          name,
+          { probabilities: { [API_ID]: 0.95, none: 0.05 }, confidence: 0.95 },
+        ]),
+      ),
+      specDescribesApi: { "Boxy API": yes },
+    });
+    const guru = {
+      ...candidate,
+      originUrls: VERSIONS.map((v) => `${server.origin(HOST)}${path(v)}`),
+    };
+    const lookup = createLookup({
+      db: openDb(join(dir, "index.db")),
+      judge,
+      apisGuru: {
+        findCandidates: async () => [guru],
+        findVendorApis: async () => [guru],
+      },
+      webSearch: null,
+      fetcher: createFetcher({
+        allowPrivate: true,
+        lookup: fixtureLookup,
+        minIntervalMs: 0,
+      }),
+      now: () => new Date(NOW),
+      probe: async () => [],
+      crawl: fakeCrawl().crawl,
+    });
+    return { judge, lookup };
+  }
+
+  const versionsOf = (outcome: Outcome) =>
+    outcome.outcome === "Resolved"
+      ? {
+          current: outcome.currentSpec.apiVersion,
+          alternates: outcome.alternateSpecs.map((s) => s.apiVersion),
+        }
+      : outcome.outcome;
+
+  it("answers the highest non-Preview API Version as Current, the others as Alternates", async () => {
+    const { lookup } = setupVersions();
+
+    const outcome = await ask(lookup, "boxy");
+
+    expect(versionsOf(outcome)).toEqual({
+      current: "2026.0",
+      alternates: ["2025.0", "2024.0"],
+    });
+    expect(outcome).toMatchObject({
+      outcome: "Resolved",
+      currentSpec: { isPreview: false, supersededAt: null },
+      sources: [{ url: `${server.origin(HOST)}${path("2026.0")}` }],
+    });
+    // Settled by the first origin, the others were still fetched: each
+    // names an API Version. The mirror, a later step, was not.
+    expect(
+      server.requests.filter((r) => r.host === HOST).map((r) => r.path),
+    ).toEqual(expect.arrayContaining(VERSIONS.map(path)));
+    expect(server.requests.map((r) => r.host)).not.toContain("apis-guru.test");
+  });
+
+  it("answers the same from the Index, still leaving the Preview out", async () => {
+    const { lookup, judge } = setupVersions();
+    const first = await ask(lookup, "boxy");
+    const calls = judge.calls.length;
+
+    const second = await ask(lookup, "boxy");
+
+    expect(second).toEqual(first);
+    expect(judge.calls).toHaveLength(calls);
+  });
+
+  it("selects an Alternate by its API Version, from Discovery and from the Index", async () => {
+    const { lookup, judge } = setupVersions();
+
+    const live = await ask(lookup, "boxy", { apiVersion: "2025.0" });
+    expect(versionsOf(live)).toEqual({
+      current: "2025.0",
+      alternates: ["2026.0", "2024.0"],
+    });
+
+    const calls = judge.calls.length;
+    const indexed = await ask(lookup, "boxy", { apiVersion: "2024.0" });
+    expect(versionsOf(indexed)).toEqual({
+      current: "2024.0",
+      alternates: ["2026.0", "2025.0"],
+    });
+    expect(judge.calls).toHaveLength(calls);
+  });
+
+  it("selects a Preview Version only when asked for it", async () => {
+    const { lookup } = setupVersions();
+
+    const outcome = await ask(lookup, "boxy", { apiVersion: "2027.0-beta" });
+
+    expect(outcome).toMatchObject({
+      outcome: "Resolved",
+      currentSpec: { apiVersion: "2027.0-beta", isPreview: true },
+    });
+  });
+
+  it("answers No Spec for an API Version the API does not have", async () => {
+    const { lookup } = setupVersions();
+
+    const outcome = await ask(lookup, "boxy", { apiVersion: "1999.0" });
+
+    expect(outcome).toMatchObject({
+      outcome: "NoSpec",
+      api: { id: API_ID },
+      communityAvailable: false,
+    });
+    expect(outcome.diagnostics).toContain(
+      "no Spec for API Version 1999.0; found: 2025.0, 2026.0, 2024.0, 2027.0-beta (Preview)",
+    );
+  });
+
+  it("marks a Spec Superseded once its Source stops serving it, and leaves it out by default", async () => {
+    const { lookup } = setupVersions();
+    await ask(lookup, "boxy");
+
+    // 2024.0 is withdrawn; a Lookup under another name finds the rest again.
+    server.route(HOST, path("2024.0"), (_req, res) => {
+      res.writeHead(404).end();
+    });
+    await ask(lookup, "boxy files");
+    const outcome = await ask(lookup, "boxy");
+
+    expect(versionsOf(outcome)).toEqual({
+      current: "2026.0",
+      alternates: ["2025.0"],
+    });
+    // Still kept, and still selectable.
+    expect(await ask(lookup, "boxy", { apiVersion: "2024.0" })).toMatchObject({
+      outcome: "Resolved",
+      currentSpec: { apiVersion: "2024.0", supersededAt: NOW },
+    });
+  });
+});
+
 describe("provenanceOf", () => {
   const stripe = { id: "stripe.com", name: "stripe.com", domain: "stripe.com" };
 

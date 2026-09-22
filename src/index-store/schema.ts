@@ -44,6 +44,9 @@ export const specs = sqliteTable(
       .references(() => apis.id),
     specVersion: text("spec_version").notNull(),
     apiVersion: text("api_version"),
+    isPreview: integer("is_preview", { mode: "boolean" })
+      .notNull()
+      .default(false),
     format: text("format", { enum: ["json", "yaml"] }).notNull(),
     byteLength: integer("byte_length").notNull(),
     publishedBytes: blob("published_bytes", { mode: "buffer" }).notNull(),
@@ -52,6 +55,12 @@ export const specs = sqliteTable(
      * is only Unconfirmed. Only a confirmed Spec is answered Resolved from the Index.
      */
     confirmedAt: text("confirmed_at"),
+    /**
+     * When every Source of this Spec was seen serving something else, or
+     * nothing; null while any may still serve it. A Superseded Spec is kept
+     * but never returned by default.
+     */
+    supersededAt: text("superseded_at"),
     createdAt: text("created_at").notNull().default(now),
   },
   (t) => [index("specs_api_id_idx").on(t.apiId)],
