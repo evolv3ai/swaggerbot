@@ -35,6 +35,10 @@ A run uses a throwaway Index by default: a fresh, empty database in a temporary 
 
 They can't be used together. The report names the Index it used (`indexPath` and `indexFresh` in `--json`).
 
+## Crawling etiquette
+
+The fetcher (`src/fetch/fetcher.ts`) sends an honest User-Agent, spaces requests per host and respects `robots.txt`. The one exception is [ADR 0003](docs/adr/0003-robots-txt-exception-for-vendor-linked-specs.md): a single Spec document linked from an allowed Vendor page is fetched once even when its own host's `robots.txt` disallows it (`fetchUrl(url, { ignoreRobots: true })`), and never crawled on from; the result's `robotsDisallowed` records that it happened.
+
 ## Check
 
 ```sh

@@ -231,6 +231,118 @@ describe("fetchUrl", () => {
   });
 });
 
+describe("fetchUrl with ignoreRobots (ADR 0003)", () => {
+  const disallowAll = (host: string) =>
+    server.send(host, "/robots.txt", "User-agent: *\nDisallow: /\n", "");
+
+  it("still refuses a disallowed URL by default", async () => {
+    disallowAll("api.test");
+    server.send("api.test", "/openapi.json", "{}", "application/json");
+
+    const error = await fetchError(
+      testFetcher().fetchUrl(`${server.origin("api.test")}/openapi.json`),
+    );
+
+    expect(error.kind).toBe("robots-disallowed");
+  });
+
+  it("returns a disallowed URL and says robots.txt disallowed it", async () => {
+    disallowAll("api.test");
+    server.send("api.test", "/openapi.json", "{}", "application/json");
+
+    const result = await testFetcher().fetchUrl(
+      `${server.origin("api.test")}/openapi.json`,
+      { ignoreRobots: true },
+    );
+
+    expect(new TextDecoder().decode(result.bytes)).toBe("{}");
+    expect(result.robotsDisallowed).toBe(true);
+  });
+
+  it("reports robotsDisallowed false for an allowed URL", async () => {
+    server.send(
+      "api.test",
+      "/robots.txt",
+      "User-agent: *\nDisallow: /private\n",
+      "",
+    );
+    server.send("api.test", "/openapi.json", "{}", "application/json");
+    const fetcher = testFetcher();
+
+    const flagged = await fetcher.fetchUrl(
+      `${server.origin("api.test")}/openapi.json`,
+      { ignoreRobots: true },
+    );
+    const plain = await fetcher.fetchUrl(
+      `${server.origin("api.test")}/openapi.json`,
+    );
+
+    expect(flagged.robotsDisallowed).toBe(false);
+    expect(plain.robotsDisallowed).toBe(false);
+    expect(
+      server.requests.filter((r) => r.path === "/robots.txt"),
+    ).toHaveLength(1);
+  });
+
+  it("follows a redirect from an allowed host onto a disallowed one", async () => {
+    server.route("docs.test", "/openapi", (_req, res) => {
+      res
+        .writeHead(302, {
+          location: `${server.origin("api.test")}/openapi.json`,
+        })
+        .end();
+    });
+    disallowAll("api.test");
+    server.send("api.test", "/openapi.json", "{}", "application/json");
+
+    const result = await testFetcher().fetchUrl(
+      `${server.origin("docs.test")}/openapi`,
+      { ignoreRobots: true },
+    );
+
+    expect(result.finalUrl).toBe(`${server.origin("api.test")}/openapi.json`);
+    expect(result.robotsDisallowed).toBe(true);
+  });
+
+  it("still spaces requests to one host", async () => {
+    disallowAll("api.test");
+    server.send("api.test", "/a", "a", "text/plain");
+    server.send("api.test", "/b", "b", "text/plain");
+    const fetcher = testFetcher({ minIntervalMs: 250 });
+
+    await Promise.all([
+      fetcher.fetchUrl(`${server.origin("api.test")}/a`, {
+        ignoreRobots: true,
+      }),
+      fetcher.fetchUrl(`${server.origin("api.test")}/b`, {
+        ignoreRobots: true,
+      }),
+    ]);
+
+    const times = server.requests
+      .filter((r) => r.path !== "/robots.txt")
+      .map((r) => r.at);
+    expect(times).toHaveLength(2);
+    expect(Math.abs((times[1] ?? 0) - (times[0] ?? 0))).toBeGreaterThanOrEqual(
+      240,
+    );
+  });
+
+  it("still applies the size cap", async () => {
+    disallowAll("api.test");
+    server.send("api.test", "/openapi.json", "x".repeat(4096), "text/plain");
+
+    const error = await fetchError(
+      testFetcher({ maxBytes: 1024 }).fetchUrl(
+        `${server.origin("api.test")}/openapi.json`,
+        { ignoreRobots: true },
+      ),
+    );
+
+    expect(error.kind).toBe("too-large");
+  });
+});
+
 describe("private addresses", () => {
   it("are refused by default, as a literal or through DNS", async () => {
     server.send("vendor.test", "/doc", "ok", "text/plain");
