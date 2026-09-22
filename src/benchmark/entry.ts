@@ -25,7 +25,11 @@ export const BenchmarkEntry = z
     group: BenchmarkGroup,
     expected: ExpectedOutcome,
     apiId: ApiId.optional(),
-    /** Any of these URLs counts as the correct Current Spec Source. */
+    /**
+     * Any of these URLs counts as the correct Current Spec Source. A Resolved
+     * answer is correct when its Vendor is the Vendor part of `apiId` and one
+     * of its Sources is listed here; the API slug itself is not compared.
+     */
     specSources: z.array(z.url()).min(1).optional(),
     /** Expected API ids when the name is Ambiguous. */
     candidates: z.array(ApiId).min(2).optional(),
