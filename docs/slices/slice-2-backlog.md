@@ -24,7 +24,7 @@ Where the twelve long-tail Specs actually live, checked live:
 | Val Town | `api.val.town/openapi.json` | #6 + #4, the ADR 0003 exception |
 | Codeberg | `codeberg.org/swagger.v1.json` | never: re-labelled NoSpec, see ADR 0003 |
 
-The six popular failures (Box, Asana, PagerDuty, Cloudflare, GitHub REST, Slack) all have their Spec in a Vendor GitHub repo that APIs.guru doesn't point at, which is #3 and #7 — **plus #12**, added after a live probe of #3 showed that code search alone is not enough: `cloudflare/api-schemas/openapi.json` is 26 MB, past GitHub's code-search indexing limit, so `repo:cloudflare/api-schemas openapi in:path` returns nothing while repository search finds it at once.
+The six popular failures (Box, Asana, PagerDuty, Cloudflare, GitHub REST, Slack) all have their Spec in a Vendor GitHub repo that APIs.guru doesn't point at, which is #3 and #7 — **plus #12**, added after a live probe of #3 showed that code search alone is not enough: `cloudflare/api-schemas/openapi.json` is 26 MB, past GitHub's code-search indexing limit, so `repo:cloudflare/api-schemas openapi in:path` returns nothing while repository search finds it at once. That same 26 MB is also over the fetcher's 10 MB body cap, so finding it is not enough to serve it — Wes decided to raise the cap (#13).
 
 So the **portal crawl carries the gate** and code search carries precision on the popular set.
 
@@ -46,6 +46,7 @@ Filed 2026-09-22 as WTR-41..51, with Linear "blocked by" relations mirroring thi
 | 10 | WTR-50 | Candidate identity: the Neon split and GitHub's 20 APIs.guru entries | 7 | 5 |
 | 11 | WTR-51 | A Vendor's APIs from its Developer Portal | 6 | 5 |
 | 12 | WTR-52 | GitHub repository search and tree probing, for Specs code search can't index | — | 2 |
+| 13 | WTR-53 | Raise the fetched-Spec size cap from 10 MB | — | 2 |
 
 #6, #7, #8, #10 and #11 all touch `findSpec`/`lookup` in `src/lookup/lookup.ts`, so they are queued one wave at a time and rebased in arrival order rather than run together.
 
