@@ -9,7 +9,7 @@ import {
   fixtureLookup,
   startFixtureServer,
 } from "~/fetch/__fixtures__/server";
-import { createFetcher } from "~/fetch/fetcher";
+import { createFetcher, FetchError, type Fetcher } from "~/fetch/fetcher";
 import { type KnownPathHit, probeKnownPaths } from "~/fetch/known-paths";
 import { sniffSpec } from "~/fetch/sniff";
 import { openDb } from "~/index-store/db";
@@ -93,6 +93,32 @@ function fakeVendorCrawl(hits: VendorApiHit[] | Error = []): {
   };
 }
 
+/**
+ * A fetcher that answers the `apexes` URLs itself (redirecting to the given
+ * final URL, or throwing the given error) and hands every other URL to
+ * `fetcher`, recording each apex asked for.
+ */
+function fakeApexes(apexes: Record<string, string | Error>) {
+  const asked: string[] = [];
+  const wrap = (fetcher: Fetcher): Fetcher => ({
+    async fetchUrl(url, opts) {
+      const apex = apexes[url];
+      if (apex === undefined) return fetcher.fetchUrl(url, opts);
+      asked.push(url);
+      if (apex instanceof Error) throw apex;
+      return {
+        url,
+        finalUrl: apex,
+        status: 200,
+        contentType: "text/html",
+        bytes: new TextEncoder().encode("<html></html>"),
+        robotsDisallowed: false,
+      };
+    },
+  });
+  return { wrap, asked };
+}
+
 function setup(
   script: FakeJudgeScript,
   webSearch: WebSearch | null = new FakeWebSearch(),
@@ -101,13 +127,17 @@ function setup(
   crawl: ReturnType<typeof fakeCrawl> | null = fakeCrawl(),
   githubSearch?: GitHubCodeSearch,
   vendorCrawl = fakeVendorCrawl(),
+  /** Wraps the fixture fetcher, e.g. to fake answers for `https://` URLs. */
+  wrapFetcher: (fetcher: Fetcher) => Fetcher = (f) => f,
 ) {
   const judge = new FakeJudge(script);
-  const fetcher = createFetcher({
-    allowPrivate: true,
-    lookup: fixtureLookup,
-    minIntervalMs: 0,
-  });
+  const fetcher = wrapFetcher(
+    createFetcher({
+      allowPrivate: true,
+      lookup: fixtureLookup,
+      minIntervalMs: 0,
+    }),
+  );
   const probed: string[] = [];
   const lookup = createLookup({
     db: openDb(join(dir, "index.db")),
@@ -454,6 +484,109 @@ describe("lookup", () => {
     expect(outcome.diagnostics).toContain(
       `Developer Portal: could not follow ${url}; kept its domain neon-tech.test`,
     );
+  });
+
+  describe("Vendor identity from a portal domain's apex", () => {
+    /** The three portal Candidates web search finds for "Neon API". */
+    function neonSearch() {
+      server.send(
+        "neon.com",
+        "/docs/reference/api-reference",
+        "<html>Neon API</html>",
+        "text/html",
+      );
+      server.send(
+        "api-docs.neon.tech",
+        "/reference/getting-started-with-neon-api",
+        "<html>Neon API</html>",
+        "text/html",
+      );
+      server.send(
+        "developer.neoncrm.com",
+        "/api-v2/",
+        "<html>Neon CRM API</html>",
+        "text/html",
+      );
+      return new FakeWebSearch([
+        {
+          url: `${server.origin("neon.com")}/docs/reference/api-reference`,
+          title: "Neon API reference",
+          snippet: "The Neon API.",
+        },
+        {
+          url: `${server.origin("api-docs.neon.tech")}/reference/getting-started-with-neon-api`,
+          title: "Getting started with Neon API",
+          snippet: "Neon API docs.",
+        },
+        {
+          url: `${server.origin("developer.neoncrm.com")}/api-v2/`,
+          title: "Neon CRM API v2",
+          snippet: "The Neon CRM API.",
+        },
+      ]);
+    }
+
+    async function askedIds(apexes: Record<string, string | Error>) {
+      const fake = fakeApexes(apexes);
+      const { lookup, judge } = setup(
+        {},
+        neonSearch(),
+        undefined,
+        fakeCrawl(),
+        undefined,
+        fakeVendorCrawl(),
+        fake.wrap,
+      );
+      const outcome = await ask(lookup, "Neon API");
+      const asked = judge.calls.find((c) => c.judgment === "whichApi");
+      return {
+        ids:
+          asked?.judgment === "whichApi" && asked.candidates.map((c) => c.id),
+        apexes: fake.asked,
+        outcome,
+      };
+    }
+
+    it("moves a domain's Candidates to the Candidate domain its apex redirects to", async () => {
+      const { ids, apexes } = await askedIds({
+        "https://neon.tech/": "https://neon.com/",
+        "https://neoncrm.com/": "https://neonone.com/",
+        "https://neon.com/": "https://neon.com/",
+      });
+
+      expect(ids).toEqual(["neon.com/api", "neoncrm.com/api"]);
+      // One apex fetch per domain.
+      expect([...apexes].sort()).toEqual([
+        "https://neon.com/",
+        "https://neon.tech/",
+        "https://neoncrm.com/",
+      ]);
+    });
+
+    it("moves nothing when an apex can't be fetched", async () => {
+      const failed = (url: string) =>
+        new FetchError("network", url, "connection reset");
+      const { ids, outcome } = await askedIds({
+        "https://neon.tech/": failed("https://neon.tech/"),
+        "https://neoncrm.com/": failed("https://neoncrm.com/"),
+        "https://neon.com/": failed("https://neon.com/"),
+      });
+
+      expect(ids).toEqual(["neon.com/api", "neon.tech/api", "neoncrm.com/api"]);
+      expect(outcome.diagnostics ?? []).not.toContainEqual(
+        expect.stringContaining("Developer Portal"),
+      );
+    });
+
+    it("moves nothing when an apex redirects to a domain no Candidate has", async () => {
+      const { ids } = await askedIds({
+        "https://neon.tech/": "https://neon-elsewhere.com/",
+        "https://neoncrm.com/": "https://neonone.com/",
+        "https://neon.com/": "https://neon.com/",
+      });
+
+      expect(ids).toEqual(["neon.com/api", "neon.tech/api", "neoncrm.com/api"]);
+    });
   });
 
   it("drops a portal Candidate for a Vendor APIs.guru already has", async () => {
