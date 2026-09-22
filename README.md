@@ -20,6 +20,21 @@ pnpm dev     # dev server; GET /api/health returns {"ok":true}
 pnpm build   # production build into dist/
 ```
 
+## Benchmark
+
+```sh
+pnpm bench [--only-reviewed] [--json] [--search brave|tavily]
+```
+
+Runs every Benchmark entry through the live Lookup and prints the False Resolution rate, long-tail coverage and Outcome accuracy; it exits 1 when the False Resolution rate reaches the 2% gate. It needs the same keys as a Lookup (`TYPESAFE_API_KEY`, plus a search key for portal finding).
+
+A run uses a throwaway Index by default: a fresh, empty database in a temporary directory, deleted when the run ends. Without it, names the Index had already settled would be answered from the Index, and the Benchmark would measure Index replay instead of Discovery. Two flags change this:
+
+- `--index <path>` uses the Index at that path and never deletes it, for comparing runs or inspecting what was stored.
+- `--keep-index` keeps the temporary Index and prints its path.
+
+They can't be used together. The report names the Index it used (`indexPath` and `indexFresh` in `--json`).
+
 ## Check
 
 ```sh

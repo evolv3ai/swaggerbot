@@ -1,62 +1,87 @@
 /**
- * Run the Benchmark: `pnpm bench [--only-reviewed] [--json] [--search brave|tavily]`.
+ * Run the Benchmark:
+ * `pnpm bench [--only-reviewed] [--json] [--search brave|tavily] [--index <path> | --keep-index]`.
  * Prints a table (or the report as JSON) and exits 1 when the
  * False Resolution rate is at or above the 2% release gate. `--search` sets
  * `SEARCH_PROVIDER` for this run, so portal finding can be compared.
+ *
+ * Each run uses a fresh, empty Index in a temporary directory, deleted when
+ * the run ends, so the Benchmark measures Discovery rather than Index replay.
+ * `--index <path>` uses that Index instead and never deletes it;
+ * `--keep-index` keeps the temporary one and prints its path.
  */
-import { readFile } from "node:fs/promises";
-import { parseArgs } from "node:util";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
+  type BenchIndex,
+  indexLabel,
+  parseBenchArgs,
+  withIndex,
+} from "~/benchmark/cli";
 import { BenchmarkEntries } from "~/benchmark/entry";
 import { type BenchmarkLookup, runBenchmark } from "~/benchmark/run";
 import type { BenchmarkReport } from "~/benchmark/score";
 import { createAppLookup } from "~/lookup/app";
-import { SEARCH_PROVIDERS } from "~/sources/web-search";
 
 const FALSE_RESOLUTION_GATE = 0.02;
 
-const { values } = parseArgs({
-  options: {
-    "only-reviewed": { type: "boolean", default: false },
-    json: { type: "boolean", default: false },
-    search: { type: "string" },
-  },
-});
-
-const provider = values.search;
-if (
-  provider !== undefined &&
-  !(SEARCH_PROVIDERS as readonly string[]).includes(provider)
-) {
-  console.error(
-    `--search must be one of: ${SEARCH_PROVIDERS.join(", ")} (got "${provider}")`,
-  );
-  process.exit(2);
+const parsed = parseBenchArgs(process.argv.slice(2));
+if (!parsed.ok) {
+  console.error(parsed.error);
+  process.exit(parsed.exitCode);
 }
+const options = parsed.options;
+const provider = options.search;
 // Set before the Lookup is built, so its WebSearch picks this provider.
 if (provider) process.env.SEARCH_PROVIDER = provider;
 
-const appLookup = createAppLookup();
-const lookup: BenchmarkLookup = (name) => appLookup({ name });
+const tempDir = options.index
+  ? undefined
+  : await mkdtemp(join(tmpdir(), "swaggerbot-bench-"));
+const index: BenchIndex = tempDir
+  ? { path: join(tempDir, "index.db"), fresh: true, kept: options.keepIndex }
+  : { path: options.index as string, fresh: false, kept: true };
 
-const path = new URL("../benchmark/entries.json", import.meta.url);
-const entries = BenchmarkEntries.parse(
-  JSON.parse(await readFile(path, "utf8")),
-);
+try {
+  // Set before the Lookup is built: `openDb` reads it at call time.
+  process.env.DATABASE_PATH = index.path;
+  const appLookup = createAppLookup();
+  const lookup: BenchmarkLookup = (name) => appLookup({ name });
 
-const report = await runBenchmark({
-  lookup,
-  entries,
-  onlyReviewed: values["only-reviewed"],
-});
+  const path = new URL("../benchmark/entries.json", import.meta.url);
+  const entries = BenchmarkEntries.parse(
+    JSON.parse(await readFile(path, "utf8")),
+  );
 
-console.log(values.json ? JSON.stringify(report, null, 2) : table(report));
-process.exitCode = report.falseResolutionRate >= FALSE_RESOLUTION_GATE ? 1 : 0;
+  const report = withIndex(
+    await runBenchmark({
+      lookup,
+      entries,
+      onlyReviewed: options.onlyReviewed,
+    }),
+    index,
+  );
+
+  console.log(options.json ? JSON.stringify(report, null, 2) : table(report));
+  process.exitCode =
+    report.falseResolutionRate >= FALSE_RESOLUTION_GATE ? 1 : 0;
+} finally {
+  // Deleting the directory takes the `-wal` and `-shm` files with it.
+  if (tempDir && !options.keepIndex) {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+  if (tempDir && options.keepIndex) {
+    console.error(`Index kept at ${index.path}`);
+  }
+}
 
 function table(r: BenchmarkReport): string {
   const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
   const gate = r.falseResolutionRate >= FALSE_RESOLUTION_GATE ? "FAIL" : "ok";
   const lines = [
-    `Benchmark: ${r.entries} entries${values["only-reviewed"] ? " (reviewed only)" : ""}${provider ? `, search: ${provider}` : ""}`,
+    `Benchmark: ${r.entries} entries${options.onlyReviewed ? " (reviewed only)" : ""}${provider ? `, search: ${provider}` : ""}`,
+    indexLabel(index),
     "",
     `False Resolution rate  ${pct(r.falseResolutionRate).padStart(6)}  (${r.falseResolutions}/${r.resolved} Resolved, gate < ${pct(FALSE_RESOLUTION_GATE)}: ${gate})`,
     `Long-tail coverage     ${pct(r.longtailCoverage).padStart(6)}`,

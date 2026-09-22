@@ -37,6 +37,10 @@ export type BenchmarkReport = {
   groups: Record<BenchmarkGroup, GroupCounts>;
   failures: BenchmarkFailure[];
   errors: { name: string; message: string }[];
+  /** The Index the run used; set by `pnpm bench`, not by `score`. */
+  indexPath?: string;
+  /** Whether that Index started empty (a fresh temporary one) rather than given with `--index`. */
+  indexFresh?: boolean;
 };
 
 /**
