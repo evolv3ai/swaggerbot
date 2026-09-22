@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { slugify } from "~/domain/catalog";
 import { Outcome } from "~/domain/outcome";
 import {
   type FixtureServer,
@@ -14,7 +15,7 @@ import { sniffSpec } from "~/fetch/sniff";
 import { openDb } from "~/index-store/db";
 import { FakeJudge, type FakeJudgeScript } from "~/judge/fake";
 import { JudgeError, yesNo } from "~/judge/judge";
-import { createApisGuru } from "~/sources/apis-guru";
+import { type ApiCandidate, createApisGuru } from "~/sources/apis-guru";
 import type { CrawlHit, CrawlResult } from "~/sources/crawl";
 import type {
   GitHubCodeSearch,
@@ -296,12 +297,27 @@ describe("lookup", () => {
     ]);
   });
 
-  it("merges portal Candidates whose domains redirect to one Vendor", async () => {
+  it("merges portal Candidates whose pages end on one domain", async () => {
     // neon-tech.test redirects to neon.test, as neon.tech does to neon.com.
-    server.route("www.neon-tech.test", "/", (_req, res) => {
-      res.writeHead(301, { location: `${server.origin("neon.test")}/` }).end();
+    server.route("www.neon-tech.test", "/neon-api-reference", (_req, res) => {
+      res
+        .writeHead(301, {
+          location: `${server.origin("neon.test")}/docs/reference/api-reference`,
+        })
+        .end();
     });
-    server.send("neon.test", "/", "<html>Neon</html>", "text/html");
+    server.send(
+      "neon.test",
+      "/docs/reference/api-reference",
+      "<html>Neon API</html>",
+      "text/html",
+    );
+    server.send(
+      "neon.test",
+      "/docs/neon-api",
+      "<html>Neon</html>",
+      "text/html",
+    );
     const search = new FakeWebSearch([
       {
         url: `${server.origin("www.neon-tech.test")}/neon-api-reference`,
@@ -312,11 +328,6 @@ describe("lookup", () => {
         url: `${server.origin("neon.test")}/docs/neon-api`,
         title: "Neon API | Neon Docs",
         snippet: "Manage Neon.",
-      },
-      {
-        url: `${server.origin("docs.neon.test")}/other-page`,
-        title: "Another Neon page",
-        snippet: "",
       },
     ]);
     const { lookup, judge } = setup(
@@ -350,13 +361,71 @@ describe("lookup", () => {
       api: { id: "neon.test/api", name: "Neon API" },
       vendor: { id: "neon.test", domain: "neon.test" },
     });
-    // Each origin fetched once.
-    const roots = server.requests.filter((r) => r.path === "/");
-    expect(roots.map((r) => r.host).sort()).toEqual([
-      "neon.test",
-      "neon.test",
-      "www.neon-tech.test",
+    expect(outcome.diagnostics).toBeUndefined();
+    // Each Candidate's own page fetched, and no origin.
+    expect(
+      server.requests.filter((r) => r.path === "/").map((r) => r.host),
+    ).toEqual([]);
+    expect(
+      server.requests
+        .filter(
+          (r) => r.path.startsWith("/neon-api") || r.path === "/docs/neon-api",
+        )
+        .map((r) => `${r.host}${r.path}`),
+    ).toEqual([
+      "www.neon-tech.test/neon-api-reference",
+      "neon.test/docs/neon-api",
     ]);
+  });
+
+  it("re-homes a portal Candidate from its origin when its page can't be fetched", async () => {
+    // The page drops the connection; the origin redirects to neon.test.
+    server.route("www.neon-tech.test", "/neon-api-reference", (req) => {
+      req.socket.destroy();
+    });
+    server.route("www.neon-tech.test", "/", (_req, res) => {
+      res.writeHead(301, { location: `${server.origin("neon.test")}/` }).end();
+    });
+    server.send("neon.test", "/", "<html>Neon</html>", "text/html");
+    const search = new FakeWebSearch([
+      {
+        url: `${server.origin("www.neon-tech.test")}/neon-api-reference`,
+        title: "Neon API Reference",
+        snippet: "The Neon API.",
+      },
+    ]);
+    const { lookup, judge } = setup({}, search);
+
+    const outcome = await ask(lookup, "neon");
+
+    expect(
+      judge.calls[0]?.judgment === "whichApi" &&
+        judge.calls[0].candidates.map((c) => c.id),
+    ).toEqual(["neon.test/api"]);
+    expect(outcome.diagnostics ?? []).not.toContainEqual(
+      expect.stringContaining("Developer Portal"),
+    );
+  });
+
+  it("keeps a portal Candidate's search domain when neither page nor origin answers", async () => {
+    const drop = (req: { socket: { destroy(): void } }) => req.socket.destroy();
+    server.route("www.neon-tech.test", "/neon-api-reference", drop);
+    server.route("www.neon-tech.test", "/", drop);
+    const url = `${server.origin("www.neon-tech.test")}/neon-api-reference`;
+    const search = new FakeWebSearch([
+      { url, title: "Neon API Reference", snippet: "The Neon API." },
+    ]);
+    const { lookup, judge } = setup({}, search);
+
+    const outcome = await ask(lookup, "neon");
+
+    expect(
+      judge.calls[0]?.judgment === "whichApi" &&
+        judge.calls[0].candidates.map((c) => c.id),
+    ).toEqual(["neon-tech.test/api"]);
+    expect(outcome.diagnostics).toContain(
+      `Developer Portal: could not follow ${url}; kept its domain neon-tech.test`,
+    );
   });
 
   it("drops a portal Candidate for a Vendor APIs.guru already has", async () => {
@@ -640,6 +709,7 @@ describe("lookup", () => {
       name: "payco",
       diagnostics: [
         "Judge whichApi: Jev did not answer within 10 s",
+        "Developer Portal: could not follow https://payco.example/docs; kept its domain payco.example",
         "Judge whichApi: Jev did not answer within 10 s",
       ],
     });
@@ -662,6 +732,113 @@ describe("lookup", () => {
       name: "nothing like it",
       diagnostics: ["web search: Brave search failed with HTTP 503"],
     });
+  });
+});
+
+describe("lookup with APIs.guru duplicates", () => {
+  const TITLE = "GHub v3 REST API";
+
+  /** An APIs.guru Candidate of Vendor `ghub.test` keyed `key`. */
+  function candidate(key: string, name: string, i: number): ApiCandidate {
+    const service = key.split(":")[1];
+    return {
+      key,
+      apiId: `ghub.test/${slugify(service ?? name)}`,
+      name,
+      vendor: { id: "ghub.test", name: "ghub.test", domain: "ghub.test" },
+      description: `Entry ${key}.`,
+      preferredVersion: "1.0.0",
+      mirrorUrl: `${server.origin("apis-guru.test")}/${key}/openapi.json`,
+      originUrls: [`${server.origin("api.ghub.test")}/v${i}.json`],
+      possiblyOfficialUrls: [],
+      updated: "2024-01-01T00:00:00.000Z",
+    };
+  }
+
+  function setupGuru(candidates: ApiCandidate[], script: FakeJudgeScript) {
+    const judge = new FakeJudge(script);
+    const lookup = createLookup({
+      db: openDb(join(dir, "index.db")),
+      judge,
+      apisGuru: {
+        findCandidates: async () => candidates,
+        findVendorApis: async () => candidates,
+      },
+      webSearch: null,
+      fetcher: createFetcher({
+        allowPrivate: true,
+        lookup: fixtureLookup,
+        minIntervalMs: 0,
+      }),
+      probe: async () => [],
+      crawl: fakeCrawl().crawl,
+    });
+    return { judge, lookup };
+  }
+
+  it("collapses one Vendor's entries with one title to a single choice", async () => {
+    // Twenty variants, the unsuffixed key fourth, as APIs.guru lists GitHub.
+    const keys = [
+      "ghub.test:api.ghub.test",
+      "ghub.test:ghec",
+      "ghub.test:ghub.ae",
+      "ghub.test",
+      ...Array.from({ length: 16 }, (_, i) => `ghub.test:ghes-3.${i}`),
+    ];
+    const { lookup, judge } = setupGuru(
+      keys.map((key, i) => candidate(key, TITLE, i)),
+      {
+        whichApi: {
+          ghub: {
+            probabilities: { "ghub.test/ghub-v3-rest-api": 0.9, none: 0.1 },
+            confidence: 0.9,
+          },
+        },
+      },
+    );
+
+    const outcome = await ask(lookup, "ghub");
+
+    expect(judge.calls[0]).toEqual({
+      judgment: "whichApi",
+      name: "ghub",
+      candidates: [
+        {
+          id: "ghub.test/ghub-v3-rest-api",
+          name: TITLE,
+          vendor: "ghub.test",
+          description: "Entry ghub.test.",
+        },
+      ],
+    });
+    expect(outcome).toMatchObject({
+      outcome: "NoSpec",
+      api: { id: "ghub.test/ghub-v3-rest-api", name: TITLE },
+    });
+    // The group's origin URLs, in order, at most eight.
+    expect(
+      server.requests
+        .filter((r) => r.host === "api.ghub.test" && r.path !== "/robots.txt")
+        .map((r) => r.path),
+    ).toEqual(Array.from({ length: 8 }, (_, i) => `/v${i}.json`));
+  });
+
+  it("keeps one Vendor's entries with different titles apart", async () => {
+    const { lookup, judge } = setupGuru(
+      [
+        candidate("ghub.test", TITLE, 0),
+        candidate("ghub.test:graphql", "GHub GraphQL API", 1),
+      ],
+      {},
+    );
+
+    // Not "ghub": that names the Vendor, Ambiguous without `whichApi`.
+    await ask(lookup, "ghub rest");
+
+    expect(
+      judge.calls[0]?.judgment === "whichApi" &&
+        judge.calls[0].candidates.map((c) => c.id),
+    ).toEqual(["ghub.test/ghub-v3-rest-api", "ghub.test/graphql"]);
   });
 });
 

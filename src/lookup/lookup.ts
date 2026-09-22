@@ -91,6 +91,9 @@ const CRAWL_STEP_BUDGET_MS = 20_000;
 const GITHUB_SEARCH_SKIPPED =
   "GitHub code search: skipped (no GITHUB_TOKEN, rate-limited or failed)";
 
+/** A merged APIs.guru choice keeps at most this many origin URLs. */
+const MAX_MERGED_ORIGIN_URLS = 8;
+
 /** Umbrella names list at most this many Candidates. */
 const MAX_UMBRELLA_CANDIDATES = 10;
 
@@ -183,7 +186,7 @@ export function createLookup(deps: LookupDeps): Lookup {
     // 2. APIs.guru.
     let guru: ApiChoice[] = [];
     try {
-      guru = (await apisGuru.findCandidates(name)).map(fromApisGuru);
+      guru = mergeGuruChoices(await apisGuru.findCandidates(name));
     } catch (error) {
       diagnostics.push(`APIs.guru: ${message(error)}`);
     }
@@ -204,7 +207,7 @@ export function createLookup(deps: LookupDeps): Lookup {
       }
       const all = uniqueById([
         ...guru,
-        ...portalChoices(await followPortals(portals), guru),
+        ...portalChoices(await followPortals(portals, diagnostics), guru),
       ]);
       if (all.length > guru.length) {
         verdict = (await whichApi(name, all, diagnostics)) ?? verdict;
@@ -234,36 +237,51 @@ export function createLookup(deps: LookupDeps): Lookup {
   };
 
   /**
-   * Fetches each portal's origin once and moves the Candidate to the
-   * registrable domain it ends up on (`neon.tech` → `neon.com`). An origin
-   * that fails still names the domain it failed on; one that can't be reached
-   * at all keeps its search domain.
+   * Fetches each portal Candidate's own page and moves the Candidate to the
+   * registrable domain it ends up on (`neon.tech` → `neon.com`), one fetch per
+   * search domain. When the page can't be fetched, the site's origin is tried;
+   * when that fails too, the Candidate keeps its search domain, with a
+   * diagnostic.
    */
   async function followPortals(
     portals: PortalCandidate[],
+    diagnostics: string[],
   ): Promise<PortalCandidate[]> {
     const finalDomains = new Map<string, Promise<string | null>>();
-    const finalDomain = (origin: string) => {
-      let domain = finalDomains.get(origin);
+    const settle = async (url: string, searchDomain: string) => {
+      try {
+        return registrableDomain((await fetcher.fetchUrl(url)).finalUrl);
+      } catch (error) {
+        if (!(error instanceof FetchError)) return null;
+        // A host that answered, or a redirect off the search domain, still
+        // says where the page lives.
+        const domain = registrableDomain(error.url);
+        return error.kind === "http-error" || domain !== searchDomain
+          ? domain
+          : null;
+      }
+    };
+    const finalDomain = (p: PortalCandidate) => {
+      let domain = finalDomains.get(p.domain);
       if (!domain) {
-        domain = fetcher.fetchUrl(origin).then(
-          (res) => registrableDomain(res.finalUrl),
-          (error) =>
-            error instanceof FetchError ? registrableDomain(error.url) : null,
-        );
-        finalDomains.set(origin, domain);
+        domain = (async () => {
+          const fromPage = await settle(p.url, p.domain);
+          if (fromPage) return fromPage;
+          // `p.url` parses: its registrable domain was taken from it.
+          const fromOrigin = await settle(new URL(p.url).origin, p.domain);
+          if (!fromOrigin)
+            diagnostics.push(
+              `Developer Portal: could not follow ${p.url}; kept its domain ${p.domain}`,
+            );
+          return fromOrigin;
+        })();
+        finalDomains.set(p.domain, domain);
       }
       return domain;
     };
     return Promise.all(
       portals.map(async (p) => {
-        let origin: string;
-        try {
-          origin = new URL(p.url).origin;
-        } catch {
-          return p;
-        }
-        const domain = await finalDomain(origin);
+        const domain = await finalDomain(p);
         return domain && domain !== p.domain ? { ...p, domain } : p;
       }),
     );
@@ -370,9 +388,9 @@ export function createLookup(deps: LookupDeps): Lookup {
   ): Promise<AmbiguousCandidate[] | null> {
     let members: ApiChoice[];
     try {
-      members = (await apisGuru.findVendorApis(vendor.id))
-        .slice(0, MAX_UMBRELLA_CANDIDATES)
-        .map(fromApisGuru);
+      members = mergeGuruChoices(
+        await apisGuru.findVendorApis(vendor.id),
+      ).slice(0, MAX_UMBRELLA_CANDIDATES);
     } catch (error) {
       diagnostics.push(`APIs.guru: ${message(error)}`);
       return null;
@@ -856,6 +874,32 @@ function isUmbrellaLabel(query: string, label: string): boolean {
     (label.startsWith(query) &&
       ["apis", "api"].includes(label.slice(query.length)))
   );
+}
+
+/**
+ * APIs.guru Candidates as choices, one per Vendor and title: APIs.guru lists
+ * deployment variants and versions of one API as separate entries (twenty
+ * "GitHub v3 REST API"s), which `whichApi` could only call Ambiguous. A
+ * group's choice is its entry without a `:` suffix in the key, else its
+ * first, with the group's origin URLs. Different titles are never merged.
+ */
+function mergeGuruChoices(candidates: ApiCandidate[]): ApiChoice[] {
+  const groups = new Map<string, ApiCandidate[]>();
+  for (const c of candidates) {
+    const id = `${c.vendor.id}\n${c.name}`;
+    const group = groups.get(id);
+    if (group) group.push(c);
+    else groups.set(id, [c]);
+  }
+  return [...groups.values()].map((group) => {
+    const representative =
+      group.find((c) => !c.key.includes(":")) ?? (group[0] as ApiCandidate);
+    const originUrls = [...new Set(group.flatMap((c) => c.originUrls))];
+    return {
+      ...fromApisGuru(representative),
+      originUrls: originUrls.slice(0, MAX_MERGED_ORIGIN_URLS),
+    };
+  });
 }
 
 function fromApisGuru(c: ApiCandidate): ApiChoice {
