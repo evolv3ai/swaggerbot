@@ -16,6 +16,7 @@ import {
   JudgeError,
   NONE,
   type SpecLink,
+  type VendorRef,
   type WhichApiJudgment,
   type YesNoJudgment,
   yesNo,
@@ -49,6 +50,17 @@ export const SPEC_DESCRIBES_API_QUESTION = {
     true: "The document describes that API, in any version.",
     false:
       "The document describes a different API, an internal or test API, an example or tutorial API, or cannot be tied to that API.",
+  },
+};
+
+/** Wording of `isVendorName`, a `noul` over `{name, vendor}`. */
+export const IS_VENDOR_NAME_QUESTION = {
+  instructions:
+    "Someone asked for an API by the name in `name`. Does that name refer to the company in `vendor` as a whole, rather than to one of its APIs or products?",
+  criteria: {
+    true: "The name is the company's own name: it means the company as a whole, which offers several APIs.",
+    false:
+      "The name means one specific API or product of the company, or a different company or thing altogether.",
   },
 };
 
@@ -157,6 +169,19 @@ export class JevJudge implements Judge {
       },
     });
     return yesNoFrom(answers, "describes");
+  }
+
+  async isVendorName(name: string, vendor: VendorRef): Promise<YesNoJudgment> {
+    const answers = await this.#ask({
+      state: { name, vendor: { id: vendor.id, name: vendor.name } },
+      questions: {
+        vendor: noul(
+          IS_VENDOR_NAME_QUESTION.instructions,
+          IS_VENDOR_NAME_QUESTION.criteria,
+        ),
+      },
+    });
+    return yesNoFrom(answers, "vendor");
   }
 
   /** One `systemOne` call, retried once on 429/5xx. */

@@ -4,6 +4,7 @@ import {
   type Judge,
   NONE,
   type SpecLink,
+  type VendorRef,
   type WhichApiJudgment,
   type YesNoJudgment,
 } from "./judge";
@@ -15,6 +16,8 @@ export type FakeJudgeScript = {
   isSpecLink?: Record<string, YesNoJudgment>;
   /** Answers keyed by the extract's `title` (an untitled extract gets the default). */
   specDescribesApi?: Record<string, YesNoJudgment>;
+  /** Answers keyed by the name asked about. */
+  isVendorName?: Record<string, YesNoJudgment>;
   /**
    * Answers for anything not scripted. Unless set: `whichApi` says `"none"`
    * with certainty, and the yes/no judgments say no with certainty.
@@ -23,13 +26,15 @@ export type FakeJudgeScript = {
     whichApi?: WhichApiJudgment;
     isSpecLink?: YesNoJudgment;
     specDescribesApi?: YesNoJudgment;
+    isVendorName?: YesNoJudgment;
   };
 };
 
 export type FakeJudgeCall =
   | { judgment: "whichApi"; name: string; candidates: ApiRef[] }
   | { judgment: "isSpecLink"; api: ApiRef; link: SpecLink }
-  | { judgment: "specDescribesApi"; api: ApiRef; extract: SpecExtract };
+  | { judgment: "specDescribesApi"; api: ApiRef; extract: SpecExtract }
+  | { judgment: "isVendorName"; name: string; vendor: VendorRef };
 
 const NO: YesNoJudgment = { probability: 0, confidence: 1 };
 
@@ -79,6 +84,15 @@ export class FakeJudge implements Judge {
         ? this.#script.specDescribesApi?.[extract.title]
         : undefined) ??
       this.#script.defaults?.specDescribesApi ??
+      NO
+    );
+  }
+
+  async isVendorName(name: string, vendor: VendorRef): Promise<YesNoJudgment> {
+    this.calls.push({ judgment: "isVendorName", name, vendor });
+    return (
+      this.#script.isVendorName?.[name] ??
+      this.#script.defaults?.isVendorName ??
       NO
     );
   }

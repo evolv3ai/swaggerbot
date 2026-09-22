@@ -128,6 +128,19 @@ describe("createApisGuru", () => {
     });
   });
 
+  describe("findVendorApis", () => {
+    it("lists one Vendor's APIs by key", async () => {
+      const guru = withFixture();
+      const google = await guru.findVendorApis("googleapis.com");
+      expect(google.map((c) => c.apiId)).toEqual([
+        "googleapis.com/drive",
+        "googleapis.com/driveactivity",
+        "googleapis.com/gmail",
+      ]);
+      expect(await guru.findVendorApis("nothing.test")).toEqual([]);
+    });
+  });
+
   describe("cache", () => {
     it("fetches the list once and writes it to disk", async () => {
       const fetchJson = vi.fn(async () => fixture);

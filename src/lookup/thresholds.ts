@@ -16,6 +16,11 @@ export type Thresholds = {
   describes: number;
   /** Below `describes` but at least this likely → Unconfirmed; below → No Spec. */
   doubt: number;
+  /**
+   * `isVendorName` at least this likely for the top Candidate's Vendor, when
+   * `whichApi` settled nothing → Ambiguous over that Vendor's APIs.
+   */
+  vendorName: number;
 };
 
 export const DEFAULT_THRESHOLDS: Thresholds = {
@@ -25,4 +30,5 @@ export const DEFAULT_THRESHOLDS: Thresholds = {
   ambiguousFloor: 0.1,
   describes: 0.8,
   doubt: 0.4,
+  vendorName: 0.7,
 };

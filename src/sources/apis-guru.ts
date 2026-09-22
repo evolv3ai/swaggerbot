@@ -33,6 +33,8 @@ export type ApiCandidate = {
 
 export type ApisGuru = {
   findCandidates(name: string): Promise<ApiCandidate[]>;
+  /** A Vendor's APIs, by Vendor id (`googleapis.com`), at most 10, by key. */
+  findVendorApis(vendorId: string): Promise<ApiCandidate[]>;
 };
 
 export type ApisGuruOptions = {
@@ -124,6 +126,14 @@ export function createApisGuru({
           (a.api.key < b.api.key ? -1 : a.api.key > b.api.key ? 1 : 0),
       );
       return scored.slice(0, MAX_CANDIDATES).map(({ api }) => api.candidate);
+    },
+
+    async findVendorApis(vendorId) {
+      return (await entries())
+        .filter((api) => api.candidate.vendor.id === vendorId)
+        .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
+        .slice(0, MAX_CANDIDATES)
+        .map((api) => api.candidate);
     },
   };
 }

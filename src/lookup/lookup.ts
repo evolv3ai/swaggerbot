@@ -72,7 +72,8 @@ type AmbiguousCandidate = {
 };
 
 type Verdict =
-  | { kind: "unknown" }
+  /** `top`: the likeliest Candidate, when `whichApi` weighed any. */
+  | { kind: "unknown"; top?: ApiChoice }
   | { kind: "identified"; choice: ApiChoice }
   | { kind: "ambiguous"; candidates: AmbiguousCandidate[] };
 
@@ -95,7 +96,9 @@ type SpecCandidate = {
  * 2. APIs.guru Candidates, judged by `whichApi`;
  * 3. Developer Portal Candidates from web search, one per Vendor after
  *    following redirects, judged with step 2's;
- * 4. for the identified API, its Spec: APIs.guru origin URLs, then known
+ * 4. when nothing is identified yet, a name the Judge takes for the top
+ *    Candidate's Vendor as a whole: Ambiguous over that Vendor's APIs;
+ * 5. for the identified API, its Spec: APIs.guru origin URLs, then known
  *    paths on the Vendor's domain, then the APIs.guru mirror.
  *
  * A Judge, search or fetch error skips that step and is reported in
@@ -149,12 +152,23 @@ export function createLookup(deps: LookupDeps): Lookup {
       }
     }
 
+    // 4. A name for the whole Vendor.
+    if (verdict?.kind === "unknown" && verdict.top) {
+      const vendorApis = await vendorCandidates(
+        name,
+        verdict.top.vendor,
+        diagnostics,
+      );
+      if (vendorApis)
+        return finish({ outcome: "Ambiguous", candidates: vendorApis });
+    }
+
     if (!verdict || verdict.kind === "unknown")
       return finish({ outcome: "Unknown", name });
     if (verdict.kind === "ambiguous")
       return finish({ outcome: "Ambiguous", candidates: verdict.candidates });
 
-    // 4. The identified API's Spec.
+    // 5. The identified API's Spec.
     return finish(await findSpec(name, verdict.choice, diagnostics));
   };
 
@@ -221,12 +235,12 @@ export function createLookup(deps: LookupDeps): Lookup {
       return null;
     }
     const p = (id: string) => probabilities[id] ?? 0;
-    if (p(NONE) >= t.none) return { kind: "unknown" };
-
     const ranked = choices
       .map((choice) => ({ choice, probability: p(choice.api.id) }))
       .sort((a, b) => b.probability - a.probability);
     const [top, second] = ranked;
+    if (p(NONE) >= t.none) return { kind: "unknown", top: top?.choice };
+
     if (
       top &&
       top.probability >= t.apiPick &&
@@ -242,7 +256,7 @@ export function createLookup(deps: LookupDeps): Lookup {
         diagnostics.push(
           `Judge whichApi: the only Candidate, ${top.choice.api.id}, was not likely enough (${top.probability.toFixed(2)})`,
         );
-      return { kind: "unknown" };
+      return { kind: "unknown", top: top?.choice };
     }
     return {
       kind: "ambiguous",
@@ -253,10 +267,11 @@ export function createLookup(deps: LookupDeps): Lookup {
   }
 
   /**
-   * A name equal to the first label of a Vendor id (`google` ↔ `google.com`)
-   * with two or more of that Vendor's APIs among the Candidates means the
-   * Vendor, not one API: Ambiguous without asking `whichApi`, which tends to
-   * answer `"none"` for such names.
+   * A name equal to the first label of a Vendor id (`google` ↔ `google.com`),
+   * or to that label less an `apis`/`api` suffix (`google` ↔
+   * `googleapis.com`), with two or more of that Vendor's APIs among the
+   * Candidates means the Vendor, not one API: Ambiguous without asking
+   * `whichApi`, which tends to answer `"none"` for such names.
    */
   function umbrellaCandidates(
     name: string,
@@ -264,9 +279,43 @@ export function createLookup(deps: LookupDeps): Lookup {
   ): AmbiguousCandidate[] | null {
     const query = normalizeName(name);
     const members = choices
-      .filter((c) => c.vendor.id.split(".")[0] === query)
+      .filter((c) => isUmbrellaLabel(query, vendorLabel(c.vendor)))
       .slice(0, MAX_UMBRELLA_CANDIDATES);
     if (members.length < 2) return null;
+    return members.map((c) => ambiguousCandidate(c, 1 / members.length));
+  }
+
+  /**
+   * When the Judge takes the name for the Vendor as a whole, that Vendor's
+   * APIs.guru APIs as equally likely Candidates, if it has at least two;
+   * otherwise `null`, and the Lookup keeps its answer.
+   */
+  async function vendorCandidates(
+    name: string,
+    vendor: Vendor,
+    diagnostics: string[],
+  ): Promise<AmbiguousCandidate[] | null> {
+    let members: ApiChoice[];
+    try {
+      members = (await apisGuru.findVendorApis(vendor.id))
+        .slice(0, MAX_UMBRELLA_CANDIDATES)
+        .map(fromApisGuru);
+    } catch (error) {
+      diagnostics.push(`APIs.guru: ${message(error)}`);
+      return null;
+    }
+    if (members.length < 2) return null;
+    let probability: number;
+    try {
+      ({ probability } = await judge.isVendorName(name, {
+        id: vendor.id,
+        name: vendor.name,
+      }));
+    } catch (error) {
+      diagnostics.push(`Judge isVendorName: ${message(error)}`);
+      return null;
+    }
+    if (probability < t.vendorName) return null;
     return members.map((c) => ambiguousCandidate(c, 1 / members.length));
   }
 
@@ -493,6 +542,15 @@ function githubOrg(url: string): string | null {
  */
 function vendorLabel(vendor: Vendor): string {
   return vendor.id.split(".")[0] ?? vendor.id;
+}
+
+/** `google` names `google` and `googleapis`/`googleapi`. */
+function isUmbrellaLabel(query: string, label: string): boolean {
+  return (
+    label === query ||
+    (label.startsWith(query) &&
+      ["apis", "api"].includes(label.slice(query.length)))
+  );
 }
 
 function fromApisGuru(c: ApiCandidate): ApiChoice {

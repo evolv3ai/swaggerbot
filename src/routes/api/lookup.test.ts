@@ -19,7 +19,10 @@ createAppLookup.mockImplementation(() =>
   createLookup({
     db: openDb(join(dir, "index.db")),
     judge: new FakeJudge(),
-    apisGuru: { findCandidates: async () => [] },
+    apisGuru: {
+      findCandidates: async () => [],
+      findVendorApis: async () => [],
+    },
     webSearch: null,
     fetcher: createFetcher(),
   }),
