@@ -47,6 +47,9 @@ export function apisGuruList(origin: (host: string) => string) {
     ...entry("nospec.test", "NoSpec API", [
       `${origin("developer.nospec.test")}/gone.json`,
     ]),
+    ...entry("ghco.test", "GhCo API", [
+      `${origin("raw.githubusercontent.com")}/ghco/openapi/master/openapi.json`,
+    ]),
     ...entry("umbra.test:alpha", "Umbra Alpha", []),
     ...entry("umbra.test:beta", "Umbra Beta", []),
     ...entry(
