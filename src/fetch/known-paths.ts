@@ -1,5 +1,5 @@
 import { setTimeout as sleep } from "node:timers/promises";
-import { FetchError, type Fetcher } from "./fetcher";
+import { FetchError, type Fetcher, type FetchResult } from "./fetcher";
 import { type SniffResult, sniffSpec } from "./sniff";
 
 export const KNOWN_HOST_PREFIXES = [
@@ -40,6 +40,11 @@ export type KnownPathHit = {
   url: string;
   sniff: SniffResult;
   bytes: Uint8Array;
+  /**
+   * True when the host's robots.txt disallowed the fetch and ADR 0003 allowed
+   * it once; false on the ordinary path.
+   */
+  robotsDisallowed: boolean;
 };
 
 export type ProbeOptions = {
@@ -50,6 +55,12 @@ export type ProbeOptions = {
   budgetMs?: number;
   /** Default `https`. Tests use `http` against the fixture server. */
   scheme?: "http" | "https";
+  /**
+   * When a host's own robots.txt disallows its whole site (`Disallow: /`),
+   * fetch a known path there once anyway (ADR 0003). Only for a probe of the
+   * Vendor's own domain, never a third party's host. Default false.
+   */
+  allowBlanketRobots?: boolean;
 };
 
 /**
@@ -79,8 +90,12 @@ export async function probeKnownPaths(
   await Promise.all(
     hosts.map((host, i) =>
       Promise.race([
-        probeHost(`${scheme}://${host}`, fetcher, stop.signal, (hit) =>
-          found[i]?.push(hit),
+        probeHost(
+          `${scheme}://${host}`,
+          fetcher,
+          stop.signal,
+          opts.allowBlanketRobots ?? false,
+          (hit) => found[i]?.push(hit),
         ),
         deadline,
       ]),
@@ -99,22 +114,43 @@ async function probeHost(
   origin: string,
   fetcher: Fetcher,
   signal: AbortSignal,
+  allowBlanketRobots: boolean,
   collect: (hit: KnownPathHit) => void,
 ): Promise<void> {
   for (const path of KNOWN_PATHS) {
     if (signal.aborted) break;
-    let res: Awaited<ReturnType<Fetcher["fetchUrl"]>>;
+    const url = `${origin}${path}`;
+    let res: FetchResult;
     try {
-      res = await fetcher.fetchUrl(`${origin}${path}`, { signal });
+      res = await fetcher.fetchUrl(url, { signal });
     } catch (error) {
+      if (!(error instanceof FetchError)) continue;
       // A host that can't be reached won't answer on another path either.
-      if (error instanceof FetchError && isHostDead(error)) break;
-      continue;
+      if (isHostDead(error)) break;
+      // ADR 0003: a host that shuts its whole site still has its Spec
+      // fetched once. A list of disallowed paths is honoured as it stands.
+      if (
+        !allowBlanketRobots ||
+        error.kind !== "robots-disallowed" ||
+        !error.blanket
+      )
+        continue;
+      try {
+        res = await fetcher.fetchUrl(url, { signal, ignoreRobots: true });
+      } catch (retryError) {
+        if (retryError instanceof FetchError && isHostDead(retryError)) break;
+        continue;
+      }
     }
 
     const sniff = sniffSpec(res.bytes, res.contentType);
     if (sniff) {
-      collect({ url: res.finalUrl, sniff, bytes: res.bytes });
+      collect({
+        url: res.finalUrl,
+        sniff,
+        bytes: res.bytes,
+        robotsDisallowed: res.robotsDisallowed,
+      });
     } else if (path === APIS_JSON_PATH) {
       for (const specUrl of apisJsonSpecUrls(res.bytes, res.finalUrl)) {
         if (signal.aborted) break;
@@ -133,7 +169,14 @@ async function fetchSpec(
   try {
     const res = await fetcher.fetchUrl(url, { signal });
     const sniff = sniffSpec(res.bytes, res.contentType);
-    return sniff ? { url: res.finalUrl, sniff, bytes: res.bytes } : null;
+    return sniff
+      ? {
+          url: res.finalUrl,
+          sniff,
+          bytes: res.bytes,
+          robotsDisallowed: res.robotsDisallowed,
+        }
+      : null;
   } catch {
     return null;
   }
