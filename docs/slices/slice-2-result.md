@@ -1,29 +1,68 @@
 ---
-status: gate not met; labels reviewed, every false resolution has an issue (WTR-56..61)
+status: gate not met; WTR-57..62 merged, WTR-56 held; three label questions for Wes
 ---
 
 # Slice 2 result
 
-All thirteen planned issues are merged, plus two filed mid-slice (WTR-54, WTR-55).
-`main` = `d140a87` plus the label review below. Two live `pnpm bench` runs on
-2026-09-22 before the review (~16:00 and ~16:10) agreed on every number; two after
-it (~17:00 and ~17:20, fresh Index each) are below.
+All thirteen planned issues are merged, plus WTR-54 and WTR-55 (filed mid-slice), and
+after the label review WTR-57..62. **WTR-56 is built (PR #36) but held** (see below).
+`main` = `df75e21`. Two live `pnpm bench` runs on that `main`, 2026-09-22 ~18:00 and
+~18:20, fresh Index each:
 
-| | Slice 1 accepted | Slice 2 before review | Slice 2 after review | Slice 2 target |
-|---|---|---|---|---|
-| False Resolution | 0.0% (0/9) | 33.3% (6/18) | **21.1% (4/19)** | < 2% |
-| Long-tail coverage | 27.3% | 45.5% | **63.6%** | 60% |
-| Outcome accuracy | — | 72.5% | 75.0% | — |
+| | Slice 1 accepted | Slice 2 before review | After review | **After WTR-57..62** | Slice 2 target |
+|---|---|---|---|---|---|
+| False Resolution | 0.0% (0/9) | 33.3% (6/18) | 21.1% (4/19) | **15.0% (3/20), 10.0% (2/20)** | < 2% |
+| Long-tail coverage | 27.3% | 45.5% | 63.6% | **72.7%** (both runs) | 60% |
+| Outcome accuracy | — | 72.5% | 75.0% | **77.5%** (both runs) | — |
 
-| group | entries | correct | resolved | false |
+| group | entries | correct | resolved | false (run 1 / run 2) |
 |---|---|---|---|---|
-| popular | 12 | 10 | 10 | 2 |
-| longtail | 12 | 10 | 9 | 2 |
+| popular | 12 | 11 | 11 | 2 / 1 |
+| longtail | 12 | 10 | 9 | 1 / 1 |
 | ambiguous | 10 | 5 | 0 | 0 |
 | negative | 6 | 5 | 0 | 0 |
 
-**The coverage target is met; the precision gate is not.** The four remaining false
-resolutions are all real defects with a known cause, each filed.
+**Coverage is met; the precision gate is not, but it is close.** Of the false
+resolutions, two (Box, Neon, in both runs) are **label questions**: each resolves to
+an Official URL serving the labelled Spec. If Wes accepts them, run 2 has 0/20. The
+third (GitHub, run 1 only) is a new intermittent defect, WTR-65.
+
+## Label questions for Wes (from this round)
+
+| Entry | Source found | Finding |
+|---|---|---|
+| Neon API | `neon.com/openapi.json` | **Byte-identical** to the labelled `neon.com/api_spec/release/v2.json` (same SHA-256) |
+| Box Platform API | `developer.box.com/box-openapi.json` | Same title, 2024.0, server `api.box.com/2.0`, and all 187 path keys as the labelled `openapi.json`; only the rendered description text differs (markdown bullets, relative links) |
+| Novu | `api.novu.co/openapi.yaml` | The same document as the labelled `openapi.json` once parsed; seen in 1 of 3 live runs, not in the Benchmark |
+
+Precedents: Supabase (a second Official URL serving the same document) and
+Cloudflare (same version and server) were accepted.
+
+## WTR-56..62 round (2026-09-22)
+
+Each PR was verified merged with current `main` and live-checked with keys from
+that worktree:
+
+- **WTR-61** (#32): Novu picks 3.19.2 over the stale `docs.novu.co` copy. That
+  surfaced `api.novu.co/api-json`, titled "DEPRECATED … Use /openapi.{json,yaml}
+  instead" at the same version, which won on pool order in some runs → **WTR-62**
+  (#38): a Spec whose Vendor marks it deprecated isn't Current. After both: 3 of 3 runs avoid `api-json`.
+- **WTR-59** (#33): Firecrawl → `docs.firecrawl.dev/api-reference/v2-openapi.json`.
+- **WTR-57** (#34): wires WTR-52's `searchSpecRepos`/`specsInRepo` (no longer
+  unused). As built it found PagerDuty's REST Spec but still settled on an Events
+  Spec fetched first; the reviewer added "fetch GitHub hits likeliest first".
+- **WTR-58** (#35): Box Current 2024.0, not the 5-path 2026.0 add-on. Also rules
+  out PagerDuty's 1-path Events v1, whose date version outranked REST's 2.0.0.
+  PagerDuty REST API is correct in both Benchmark runs. The rule doesn't reach
+  Index answers (WTR-64, needs a design call).
+- **WTR-60** (#37): Neon resolves (apex redirect `neon.tech` → `neon.com`).
+- **WTR-56** (#36), **held**: Mailchimp → Ambiguous as intended, but Zoho and Intuit
+  stay NoSpec and **Plaid regresses to Ambiguous** over ten product pages ("Transfer:
+  ACH, RTP…", "Balance: real-time…"), because the WTR-51 Vendor crawl can't tell
+  one API's products from separate APIs. Needs a decision; evidence on WTR-56.
+
+**Thresholds were not tuned.** No remaining failure turns on a threshold: they are
+label questions, a merge/tie defect, crawl and identity gaps, and undiagnosed cases.
 
 ## Label review (Wes, 2026-09-22)
 
@@ -49,55 +88,27 @@ Two structural rulings from the same review:
   `neon.tech`'s apex redirects to `neon.com`, while `neoncrm.com`'s goes to
   `neonone.com`. WTR-60.
 
-## The ten non-Resolved failures, by cause
+## Remaining failures, by cause (run 2)
 
-**Already diagnosed, recorded on their issues:**
-
-- **Mailchimp, Zoho, Intuit** (expected Ambiguous, got NoSpec). WTR-51 built the
-  Vendor-API crawl, and it never runs: step 4 in `findSpec` is guarded by
-  `verdict?.kind === "unknown"`, and for a bare Vendor name the Judge confidently
-  identifies a single API instead. A judgment question — should one Candidate from
-  a bare Vendor name count as identified? — not a threshold. See WTR-51. **Ruled
-  2026-09-22: always run the whole-Vendor step; WTR-56.**
-- **Neon API** (expected Resolved, got Ambiguous). Not the redirect problem WTR-50
-  assumed. `api-docs.neon.tech` is a live ReadMe-hosted reference Neon still runs;
-  it doesn't redirect, so `neon.tech` and `neon.com` are two real domains of one
-  Vendor. Needs Vendor identity, and `neoncrm.com` is a *different company*, so the
-  rule has to tell those apart. See WTR-50. **Ruled 2026-09-22: identity from
-  evidence (the apex redirect); WTR-60.**
-- **Mux** was NoSpec before the review; after it, it resolves on
-  `www.mux.com/full-combined-spec.json`, accepted as correct (see the label review).
-  WTR-56 may change how the bare name "Mux" is routed, so watch it.
-
-**Not yet diagnosed:**
-
-- **Slack Web API** (Unconfirmed on the APIs.guru mirror). Its Spec is in
-  `slackapi/slack-api-specs`, linked from Slack's docs — the org is `slackapi` while
-  the Vendor label is `slack`, so the org-scoped GitHub search misses it. A link to a
-  GitHub *repo page* also passes `isSpecCandidate` (it contains `api-spec`) but sniffs
-  as HTML, so the crawl drops it rather than resolving repo → raw Spec file.
-- **Asana** (Unconfirmed), **Render API** (NoSpec) — not investigated.
-- **Atlassian, Cisco** (expected Ambiguous, got Unknown) — the Vendor has fewer than
-  two APIs.guru entries, same family as Mailchimp.
-- **Steam Web API** (expected NoSpec, got Ambiguous) — a negative entry now answering
-  Ambiguous; check nothing over-eager crept in.
-
-## Also unfinished
-
-`searchSpecRepos` and `specsInRepo` (WTR-52, built for Cloudflare's 26 MB Spec that
-code search cannot index) are **exported, tested and called by nothing**. WTR-47's
-issue predated them and wires only `searchSpecs`. Cloudflare resolves anyway by
-another route, so nothing is broken — but the capability the slice paid for is
-unused, and the next person would reasonably assume it isn't. **It is also why
-PagerDuty fails** (its 2.7 MB REST Spec is never a code-search hit); WTR-57 wires it.
+- **Box, Neon**: label questions above.
+- **GitHub REST API** (run 1 only): resolved to GitHub Enterprise Cloud's
+  `ghec.2022-11-28.json`. APIs.guru's 20 `github.com` entries share one name, so
+  `mergeGuruChoices` puts GHEC's origins in GitHub's Choice, all at 1.1.4; the order
+  flip isn't explained yet. WTR-65.
+- **Mailchimp, Zoho, Intuit** (expected Ambiguous, got NoSpec): WTR-56, held.
+- **Mux** (expected Resolved, got NoSpec in both runs, and live on `main`): resolved
+  once after the label review; not diagnosed.
+- **Slack Web API** (Unconfirmed): its Spec is in `slackapi/slack-api-specs`; the
+  org is `slackapi` while the Vendor label is `slack`, and a link to a GitHub repo
+  page sniffs as HTML.
+- **Render API** (NoSpec), **Atlassian, Cisco** (Unknown; fewer than two APIs.guru
+  entries), **Steam Web API** (a negative entry answering Ambiguous): not diagnosed.
 
 ## What to do next
 
-1. **Merge WTR-56..61** (all in Backlog, each with a named live check). 57 also
-   closes the unused-WTR-52 gap above. Run each PR's live check with keys before
-   merging: agents' worktrees have none.
-2. Re-run `pnpm bench` twice and update this document in place.
-3. Only then tune `src/lookup/thresholds.ts` on the reviewed entries.
-4. Still undiagnosed: Slack (Unconfirmed), Asana (Unconfirmed), Render (NoSpec),
-   Atlassian and Cisco (Unknown), Steam Web API (a negative entry answering
-   Ambiguous).
+1. Wes: rule on the three label questions and on WTR-56 (Plaid).
+2. WTR-65 first step: log the pool for a failing GitHub run.
+3. Then two more `pnpm bench` runs; with the label rulings accepted and WTR-65
+   fixed, the gate is within reach.
+4. Undiagnosed: Mux, Slack, Render, Atlassian, Cisco, Steam Web API. WTR-64 (Index
+   answers) needs a design call.
