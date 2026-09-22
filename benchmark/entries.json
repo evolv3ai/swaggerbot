@@ -5,12 +5,283 @@
     "expected": "Resolved",
     "apiId": "stripe.com/stripe-api",
     "specSources": [
-      "https://raw.githubusercontent.com/stripe/openapi/master/openapi/spec3.json",
-      "https://raw.githubusercontent.com/stripe/openapi/master/openapi/spec3.yaml"
+      "https://raw.githubusercontent.com/stripe/openapi/master/latest/openapi.spec3.json",
+      "https://raw.githubusercontent.com/stripe/openapi/master/latest/openapi.spec3.yaml"
     ],
     "evidenceUrl": "https://github.com/stripe/openapi",
     "reviewed": false,
-    "notes": "Example entry from WTR-26; replaced by the seed in WTR-33."
+    "notes": "The repo README marks /latest/ as recommended (v1 + v2 endpoints). The legacy v1-only /openapi/spec3.json is still updated but left out of specSources."
+  },
+  {
+    "name": "GitHub REST API",
+    "group": "popular",
+    "expected": "Resolved",
+    "apiId": "github.com/rest-api",
+    "specSources": [
+      "https://raw.githubusercontent.com/github/rest-api-description/main/descriptions/api.github.com/api.github.com.json",
+      "https://raw.githubusercontent.com/github/rest-api-description/main/descriptions/api.github.com/api.github.com.yaml"
+    ],
+    "evidenceUrl": "https://docs.github.com/en/rest/about-the-rest-api/about-the-openapi-description-for-the-rest-api",
+    "reviewed": false,
+    "notes": "The repo also holds descriptions for GitHub Enterprise Cloud (ghec) and Server (ghes-*); only api.github.com is listed."
+  },
+  {
+    "name": "Twilio Verify",
+    "group": "popular",
+    "expected": "Resolved",
+    "apiId": "twilio.com/verify",
+    "specSources": [
+      "https://raw.githubusercontent.com/twilio/twilio-oai/main/spec/json/twilio_verify_v2.json",
+      "https://raw.githubusercontent.com/twilio/twilio-oai/main/spec/yaml/twilio_verify_v2.yaml"
+    ],
+    "evidenceUrl": "https://github.com/twilio/twilio-oai/tree/main/spec/json",
+    "reviewed": false,
+    "notes": "Bare \"Twilio\" names many APIs, so it is an ambiguous entry; this one names the Verify API (v2)."
+  },
+  {
+    "name": "Slack Web API",
+    "group": "popular",
+    "expected": "Resolved",
+    "apiId": "slack.com/web-api",
+    "specSources": [
+      "https://raw.githubusercontent.com/slackapi/slack-api-specs/master/web-api/slack_web_openapi_v2.json"
+    ],
+    "evidenceUrl": "https://github.com/slackapi/slack-api-specs",
+    "reviewed": false,
+    "notes": "Swagger 2.0. https://api.slack.com/specs/openapi/v2/slack_web.json also serves a Slack Web API spec, but a different one (170 paths vs 174 on GitHub), so it is left out; a reviewer should decide whether it counts."
+  },
+  {
+    "name": "Jira Cloud Platform REST API",
+    "group": "popular",
+    "expected": "Resolved",
+    "apiId": "atlassian.com/jira-cloud-platform",
+    "specSources": [
+      "https://developer.atlassian.com/cloud/jira/platform/swagger-v3.v3.json"
+    ],
+    "evidenceUrl": "https://developer.atlassian.com/cloud/jira/platform/rest/v3/intro/",
+    "reviewed": false,
+    "notes": "REST v3 is taken as the Current Spec; REST v2 is still live and would be an Alternate."
+  },
+  {
+    "name": "DigitalOcean API",
+    "group": "popular",
+    "expected": "Resolved",
+    "apiId": "digitalocean.com/digitalocean-api",
+    "specSources": [
+      "https://api-engineering.nyc3.digitaloceanspaces.com/spec-ci/DigitalOcean-public.v2.yaml",
+      "https://raw.githubusercontent.com/digitalocean/openapi/main/specification/DigitalOcean-public.v2.yaml"
+    ],
+    "evidenceUrl": "https://github.com/digitalocean/openapi",
+    "reviewed": false,
+    "notes": "The Spaces URL is the bundled single-file spec linked from the repo README; the GitHub raw file is the multi-file root with $refs."
+  },
+  {
+    "name": "Box Platform API",
+    "group": "popular",
+    "expected": "Resolved",
+    "apiId": "box.com/box-platform",
+    "specSources": [
+      "https://raw.githubusercontent.com/box/box-openapi/main/openapi.json"
+    ],
+    "evidenceUrl": "https://developer.box.com/reference/",
+    "reviewed": false
+  },
+  {
+    "name": "Asana",
+    "group": "popular",
+    "expected": "Resolved",
+    "apiId": "asana.com/asana-api",
+    "specSources": [
+      "https://raw.githubusercontent.com/Asana/openapi/master/defs/asana_oas.yaml"
+    ],
+    "evidenceUrl": "https://github.com/Asana/openapi",
+    "reviewed": false
+  },
+  {
+    "name": "PagerDuty REST API",
+    "group": "popular",
+    "expected": "Resolved",
+    "apiId": "pagerduty.com/rest-api",
+    "specSources": [
+      "https://raw.githubusercontent.com/PagerDuty/api-schema/main/reference/REST/openapiv3.json"
+    ],
+    "evidenceUrl": "https://github.com/PagerDuty/api-schema",
+    "reviewed": false,
+    "notes": "The evidence page is the repo README (\"our OpenAPI defined public APIs\"); it does not name the file path, which comes from the repo tree."
+  },
+  {
+    "name": "Plaid",
+    "group": "popular",
+    "expected": "Resolved",
+    "apiId": "plaid.com/plaid-api",
+    "specSources": [
+      "https://raw.githubusercontent.com/plaid/plaid-openapi/master/2020-09-14.yml"
+    ],
+    "evidenceUrl": "https://plaid.com/docs/api/libraries/",
+    "reviewed": false,
+    "notes": "2020-09-14 is Plaid's only current API Version and the only spec in the repo."
+  },
+  {
+    "name": "Cloudflare API",
+    "group": "popular",
+    "expected": "Resolved",
+    "apiId": "cloudflare.com/cloudflare-api",
+    "specSources": [
+      "https://raw.githubusercontent.com/cloudflare/api-schemas/main/openapi.json"
+    ],
+    "evidenceUrl": "https://github.com/cloudflare/api-schemas",
+    "reviewed": false,
+    "notes": "The sibling openapi.yaml (19 MB) failed to parse with PyYAML in this session, so only the JSON is listed."
+  },
+  {
+    "name": "OpenAI API",
+    "group": "popular",
+    "expected": "Resolved",
+    "apiId": "openai.com/openai-api",
+    "specSources": [
+      "https://raw.githubusercontent.com/openai/openai-openapi/main/openapi.yaml",
+      "https://raw.githubusercontent.com/openai/openai-openapi/main/openapi.json"
+    ],
+    "evidenceUrl": "https://github.com/openai/openai-openapi",
+    "reviewed": false
+  },
+  {
+    "name": "Fly.io Machines API",
+    "group": "longtail",
+    "expected": "Resolved",
+    "apiId": "fly.io/machines-api",
+    "specSources": [
+      "https://docs.machines.dev/openapi.json",
+      "https://docs.machines.dev/spec/openapi3.json"
+    ],
+    "evidenceUrl": "https://fly.io/docs/machines/api/",
+    "reviewed": false,
+    "notes": "fly.io links \"OpenAPI spec\" to the docs.machines.dev viewer, not to the JSON; /spec/openapi3.json redirects to /openapi.json."
+  },
+  {
+    "name": "Neon API",
+    "group": "longtail",
+    "expected": "Resolved",
+    "apiId": "neon.com/neon-api",
+    "specSources": [
+      "https://neon.com/api_spec/release/v2.json",
+      "https://neon.tech/api_spec/release/v2.json"
+    ],
+    "evidenceUrl": "https://neon.com/docs/reference/api-reference",
+    "reviewed": false,
+    "notes": "neon.tech redirects to neon.com."
+  },
+  {
+    "name": "Supabase Management API",
+    "group": "longtail",
+    "expected": "Resolved",
+    "apiId": "supabase.com/management-api",
+    "specSources": ["https://api.supabase.com/api/v1-json"],
+    "evidenceUrl": "https://supabase.com/docs/reference/api/introduction",
+    "reviewed": false
+  },
+  {
+    "name": "Loops",
+    "group": "longtail",
+    "expected": "Resolved",
+    "apiId": "loops.so/loops-api",
+    "specSources": ["https://app.loops.so/openapi.json"],
+    "evidenceUrl": "https://loops.so/docs/api-reference/intro",
+    "reviewed": false
+  },
+  {
+    "name": "Novu",
+    "group": "longtail",
+    "expected": "Resolved",
+    "apiId": "novu.co/novu-api",
+    "specSources": ["https://api.novu.co/openapi.json"],
+    "evidenceUrl": "https://docs.novu.co/api-reference/overview",
+    "reviewed": false
+  },
+  {
+    "name": "Replicate",
+    "group": "longtail",
+    "expected": "Resolved",
+    "apiId": "replicate.com/replicate-api",
+    "specSources": ["https://api.replicate.com/openapi.json"],
+    "evidenceUrl": "https://replicate.com/docs/reference/openapi",
+    "reviewed": false,
+    "notes": "info.version is 1.0.0-a1; Replicate does not label the HTTP API as preview."
+  },
+  {
+    "name": "Codeberg API",
+    "group": "longtail",
+    "expected": "Resolved",
+    "apiId": "codeberg.org/codeberg-api",
+    "specSources": ["https://codeberg.org/swagger.v1.json"],
+    "evidenceUrl": "https://codeberg.org/api/swagger",
+    "reviewed": false,
+    "notes": "Swagger 2.0, titled \"Forgejo API\": Codeberg runs Forgejo, and every Forgejo/Gitea instance serves a similar spec. The API here is Codeberg's hosted instance."
+  },
+  {
+    "name": "Infisical",
+    "group": "longtail",
+    "expected": "Resolved",
+    "apiId": "infisical.com/infisical-api",
+    "specSources": ["https://app.infisical.com/api/docs/json"],
+    "evidenceUrl": "https://infisical.com/docs/api-reference/overview/introduction",
+    "reviewed": false,
+    "notes": "The docs page names the spec URL only in its embedded API-reference config, not as a visible link."
+  },
+  {
+    "name": "Render API",
+    "group": "longtail",
+    "expected": "Resolved",
+    "apiId": "render.com/render-api",
+    "specSources": [
+      "https://api-docs.render.com/openapi/render-public-api-1.json"
+    ],
+    "evidenceUrl": "https://render.com/docs/api",
+    "reviewed": false,
+    "notes": "Named \"Render API\" because bare \"Render\" is a common word."
+  },
+  {
+    "name": "Firecrawl",
+    "group": "longtail",
+    "expected": "Resolved",
+    "apiId": "firecrawl.dev/firecrawl-api",
+    "specSources": ["https://docs.firecrawl.dev/api-reference/v2-openapi.json"],
+    "evidenceUrl": "https://docs.firecrawl.dev/api-reference/introduction",
+    "reviewed": false,
+    "notes": "v2 is taken as the Current Spec; the docs page names it only in its embedded API-reference config. https://docs.firecrawl.dev/api-reference/v1-openapi.json is still served and would be an Alternate."
+  },
+  {
+    "name": "Mux",
+    "group": "longtail",
+    "expected": "Resolved",
+    "apiId": "mux.com/mux-api",
+    "specSources": ["https://www.mux.com/api-spec.json"],
+    "evidenceUrl": "https://www.mux.com/docs/core/make-api-requests",
+    "reviewed": false,
+    "notes": "One spec covers Mux Video and Mux Data."
+  },
+  {
+    "name": "Val Town",
+    "group": "longtail",
+    "expected": "Resolved",
+    "apiId": "val.town/val-town-api",
+    "specSources": ["https://api.val.town/openapi.json"],
+    "evidenceUrl": "https://docs.val.town/openapi",
+    "reviewed": false,
+    "notes": "The evidence page is Val Town's API-reference viewer, which loads this spec URL."
+  },
+  {
+    "name": "Google",
+    "group": "ambiguous",
+    "expected": "Ambiguous",
+    "candidates": [
+      "google.com/gmail",
+      "google.com/drive",
+      "google.com/calendar"
+    ],
+    "evidenceUrl": "https://developers.google.com/workspace",
+    "reviewed": false,
+    "notes": "Google has hundreds of APIs; the candidates are three from the evidence page, not a full list."
   },
   {
     "name": "Atlassian",
@@ -18,18 +289,150 @@
     "expected": "Ambiguous",
     "candidates": [
       "atlassian.com/jira-cloud-platform",
-      "atlassian.com/confluence-cloud"
+      "atlassian.com/confluence-cloud",
+      "atlassian.com/bitbucket-cloud"
     ],
     "evidenceUrl": "https://developer.atlassian.com/",
-    "reviewed": false,
-    "notes": "Example entry from WTR-26; replaced by the seed in WTR-33."
+    "reviewed": false
   },
   {
-    "name": "Frobnicator Quantum Ledger",
+    "name": "Azure",
+    "group": "ambiguous",
+    "expected": "Ambiguous",
+    "candidates": [
+      "azure.com/compute",
+      "azure.com/storage",
+      "azure.com/key-vault",
+      "azure.com/cosmos-db"
+    ],
+    "evidenceUrl": "https://github.com/Azure/azure-rest-api-specs/tree/main/specification",
+    "reviewed": false,
+    "notes": "Azure has hundreds of Resource Manager APIs; the candidates are four from the evidence page, not a full list."
+  },
+  {
+    "name": "Mailchimp",
+    "group": "ambiguous",
+    "expected": "Ambiguous",
+    "candidates": ["mailchimp.com/marketing", "mailchimp.com/transactional"],
+    "evidenceUrl": "https://mailchimp.com/developer/",
+    "reviewed": false
+  },
+  {
+    "name": "Twilio",
+    "group": "ambiguous",
+    "expected": "Ambiguous",
+    "candidates": [
+      "twilio.com/api",
+      "twilio.com/verify",
+      "twilio.com/conversations"
+    ],
+    "evidenceUrl": "https://github.com/twilio/twilio-oai/tree/main/spec/json",
+    "reviewed": false,
+    "notes": "The issue lists Twilio as a popular example; it is labelled Ambiguous because Twilio publishes one spec per API (Api v2010, Verify, Conversations, ...). twilio.com/api is the core api.twilio.com 2010-04-01 API. A reviewer may prefer Resolved to twilio.com/api."
+  },
+  {
+    "name": "Xero",
+    "group": "ambiguous",
+    "expected": "Ambiguous",
+    "candidates": [
+      "xero.com/accounting",
+      "xero.com/assets",
+      "xero.com/payroll-uk"
+    ],
+    "evidenceUrl": "https://github.com/XeroAPI/Xero-OpenAPI",
+    "reviewed": false
+  },
+  {
+    "name": "Meta",
+    "group": "ambiguous",
+    "expected": "Ambiguous",
+    "candidates": [
+      "facebook.com/graph-api",
+      "facebook.com/marketing-api",
+      "facebook.com/whatsapp-business-platform",
+      "facebook.com/instagram-platform"
+    ],
+    "evidenceUrl": "https://developers.facebook.com/docs/",
+    "reviewed": false
+  },
+  {
+    "name": "Zoho",
+    "group": "ambiguous",
+    "expected": "Ambiguous",
+    "candidates": ["zoho.com/crm", "zoho.com/books", "zoho.com/desk"],
+    "evidenceUrl": "https://www.zoho.com/developer/rest-api.html",
+    "reviewed": false
+  },
+  {
+    "name": "Cisco",
+    "group": "ambiguous",
+    "expected": "Ambiguous",
+    "candidates": ["cisco.com/webex", "cisco.com/meraki-dashboard"],
+    "evidenceUrl": "https://developer.cisco.com/",
+    "reviewed": false,
+    "notes": "Meraki's API is hosted on meraki.com; cisco.com is used as the Vendor domain here."
+  },
+  {
+    "name": "Intuit",
+    "group": "ambiguous",
+    "expected": "Ambiguous",
+    "candidates": [
+      "intuit.com/quickbooks-online-accounting",
+      "intuit.com/quickbooks-payments",
+      "intuit.com/quickbooks-payroll"
+    ],
+    "evidenceUrl": "https://developer.intuit.com/app/developer/homepage",
+    "reviewed": false
+  },
+  {
+    "name": "Reddit API",
+    "group": "negative",
+    "expected": "NoSpec",
+    "apiId": "reddit.com/reddit-api",
+    "evidenceUrl": "https://www.reddit.com/dev/api/",
+    "reviewed": false,
+    "notes": "The API docs page offers no OpenAPI or Swagger file, and a GitHub search of the reddit org for \"openapi\" found nothing."
+  },
+  {
+    "name": "Dropbox API",
+    "group": "negative",
+    "expected": "NoSpec",
+    "apiId": "dropbox.com/dropbox-api",
+    "evidenceUrl": "https://www.dropbox.com/developers/documentation/http/documentation",
+    "reviewed": false,
+    "notes": "Dropbox describes its API in its own Stone format (github.com/dropbox/dropbox-api-spec), not OpenAPI. Community OpenAPI conversions exist and must not count."
+  },
+  {
+    "name": "Steam Web API",
+    "group": "negative",
+    "expected": "NoSpec",
+    "apiId": "steampowered.com/steam-web-api",
+    "evidenceUrl": "https://partner.steamgames.com/doc/webapi_overview",
+    "reviewed": false,
+    "notes": "Valve's docs offer no OpenAPI or Swagger file; community specs exist and must not count."
+  },
+  {
+    "name": "Plinthwell Rostering API",
     "group": "negative",
     "expected": "Unknown",
-    "evidenceUrl": "https://apis.guru/",
+    "evidenceUrl": "https://www.bing.com/search?q=Plinthwell+Rostering+API",
     "reviewed": false,
-    "notes": "Example entry from WTR-26: a made-up name that matches no API."
+    "notes": "Made-up name; the search returned only unrelated pages."
+  },
+  {
+    "name": "Quorvane Ledger Sync API",
+    "group": "negative",
+    "expected": "Unknown",
+    "evidenceUrl": "https://www.bing.com/search?q=Quorvane+Ledger+Sync+API",
+    "reviewed": false,
+    "notes": "Made-up name; the search returned only unrelated pages."
+  },
+  {
+    "name": "Zentharix Parcel Oracle API",
+    "group": "negative",
+    "expected": "Unknown",
+    "evidenceUrl": "https://www.bing.com/search?q=Zentharix+Parcel+Oracle+API",
+    "reviewed": false,
+    "notes": "Made-up name; the search returned only unrelated pages."
   }
 ]
