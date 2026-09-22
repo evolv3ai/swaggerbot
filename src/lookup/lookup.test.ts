@@ -78,7 +78,8 @@ function setup(
   script: FakeJudgeScript,
   webSearch: WebSearch | null = new FakeWebSearch(),
   github?: GitHubRepos,
-  crawl = fakeCrawl(),
+  /** `null` runs the real crawl with this Lookup's fetcher and Judge. */
+  crawl: ReturnType<typeof fakeCrawl> | null = fakeCrawl(),
   githubSearch?: GitHubCodeSearch,
 ) {
   const judge = new FakeJudge(script);
@@ -105,11 +106,11 @@ function setup(
         scheme: "http",
       });
     },
-    crawl: crawl.crawl,
+    ...(crawl ? { crawl: crawl.crawl } : {}),
     ...(github ? { github } : {}),
     ...(githubSearch ? { githubSearch } : {}),
   });
-  return { judge, lookup, probed, crawls: crawl.starts };
+  return { judge, lookup, probed, crawls: crawl?.starts ?? [] };
 }
 
 /** Parses against the Outcome schema, so every answer is a valid Outcome. */
@@ -933,6 +934,61 @@ describe("lookup with the Developer Portal crawl", () => {
 
     expect(outcome).toMatchObject({ outcome: "NoSpec" });
     expect(crawls).toEqual([portal]);
+  });
+
+  it("crawls a portal Candidate's bare origin from its documentation", async () => {
+    const o = server.origin("www.acme.test");
+    const html = (body: string) =>
+      `<!doctype html><html><body>${body}</body></html>`;
+    server.send(
+      "www.acme.test",
+      "/",
+      html(`<a href="/pricing">Pricing</a>`),
+      "text/html",
+    );
+    server.send(
+      "www.acme.test",
+      "/docs",
+      html(`<a href="/api-spec.json">API spec</a>`),
+      "text/html",
+    );
+    server.send(
+      "www.acme.test",
+      "/api-spec.json",
+      spec("Acme API"),
+      "application/json",
+    );
+    const search = new FakeWebSearch([
+      { url: `${o}/`, title: "Acme", snippet: "The Acme platform." },
+    ]);
+    const { lookup } = setup(
+      {
+        whichApi: {
+          acme: {
+            probabilities: { "acme.test/api": 0.9, none: 0.1 },
+            confidence: 0.9,
+          },
+        },
+        isSpecLink: { [`${o}/api-spec.json`]: yes },
+        specDescribesApi: { "Acme API": yes },
+      },
+      search,
+      undefined,
+      null,
+    );
+
+    const outcome = await ask(lookup, "acme");
+
+    expect(outcome).toMatchObject({
+      outcome: "Resolved",
+      provenance: "Official",
+      sources: [{ url: `${o}/api-spec.json`, provenance: "Official" }],
+    });
+    expect(
+      server.requests.some(
+        (r) => r.host === "www.acme.test" && r.path === "/docs",
+      ),
+    ).toBe(true);
   });
 
   it("resolves from a robots-disallowed hit and says ADR 0003 allowed it", async () => {
