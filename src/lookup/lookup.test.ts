@@ -25,7 +25,12 @@ import type {
 import { FakeWebSearch } from "~/sources/web-search/fake";
 import { SearchError, type WebSearch } from "~/sources/web-search/web-search";
 import { apisGuruList } from "./__fixtures__/apis-guru";
-import { createLookup, type LookupDeps, provenanceOf } from "./lookup";
+import {
+  createLookup,
+  type LookupDeps,
+  type LookupRequest,
+  provenanceOf,
+} from "./lookup";
 
 const NOW = "2026-09-22T10:00:00.000Z";
 
@@ -107,8 +112,12 @@ function setup(
 }
 
 /** Parses against the Outcome schema, so every answer is a valid Outcome. */
-async function ask(lookup: ReturnType<typeof setup>["lookup"], name: string) {
-  return Outcome.parse(await lookup({ name }));
+async function ask(
+  lookup: ReturnType<typeof setup>["lookup"],
+  name: string,
+  request: Omit<LookupRequest, "name"> = {},
+) {
+  return Outcome.parse(await lookup({ name, ...request }));
 }
 
 const yes = yesNo(0.95);
@@ -803,9 +812,9 @@ describe("lookup with the Developer Portal crawl", () => {
     );
   });
 
-  it("marks an off-host crawl hit a Mirror", async () => {
+  it("answers Resolved from an off-host Spec linked from the Vendor's page, as Endorsed", async () => {
     const url = `${server.origin("docs.nospec-cdn.test")}/openapi.json`;
-    const { lookup } = setup(
+    const { lookup, judge } = setup(
       script,
       undefined,
       undefined,
@@ -815,8 +824,42 @@ describe("lookup with the Developer Portal crawl", () => {
     const outcome = await ask(lookup, "nospec");
 
     expect(outcome).toMatchObject({
-      outcome: "Unconfirmed",
-      sources: [{ url, provenance: "Mirror" }],
+      outcome: "Resolved",
+      provenance: "Endorsed",
+      sources: [{ url, provenance: "Endorsed" }],
+      verifiedAt: NOW,
+    });
+    // An Endorsed Spec answers from the Index too.
+    const calls = judge.calls.length;
+    expect(await ask(lookup, "nospec")).toMatchObject({
+      outcome: "Resolved",
+      provenance: "Endorsed",
+    });
+    expect(judge.calls.length).toBe(calls);
+  });
+
+  it("prefers an Official Source to an Endorsed one when both describe the API", async () => {
+    const endorsed = `${server.origin("docs.nospec-cdn.test")}/openapi.json`;
+    const official = `${server.origin("docs.nospec.test")}/openapi.json`;
+    const { lookup } = setup(
+      {
+        ...script,
+        specDescribesApi: { "NoSpec API": yes, "NoSpec API v2": yes },
+      },
+      undefined,
+      undefined,
+      fakeCrawl({
+        hits: [
+          crawlHit(endorsed, "NoSpec API", { offHost: true }),
+          crawlHit(official, "NoSpec API v2"),
+        ],
+      }),
+    );
+
+    expect(await ask(lookup, "nospec")).toMatchObject({
+      outcome: "Resolved",
+      provenance: "Official",
+      sources: [{ url: official, provenance: "Official" }],
     });
   });
 
@@ -840,19 +883,15 @@ describe("lookup with the Developer Portal crawl", () => {
 
     const outcome = await ask(lookup, "nospec");
 
-    // A Mirror until WTR-48 makes it Endorsed, and so Resolved.
+    // A host the Vendor's pages link to: Endorsed, and so Resolved.
     expect(outcome).toMatchObject({
-      outcome: "Unconfirmed",
-      spec: { specVersion: "3.0.3" },
-      sources: [{ url, provenance: "Mirror" }],
+      outcome: "Resolved",
+      provenance: "Endorsed",
+      currentSpec: { specVersion: "3.0.3" },
+      sources: [{ url, provenance: "Endorsed" }],
     });
-    if (outcome.outcome !== "Unconfirmed") throw new Error("unreachable");
-    expect(outcome.reasons.join("\n")).toMatch(
-      /known paths on machines\.test \(from the crawl\)/,
-    );
-    // The Vendor's own domain was already probed; the rest are all tried
-    // while nothing is settled.
-    expect(probed).toEqual(["nospec.test", "machines.test", "later.test"]);
+    // The Vendor's own domain was already probed; settled on machines.test.
+    expect(probed).toEqual(["nospec.test", "machines.test"]);
   });
 
   it("skips the off-host probe once the crawl has settled the answer", async () => {
@@ -987,12 +1026,16 @@ describe("lookup with a GitHub origin", () => {
     });
     const { lookup } = setup(script, new FakeWebSearch(), github);
 
-    const outcome = await ask(lookup, "ghco");
-
-    expect(outcome).toMatchObject({
-      outcome: "Unconfirmed",
+    // A third party's own Spec: Community, answered only when allowed.
+    expect(await ask(lookup, "ghco")).toMatchObject({
+      outcome: "NoSpec",
+      communityAvailable: true,
+    });
+    expect(await ask(lookup, "ghco", { allowCommunity: true })).toMatchObject({
+      outcome: "Resolved",
+      provenance: "Community",
       sources: [
-        { url: `${server.origin(RAW)}${MASTER}`, provenance: "Mirror" },
+        { url: `${server.origin(RAW)}${MASTER}`, provenance: "Community" },
       ],
     });
   });
@@ -1074,27 +1117,103 @@ describe("lookup with GitHub code search", () => {
     server.send(
       RAW,
       "/fans/nospec-specs/HEAD/openapi.json",
-      spec("NoSpec API"),
+      spec("NoSpec API (draft)"),
       "application/json",
     );
     const { search, calls } = fakeSearch([], [found]);
     const { lookup } = setup(script, undefined, undefined, undefined, search);
 
-    const outcome = await ask(lookup, "nospec");
+    const outcome = await ask(lookup, "nospec", { allowCommunity: true });
 
     expect(calls).toEqual([
       ["nospec", "NoSpec API"],
       [null, "NoSpec API"],
     ]);
-    // Outside the Vendor's org: a Mirror.
+    // Outside the Vendor's org, with no original: Community.
     expect(outcome).toMatchObject({
       outcome: "Unconfirmed",
-      sources: [{ url: found.url, provenance: "Mirror" }],
+      sources: [{ url: found.url, provenance: "Community" }],
     });
     if (outcome.outcome !== "Unconfirmed") throw new Error("unreachable");
     const reasons = outcome.reasons.join("\n");
     expect(reasons).toMatch(/GitHub code search in org nospec \(0 hits\)/);
     expect(reasons).toMatch(/GitHub code search for "NoSpec API" \(1 hits\)/);
+  });
+
+  it("answers No Spec for a Community-only Spec unless the Caller allows Community", async () => {
+    const found = hit("fans/nospec-specs");
+    server.send(
+      RAW,
+      "/fans/nospec-specs/HEAD/openapi.json",
+      spec("NoSpec API"),
+      "application/json",
+    );
+    const { search } = fakeSearch([], [found]);
+    const { lookup } = setup(script, undefined, undefined, undefined, search);
+
+    expect(await ask(lookup, "nospec")).toMatchObject({
+      outcome: "NoSpec",
+      api: { id: "nospec.test/nospec-api" },
+      communityAvailable: true,
+    });
+    expect(await ask(lookup, "nospec", { allowCommunity: true })).toMatchObject(
+      {
+        outcome: "Resolved",
+        provenance: "Community",
+        sources: [{ url: found.url, provenance: "Community" }],
+      },
+    );
+    // The Index never gives a Community Spec to a Caller who didn't allow it.
+    expect(await ask(lookup, "nospec")).toMatchObject({
+      outcome: "NoSpec",
+      communityAvailable: true,
+    });
+  });
+
+  it("keeps a third party's copy of an Endorsed Spec a Mirror", async () => {
+    const endorsed = `${server.origin("docs.nospec-cdn.test")}/openapi.json`;
+    const found = hit("fans/nospec-specs");
+    const bytes = spec("NoSpec API (draft)");
+    server.send(
+      RAW,
+      "/fans/nospec-specs/HEAD/openapi.json",
+      bytes,
+      "application/json",
+    );
+    const crawlBytes = new TextEncoder().encode(bytes);
+    const sniff = sniffSpec(crawlBytes, "application/json");
+    if (!sniff) throw new Error("fixture is not a Spec");
+    const { search } = fakeSearch([], [found]);
+    const { lookup } = setup(
+      script,
+      undefined,
+      undefined,
+      fakeCrawl({
+        hits: [
+          {
+            url: endorsed,
+            bytes: crawlBytes,
+            sniff,
+            linkedFrom: "https://nospec.test/docs",
+            offHost: true,
+            robotsDisallowed: false,
+          },
+        ],
+      }),
+      search,
+    );
+
+    const outcome = await ask(lookup, "nospec");
+
+    expect(outcome).toMatchObject({
+      outcome: "Unconfirmed",
+      sources: [
+        { url: endorsed, provenance: "Endorsed" },
+        { url: found.url, provenance: "Mirror" },
+      ],
+    });
+    if (outcome.outcome !== "Unconfirmed") throw new Error("unreachable");
+    expect(outcome.reasons).not.toContain("only a third-party copy found");
   });
 
   it("never fetches a hit the Judge ranks below specLink", async () => {
@@ -1243,22 +1362,31 @@ describe("lookup with GitHub code search", () => {
 describe("provenanceOf", () => {
   const stripe = { id: "stripe.com", name: "stripe.com", domain: "stripe.com" };
 
-  it("is Official on the Vendor's registrable domain or GitHub org", () => {
-    expect(provenanceOf("https://files.stripe.com/openapi.json", stripe)).toBe(
-      "Official",
-    );
+  it("is Official on the Vendor's registrable domain or GitHub org, linked or not", () => {
+    for (const linked of [false, true]) {
+      expect(
+        provenanceOf("https://files.stripe.com/openapi.json", stripe, linked),
+      ).toBe("Official");
+      expect(
+        provenanceOf(
+          "https://raw.githubusercontent.com/stripe/openapi/master/openapi/spec3.yaml",
+          stripe,
+          linked,
+        ),
+      ).toBe("Official");
+      expect(
+        provenanceOf("https://github.com/Stripe/openapi", stripe, linked),
+      ).toBe("Official");
+      expect(
+        provenanceOf("https://stripe.github.io/spec.json", stripe, linked),
+      ).toBe("Official");
+    }
+  });
+
+  it("is Endorsed elsewhere when linked from the Vendor's page", () => {
     expect(
-      provenanceOf(
-        "https://raw.githubusercontent.com/stripe/openapi/master/openapi/spec3.yaml",
-        stripe,
-      ),
-    ).toBe("Official");
-    expect(provenanceOf("https://github.com/Stripe/openapi", stripe)).toBe(
-      "Official",
-    );
-    expect(provenanceOf("https://stripe.github.io/spec.json", stripe)).toBe(
-      "Official",
-    );
+      provenanceOf("https://docs.stripe-cdn.test/openapi.json", stripe, true),
+    ).toBe("Endorsed");
   });
 
   it("is Mirror anywhere else", () => {
@@ -1266,10 +1394,11 @@ describe("provenanceOf", () => {
       provenanceOf(
         "https://raw.githubusercontent.com/APIs-guru/openapi-directory/main/stripe.yaml",
         stripe,
+        false,
       ),
     ).toBe("Mirror");
     expect(
-      provenanceOf("https://stripe.com.evil.test/openapi.json", stripe),
+      provenanceOf("https://stripe.com.evil.test/openapi.json", stripe, false),
     ).toBe("Mirror");
   });
 });

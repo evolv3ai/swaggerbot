@@ -6,7 +6,7 @@ import {
   vendorIdFromDomain,
 } from "~/domain/catalog";
 import type { Outcome } from "~/domain/outcome";
-import type { Provenance } from "~/domain/provenance";
+import { bestProvenance, type Provenance } from "~/domain/provenance";
 import { FetchError, type Fetcher } from "~/fetch/fetcher";
 import {
   type KnownPathHit,
@@ -35,7 +35,10 @@ export type LookupRequest = {
   name: string;
   /** Accepted, not yet acted on: API Versions arrive in a later slice. */
   apiVersion?: string;
-  /** Accepted, not yet acted on: Community Specs arrive in Slice 2. */
+  /**
+   * Lets a Community Spec answer. Off (the default), Community Specs are only
+   * counted, as `NoSpec.communityAvailable`.
+   */
   allowCommunity?: boolean;
   /**
    * Accepted and ignored in Slice 1: there is no Verification yet (Slice 3),
@@ -128,6 +131,8 @@ type SpecCandidate = {
   probability: number;
   /** Found by the crawl off the portal's registrable domain. */
   offHost?: boolean;
+  /** The APIs.guru copy: a Mirror whatever its bytes. */
+  apisGuruMirror?: boolean;
   /** Its host's robots.txt disallowed it; fetched under ADR 0003. */
   robotsDisallowed?: boolean;
 };
@@ -166,13 +171,13 @@ export function createLookup(deps: LookupDeps): Lookup {
     ((opts: { startUrl: string; api: ApiRef }) =>
       crawlForSpecs({ ...opts, fetcher, judge }));
 
-  return async function lookup({ name }) {
+  return async function lookup({ name, allowCommunity = false }) {
     const diagnostics: string[] = [];
     const finish = (outcome: Outcome): Outcome =>
       diagnostics.length > 0 ? { ...outcome, diagnostics } : outcome;
 
     // 1. The Index.
-    const indexed = answerFromIndex(name);
+    const indexed = answerFromIndex(name, allowCommunity);
     if (indexed) return indexed;
 
     // 2. APIs.guru.
@@ -223,7 +228,9 @@ export function createLookup(deps: LookupDeps): Lookup {
       return finish({ outcome: "Ambiguous", candidates: verdict.candidates });
 
     // 5. The identified API's Spec.
-    return finish(await findSpec(name, verdict.choice, diagnostics));
+    return finish(
+      await findSpec(name, verdict.choice, allowCommunity, diagnostics),
+    );
   };
 
   /**
@@ -262,8 +269,14 @@ export function createLookup(deps: LookupDeps): Lookup {
     );
   }
 
-  /** Resolved from a confirmed Spec with an Official Source, if the name is known. */
-  function answerFromIndex(name: string): Outcome | null {
+  /**
+   * Resolved from a confirmed Spec with an Official or Endorsed Source (or a
+   * Community one, when allowed), if the name is known.
+   */
+  function answerFromIndex(
+    name: string,
+    allowCommunity: boolean,
+  ): Outcome | null {
     const api = repo.findApiByName(name);
     if (!api) return null;
     const stored = repo.getApiWithSpecs(api.id);
@@ -271,7 +284,13 @@ export function createLookup(deps: LookupDeps): Lookup {
     const confirmed = stored?.specs
       .filter((s) => s.confirmedAt !== null)
       .reverse()
-      .find((s) => s.sources.some((src) => src.provenance === "Official"));
+      .find((s) =>
+        s.sources.some(
+          (src) =>
+            isVendorBacked(src.provenance) ||
+            (allowCommunity && src.provenance === "Community"),
+        ),
+      );
     if (!stored || !confirmed) return null;
     return resolved(stored.api, stored.vendor, confirmed);
   }
@@ -376,6 +395,7 @@ export function createLookup(deps: LookupDeps): Lookup {
   async function findSpec(
     name: string,
     choice: ApiChoice,
+    allowCommunity: boolean,
     diagnostics: string[],
   ): Promise<Outcome> {
     const ref = apiRef(choice);
@@ -388,7 +408,10 @@ export function createLookup(deps: LookupDeps): Lookup {
       bytes: Uint8Array,
       sniff: SniffResult,
       provenance: Provenance,
-      found: Pick<SpecCandidate, "offHost" | "robotsDisallowed"> = {},
+      found: Pick<
+        SpecCandidate,
+        "offHost" | "robotsDisallowed" | "apisGuruMirror"
+      > = {},
     ) {
       if (candidates.some((c) => c.url === url)) return;
       const specId = specIdOf(bytes);
@@ -436,8 +459,14 @@ export function createLookup(deps: LookupDeps): Lookup {
         checked.push(url);
         const provenance = mirror
           ? "Mirror"
-          : provenanceOf(res.finalUrl, choice.vendor, githubOrg);
-        await consider(res.finalUrl, res.bytes, sniff, provenance);
+          : provenanceOf(res.finalUrl, choice.vendor, false, githubOrg);
+        await consider(
+          res.finalUrl,
+          res.bytes,
+          sniff,
+          provenance,
+          mirror ? { apisGuruMirror: true } : {},
+        );
         return true;
       } catch (error) {
         checked.push(`${url} (unreachable)`);
@@ -480,8 +509,9 @@ export function createLookup(deps: LookupDeps): Lookup {
 
     /**
      * Crawls the Developer Portal, then probes known paths on the other
-     * domains it links to, stopping once settled. Hits off the portal's
-     * domain are Mirrors for now (WTR-48 makes them Endorsed).
+     * domains it links to, stopping once settled. Hits on the portal's domain
+     * come first; those off it were reached by a link from the Vendor's pages,
+     * so are Endorsed.
      */
     async function crawlStep() {
       const deadline = Date.now() + CRAWL_STEP_BUDGET_MS;
@@ -493,13 +523,17 @@ export function createLookup(deps: LookupDeps): Lookup {
         diagnostics.push(`crawl: ${message(error)}`);
       }
       checked.push(`crawl from ${startUrl} (${result.hits.length} found)`);
-      for (const hit of result.hits) {
+      const hits = [
+        ...result.hits.filter((hit) => !hit.offHost),
+        ...result.hits.filter((hit) => hit.offHost),
+      ];
+      for (const hit of hits) {
         if (hit.robotsDisallowed) diagnostics.push(robotsDiagnostic(hit.url));
         await consider(
           hit.url,
           hit.bytes,
           hit.sniff,
-          hit.offHost ? "Mirror" : provenanceOf(hit.url, choice.vendor),
+          provenanceOf(hit.url, choice.vendor, true),
           { offHost: hit.offHost, robotsDisallowed: hit.robotsDisallowed },
         );
         if (settled()) return;
@@ -522,9 +556,13 @@ export function createLookup(deps: LookupDeps): Lookup {
           diagnostics.push(`known paths on ${host}: ${message(error)}`);
         }
         for (const hit of hits) {
-          await consider(hit.url, hit.bytes, hit.sniff, "Mirror", {
-            offHost: true,
-          });
+          await consider(
+            hit.url,
+            hit.bytes,
+            hit.sniff,
+            provenanceOf(hit.url, choice.vendor, true),
+            { offHost: true },
+          );
           if (settled()) return;
         }
       }
@@ -585,9 +623,16 @@ export function createLookup(deps: LookupDeps): Lookup {
       }
     }
 
-    const confirmed = () =>
-      best(candidates.filter((c) => c.provenance === "Official"));
-    const settled = () => (confirmed()?.probability ?? 0) >= t.describes;
+    /** The likeliest candidate at `tier` that describes the API. */
+    const describing = (tier: Provenance) =>
+      best(
+        candidates.filter(
+          (c) => c.provenance === tier && c.probability >= t.describes,
+        ),
+      );
+    // The Vendor's own Spec wins over one it links to.
+    const confirmed = () => describing("Official") ?? describing("Endorsed");
+    const settled = () => confirmed() !== undefined;
 
     for (const url of choice.originUrls) {
       await fetchOrigin(url);
@@ -610,7 +655,7 @@ export function createLookup(deps: LookupDeps): Lookup {
           hit.url,
           hit.bytes,
           hit.sniff,
-          provenanceOf(hit.url, choice.vendor),
+          provenanceOf(hit.url, choice.vendor, false),
           { robotsDisallowed: hit.robotsDisallowed },
         );
         if (settled()) break;
@@ -621,24 +666,46 @@ export function createLookup(deps: LookupDeps): Lookup {
     if (!settled() && choice.mirrorUrl)
       await fetchAndConsider(choice.mirrorUrl, true);
 
-    const official = confirmed();
-    if (official && official.probability >= t.describes) {
-      const stored = store(name, choice, official, candidates, true);
+    // A third-party Source is a Mirror only of bytes the Vendor stands behind;
+    // otherwise it is Community.
+    const backed = new Set(
+      candidates
+        .filter((c) => isVendorBacked(c.provenance))
+        .map((c) => c.specId),
+    );
+    for (const c of candidates)
+      if (
+        c.provenance === "Mirror" &&
+        !c.apisGuruMirror &&
+        !backed.has(c.specId)
+      )
+        c.provenance = "Community";
+
+    const answer =
+      confirmed() ?? (allowCommunity ? describing("Community") : undefined);
+    if (answer) {
+      const stored = store(name, choice, answer, candidates, true);
       return resolved(choice.api, choice.vendor, stored);
     }
 
     // The Vendor's own copy is preferred to a likelier third-party one.
     const doubtful = candidates.filter((c) => c.probability >= t.doubt);
+    const allowed = doubtful.filter(
+      (c) => allowCommunity || c.provenance !== "Community",
+    );
     const pick =
-      best(doubtful.filter((c) => c.provenance === "Official")) ??
-      best(doubtful);
+      best(allowed.filter((c) => c.provenance === "Official")) ??
+      best(allowed.filter((c) => c.provenance === "Endorsed")) ??
+      best(allowed);
     if (pick) {
       const stored = store(name, choice, pick, candidates, false);
       const reasons: string[] = [];
-      if (pick.provenance !== "Official")
+      if (pick.provenance === "Community")
+        reasons.push("only a Community Spec found");
+      else if (pick.provenance === "Mirror")
         reasons.push("only a third-party copy found");
       reasons.push(
-        `the Judge gave ${pick.probability.toFixed(2)} that the Spec at ${pick.url} describes ${choice.api.name}; Resolved needs ${t.describes} from an Official Source`,
+        `the Judge gave ${pick.probability.toFixed(2)} that the Spec at ${pick.url} describes ${choice.api.name}; Resolved needs ${t.describes} from an Official or Endorsed Source`,
         `checked: ${checked.join("; ")}`,
       );
       return {
@@ -658,7 +725,7 @@ export function createLookup(deps: LookupDeps): Lookup {
       outcome: "NoSpec",
       api: choice.api,
       vendor: choice.vendor,
-      communityAvailable: false,
+      communityAvailable: doubtful.some((c) => c.provenance === "Community"),
     };
   }
 
@@ -690,15 +757,20 @@ export function createLookup(deps: LookupDeps): Lookup {
   }
 }
 
-/** Resolved with a confirmed Spec; `verifiedAt` is its Official Source's. */
+/**
+ * Resolved with a confirmed Spec, at its best Provenance; `verifiedAt` is
+ * that of its Sources at that tier.
+ */
 function resolved(
   api: Api,
   vendor: Vendor,
   stored: { spec: Spec; sources: Source[] },
 ): Outcome {
-  const official = stored.sources.filter((s) => s.provenance === "Official");
+  const provenance =
+    bestProvenance(stored.sources.map((s) => s.provenance)) ?? "Official";
   const verifiedAt =
-    official
+    stored.sources
+      .filter((s) => s.provenance === provenance)
       .map((s) => s.lastVerifiedAt)
       .sort()
       .at(-1) ?? "";
@@ -708,7 +780,7 @@ function resolved(
     vendor,
     currentSpec: stored.spec,
     alternateSpecs: [],
-    provenance: "Official",
+    provenance,
     sources: stored.sources,
     validityIssues: [],
     verifiedAt,
@@ -724,13 +796,17 @@ function best(candidates: SpecCandidate[]): SpecCandidate | undefined {
 }
 
 /**
- * Slice 1 Provenance: Official when the Source's registrable domain is the
- * Vendor's, or it sits in the Vendor's GitHub org; any other copy is a Mirror.
- * `currentOrg` replaces the org in a GitHub URL whose repo has moved since.
+ * A Source's Provenance by where it is: Official when its registrable domain
+ * is the Vendor's, or it sits in the Vendor's GitHub org; else Endorsed when
+ * it was reached by a link from a page on the Vendor's domain; else Mirror.
+ * `findSpec` makes a Mirror Community when no Official or Endorsed Source has
+ * its bytes. `currentOrg` replaces the org in a GitHub URL whose repo has
+ * moved since.
  */
 export function provenanceOf(
   url: string,
   vendor: Vendor,
+  linkedFromVendor: boolean,
   currentOrg?: string,
 ): Provenance {
   const domain = registrableDomain(url);
@@ -738,7 +814,13 @@ export function provenanceOf(
   if (domain !== null && domain === vendorDomain) return "Official";
   let org = githubOrg(url);
   if (org !== null && currentOrg) org = currentOrg.toLowerCase();
-  return org !== null && org === vendorLabel(vendor) ? "Official" : "Mirror";
+  if (org !== null && org === vendorLabel(vendor)) return "Official";
+  return linkedFromVendor ? "Endorsed" : "Mirror";
+}
+
+/** Official or Endorsed: a Provenance that can answer Resolved by default. */
+function isVendorBacked(provenance: Provenance): boolean {
+  return provenance === "Official" || provenance === "Endorsed";
 }
 
 /**

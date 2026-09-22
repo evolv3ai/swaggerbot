@@ -134,7 +134,8 @@ export function createRepo(db: Db) {
     /**
      * Records where a Spec was found. Adding the same url again returns the
      * existing Source. With `verifiedAt` (an ISO timestamp), a new Source is
-     * first seen then, and an existing one is marked verified then.
+     * first seen then, and an existing one is marked verified then and takes
+     * `provenance`, the tier as computed now.
      */
     addSource(
       specId: string,
@@ -142,10 +143,11 @@ export function createRepo(db: Db) {
       provenance: Provenance,
       verifiedAt?: string,
     ): Source {
+      const tier = Provenance.parse(provenance);
       const insert = db.insert(sources).values({
         specId,
         url,
-        provenance: Provenance.parse(provenance),
+        provenance: tier,
         ...(verifiedAt
           ? { firstSeenAt: verifiedAt, lastVerifiedAt: verifiedAt }
           : {}),
@@ -153,7 +155,10 @@ export function createRepo(db: Db) {
       const target = [sources.specId, sources.url];
       if (verifiedAt)
         insert
-          .onConflictDoUpdate({ target, set: { lastVerifiedAt: verifiedAt } })
+          .onConflictDoUpdate({
+            target,
+            set: { lastVerifiedAt: verifiedAt, provenance: tier },
+          })
           .run();
       else insert.onConflictDoNothing({ target }).run();
       const source = db

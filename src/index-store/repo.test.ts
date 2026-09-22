@@ -127,6 +127,20 @@ describe("repo", () => {
     });
   });
 
+  it("re-tiers a Source verified again", () => {
+    const spec = repo.putSpec(stripeApi.id, specBytes, specMeta);
+    const url = "https://example.test/stripe.json";
+    repo.addSource(spec.id, url, "Community", "2026-09-01T00:00:00.000Z");
+    const again = repo.addSource(
+      spec.id,
+      url,
+      "Mirror",
+      "2026-09-22T00:00:00.000Z",
+    );
+
+    expect(again.provenance).toBe("Mirror");
+  });
+
   it("keeps a Spec unconfirmed until it is confirmed, then keeps the first confirmation", () => {
     const spec = repo.putSpec(stripeApi.id, specBytes, specMeta);
     const confirmed = () =>
