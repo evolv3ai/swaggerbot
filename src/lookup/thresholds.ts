@@ -21,6 +21,12 @@ export type Thresholds = {
    * `whichApi` settled nothing → Ambiguous over that Vendor's APIs.
    */
   vendorName: number;
+  /**
+   * `areSpecLinks` at least this likely for a GitHub code search hit (its
+   * path, in its repo) → the hit is fetched; below, it is never fetched.
+   * It ranks links before any fetch, so it is not `describes`.
+   */
+  specLink: number;
 };
 
 export const DEFAULT_THRESHOLDS: Thresholds = {
@@ -31,4 +37,5 @@ export const DEFAULT_THRESHOLDS: Thresholds = {
   describes: 0.8,
   doubt: 0.4,
   vendorName: 0.7,
+  specLink: 0.6,
 };
