@@ -242,7 +242,9 @@ const HEADING = /^h[1-6]$/;
  * The `<a href>` links of an HTML page as `SpecLink`s, in document order:
  * `url` resolved against `baseUrl`, `text` the anchor text, `context` the
  * enclosing paragraph's text or else the nearest preceding heading. Skips
- * `mailto:`, `javascript:` and in-page fragments; at most 60, deduplicated.
+ * `mailto:`, `javascript:` and in-page fragments; deduplicated. At most 60:
+ * Spec candidates are kept first, then the rest in document order, so a Spec
+ * link past a long run of site navigation is never the one dropped.
  */
 export function extractLinks(html: string, baseUrl: string): SpecLink[] {
   const links: SpecLink[] = [];
@@ -305,7 +307,7 @@ export function extractLinks(html: string, baseUrl: string): SpecLink[] {
         };
         if (heading) link.context = heading;
         anchor = null;
-        if (seen.has(link.url) || links.length >= MAX_LINKS_PER_PAGE) continue;
+        if (seen.has(link.url)) continue;
         seen.add(link.url);
         links.push(link);
         if (paragraph) pendingInParagraph.push(link);
@@ -317,7 +319,14 @@ export function extractLinks(html: string, baseUrl: string): SpecLink[] {
     }
   }
   closeParagraph();
-  return links;
+  if (links.length <= MAX_LINKS_PER_PAGE) return links;
+  const specs = links.filter((link) => isSpecCandidate(link.url));
+  const kept = new Set(specs.slice(0, MAX_LINKS_PER_PAGE));
+  for (const link of links) {
+    if (kept.size >= MAX_LINKS_PER_PAGE) break;
+    kept.add(link);
+  }
+  return links.filter((link) => kept.has(link));
 }
 
 function resolveLink(href: string, base: URL): string | null {

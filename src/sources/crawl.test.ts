@@ -203,6 +203,38 @@ describe("crawlForSpecs", () => {
     ]);
   });
 
+  it("judges and finds a Spec linked past more than 60 navigation links", async () => {
+    const o = server.origin("docs.acme.test");
+    const nav = Array.from(
+      { length: 300 },
+      (_, i) => `<a href="/nav${i}">Nav ${i}</a>`,
+    ).join("");
+    page(
+      "docs.acme.test",
+      "/",
+      `<nav>${nav}</nav><p><a href="/api-spec.json">API spec</a></p>`,
+    );
+    specAt("docs.acme.test", "/api-spec.json");
+    let asked: SpecLink[][] = [];
+    const judge = judgeSaying({ [`${o}/api-spec.json`]: 0.9 });
+    const areSpecLinks = judge.areSpecLinks.bind(judge);
+    judge.areSpecLinks = async (a, links) => {
+      asked = [...asked, links];
+      return areSpecLinks(a, links);
+    };
+
+    const hits = await crawlForSpecs({
+      startUrl: `${o}/`,
+      api,
+      fetcher: fetcher(),
+      judge,
+    });
+
+    expect(asked[0]?.[0]?.url).toBe(`${o}/api-spec.json`);
+    expect(asked[0]).toHaveLength(60);
+    expect(hits.map((h) => h.url)).toEqual([`${o}/api-spec.json`]);
+  });
+
   it("stops at maxPages; a fetched non-Spec does not count against it", async () => {
     const o = server.origin("docs.acme.test");
     page(
@@ -471,6 +503,20 @@ describe("extractLinks", () => {
     const links = extractLinks(many, base);
     expect(links).toHaveLength(60);
     expect(links[59]?.url).toBe("https://docs.acme.test/p59");
+  });
+
+  it("keeps a Spec link that comes after more than 60 other links", () => {
+    const nav = Array.from(
+      { length: 300 },
+      (_, i) => `<a href="/nav${i}">${i}</a>`,
+    ).join("");
+    const links = extractLinks(
+      `${nav}<a href="/api-spec.json">API spec</a>`,
+      base,
+    );
+    expect(links).toHaveLength(60);
+    expect(links[59]?.url).toBe("https://docs.acme.test/api-spec.json");
+    expect(links[58]?.url).toBe("https://docs.acme.test/nav58");
   });
 });
 
