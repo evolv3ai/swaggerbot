@@ -40,3 +40,32 @@ its word.
   buried.
 - The PRD's crawling etiquette is amended to match (decided by Wes,
   2026-09-22).
+
+## Amendment: a known path on the Vendor's own API host (Wes, 2026-09-22)
+
+The exception above is written around a **link**, and that assumption has aged
+badly. Checked live on 2026-09-22, `docs.val.town/openapi` — the very page this
+ADR was built on — is now a Scalar single-page app: 2,654 bytes, two `<a href>`s,
+and `api.val.town` present only inside the Scalar configuration. A crawl of it
+finds nothing. `fly.io/docs/machines/api/` is the same shape, and so are a
+growing number of Developer Portals, because reference documentation is
+increasingly rendered from a Spec the page never links in its HTML.
+
+The reasoning that justified the exception doesn't depend on the link, though.
+It rests on the Vendor publishing a Spec in order for it to be used, while
+serving it from an application host whose `robots.txt` was written to keep
+search engines out of an app. That is just as true when we find the Spec by
+probing a **known path** on the Vendor's own API host as when we follow a link
+to it.
+
+So the exception widens: **a single Spec document at a known path on the
+Vendor's own API host is retrieved once even when that host's `robots.txt`
+disallows it**, under the same limits as before — one document, one fetch, never
+crawled on from, the honest User-Agent and the per-host rate limit still
+applying, and the answer still recording that `robots.txt` disallowed it.
+
+What does **not** widen is deliberateness, and that is still where the line is.
+A Vendor that names the Spec file in `robots.txt`, as Codeberg does with
+`/swagger.*.json`, is refusing that file specifically rather than shuttering an
+app, and we take it at its word. Codeberg stays No Spec. The exception also
+still applies only to the Vendor's **own** API host, never to a third party's.
