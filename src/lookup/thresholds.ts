@@ -39,3 +39,11 @@ export const DEFAULT_THRESHOLDS: Thresholds = {
   vendorName: 0.7,
   specLink: 0.6,
 };
+
+/**
+ * A Spec whose path count is below this fraction of the largest in its pool
+ * covers only part of the API (Box's `openapi-v2026.0.json`, 5 paths beside
+ * `openapi.json`'s 187): it is never Current over the fuller Spec, only an
+ * Alternate.
+ */
+export const PARTIAL_SPEC_RATIO = 0.5;
