@@ -4,8 +4,13 @@ import {
   fixtureLookup,
   startFixtureServer,
 } from "./__fixtures__/server";
-import { createFetcher } from "./fetcher";
-import { apisJsonSpecUrls, probeKnownPaths } from "./known-paths";
+import { createFetcher, FetchError, type Fetcher } from "./fetcher";
+import {
+  apisJsonSpecUrls,
+  KNOWN_HOST_PREFIXES,
+  KNOWN_PATHS,
+  probeKnownPaths,
+} from "./known-paths";
 
 let server: FixtureServer;
 
@@ -22,6 +27,14 @@ const fetcher = () =>
     allowPrivate: true,
     lookup: fixtureLookup,
     minIntervalMs: 0,
+  });
+
+const slowFetcher = () =>
+  createFetcher({
+    allowPrivate: true,
+    lookup: fixtureLookup,
+    minIntervalMs: 0,
+    timeoutMs: 5_000,
   });
 
 const spec = (title: string) =>
@@ -92,7 +105,7 @@ describe("probeKnownPaths", () => {
     );
   });
 
-  it("drops hosts that don't finish within the budget", async () => {
+  it("stops hosts that don't finish within the budget", async () => {
     server.send(
       "api.vendor.test",
       "/openapi.json",
@@ -112,17 +125,133 @@ describe("probeKnownPaths", () => {
     const started = Date.now();
     const hits = await probeKnownPaths(
       `vendor.test:${server.port}`,
-      createFetcher({
-        allowPrivate: true,
-        lookup: fixtureLookup,
-        minIntervalMs: 0,
-        timeoutMs: 5_000,
-      }),
+      slowFetcher(),
       { scheme: "http", budgetMs: 300 },
     );
 
     expect(Date.now() - started).toBeLessThan(2_000);
     expect(hits.map((h) => h.sniff.extract.title)).toEqual(["Fast"]);
+  });
+
+  it("keeps what a host found before the budget stopped it", async () => {
+    server.send(
+      "vendor.test",
+      "/openapi.json",
+      spec("Early"),
+      "application/json",
+    );
+    server.route("vendor.test", "/openapi.yaml", () => {
+      // Never respond.
+    });
+
+    const hits = await probeKnownPaths(
+      `vendor.test:${server.port}`,
+      slowFetcher(),
+      { scheme: "http", budgetMs: 300 },
+    );
+
+    expect(hits.map((h) => h.url)).toEqual([
+      `${server.origin("vendor.test")}/openapi.json`,
+    ]);
+  });
+
+  it("tries the app., api-docs. and spec. hosts", async () => {
+    for (const host of ["app", "api-docs", "spec"]) {
+      server.send(
+        `${host}.vendor.test`,
+        "/openapi.json",
+        spec(host),
+        "application/json",
+      );
+    }
+
+    const hits = await probeKnownPaths(
+      `vendor.test:${server.port}`,
+      fetcher(),
+      { scheme: "http" },
+    );
+
+    expect(hits.map((h) => h.sniff.extract.title)).toEqual([
+      "app",
+      "api-docs",
+      "spec",
+    ]);
+    const hosts = new Set(server.requests.map((r) => r.host));
+    for (const prefix of KNOWN_HOST_PREFIXES) {
+      expect(hosts).toContain(`${prefix}vendor.test`);
+    }
+  });
+
+  it.each([
+    "/openapi.yml",
+    "/api-json",
+    "/v1-json",
+    "/swagger/v1/swagger.json",
+    "/api/openapi.json",
+    "/docs/openapi.json",
+    "/spec/openapi3.json",
+  ])("finds a Spec at %s", async (path) => {
+    server.send("api.vendor.test", path, spec("New"), "application/json");
+
+    const hits = await probeKnownPaths(
+      `vendor.test:${server.port}`,
+      fetcher(),
+      { scheme: "http" },
+    );
+
+    expect(hits.map((h) => h.url)).toEqual([
+      `${server.origin("api.vendor.test")}${path}`,
+    ]);
+  });
+
+  it("stops probing a host that can't be reached", async () => {
+    // A fake fetcher: robots.txt failing on the network would otherwise
+    // short-circuit the host inside the fetcher before the probe sees it.
+    const asked: string[] = [];
+    const deadFetcher: Fetcher = {
+      async fetchUrl(url) {
+        asked.push(url);
+        const kind = new URL(url).hostname.startsWith("docs.")
+          ? "network"
+          : "http-error";
+        throw new FetchError(kind, url, "fake", { status: 404 });
+      },
+    };
+
+    await probeKnownPaths("vendor.test", deadFetcher);
+
+    expect(asked.filter((u) => u.startsWith("https://docs."))).toEqual([
+      "https://docs.vendor.test/openapi.json",
+    ]);
+    expect(
+      asked.filter((u) => u.startsWith("https://api.vendor.test/")),
+    ).toHaveLength(KNOWN_PATHS.length);
+  });
+
+  it("returns a Spec reached from two hosts once", async () => {
+    server.send(
+      "api.vendor.test",
+      "/openapi.json",
+      spec("Shared"),
+      "application/json",
+    );
+    server.route("developers.vendor.test", "/openapi.json", (_req, res) => {
+      res
+        .writeHead(302, {
+          location: `${server.origin("api.vendor.test")}/openapi.json`,
+        })
+        .end();
+    });
+
+    const hits = await probeKnownPaths(
+      `vendor.test:${server.port}`,
+      fetcher(),
+      { scheme: "http" },
+    );
+
+    expect(hits.map((h) => h.url)).toEqual([
+      `${server.origin("api.vendor.test")}/openapi.json`,
+    ]);
   });
 });
 

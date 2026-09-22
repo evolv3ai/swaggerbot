@@ -8,21 +8,32 @@ export const KNOWN_HOST_PREFIXES = [
   "developer.",
   "developers.",
   "docs.",
+  "app.",
+  "api-docs.",
+  "spec.",
 ] as const;
 
+/** Most likely first: a host stopped by the budget may not get through it. */
 export const KNOWN_PATHS = [
   "/openapi.json",
   "/openapi.yaml",
   "/swagger.json",
   "/swagger.yaml",
+  "/openapi.yml",
   "/v3/api-docs",
   "/api-docs",
+  "/api-json",
+  "/v1-json",
+  "/swagger/v1/swagger.json",
+  "/api/openapi.json",
+  "/docs/openapi.json",
+  "/spec/openapi3.json",
   "/.well-known/openapi.json",
   "/apis.json",
 ] as const;
 
 const APIS_JSON_PATH = "/apis.json";
-const DEFAULT_BUDGET_MS = 12_000;
+const DEFAULT_BUDGET_MS = 25_000;
 
 export type KnownPathHit = {
   /** Where the Spec was served from, after redirects. */
@@ -32,7 +43,10 @@ export type KnownPathHit = {
 };
 
 export type ProbeOptions = {
-  /** Default 12 s. Hosts not finished by then are dropped. */
+  /**
+   * Default 25 s, for the whole call across all hosts, not per host. Hosts
+   * not finished by then stop fetching but keep the hits they already had.
+   */
   budgetMs?: number;
   /** Default `https`. Tests use `http` against the fixture server. */
   scheme?: "http" | "https";
@@ -40,9 +54,10 @@ export type ProbeOptions = {
 
 /**
  * Checks a Vendor's domain for Specs at well-known locations: each known path
- * on the domain and its `api.`, `developer.`, `developers.` and `docs.` hosts,
- * plus the Specs an `apis.json` lists. Hosts run in parallel and paths one
- * after another per host, so the fetcher's per-host spacing holds.
+ * on the domain and its `api.`, `developer.`, `developers.`, `docs.`, `app.`,
+ * `api-docs.` and `spec.` hosts, plus the Specs an `apis.json` lists. Hosts
+ * run in parallel and paths one after another per host, so the fetcher's
+ * per-host spacing holds.
  */
 export async function probeKnownPaths(
   domain: string,
@@ -58,23 +73,24 @@ export async function probeKnownPaths(
     signal: stop.signal,
   }).catch(() => "timeout" as const);
 
-  const finished = await Promise.all(
-    hosts.map((host) =>
+  // Hits are kept as they are found, so a host stopped by the budget keeps
+  // everything it found before the stop; only its unfinished work is lost.
+  const found = hosts.map(() => [] as KnownPathHit[]);
+  await Promise.all(
+    hosts.map((host, i) =>
       Promise.race([
-        probeHost(`${scheme}://${host}`, fetcher, stop.signal),
+        probeHost(`${scheme}://${host}`, fetcher, stop.signal, (hit) =>
+          found[i]?.push(hit),
+        ),
         deadline,
       ]),
     ),
   );
-  // Unfinished hosts stop fetching; their partial hits are dropped.
   stop.abort();
 
   const hits = new Map<string, KnownPathHit>();
-  for (const result of finished) {
-    if (result === "timeout") continue;
-    for (const hit of result) {
-      if (!hits.has(hit.url)) hits.set(hit.url, hit);
-    }
+  for (const hit of found.flat()) {
+    if (!hits.has(hit.url)) hits.set(hit.url, hit);
   }
   return [...hits.values()];
 }
@@ -83,8 +99,8 @@ async function probeHost(
   origin: string,
   fetcher: Fetcher,
   signal: AbortSignal,
-): Promise<KnownPathHit[]> {
-  const hits: KnownPathHit[] = [];
+  collect: (hit: KnownPathHit) => void,
+): Promise<void> {
   for (const path of KNOWN_PATHS) {
     if (signal.aborted) break;
     let res: Awaited<ReturnType<Fetcher["fetchUrl"]>>;
@@ -98,16 +114,15 @@ async function probeHost(
 
     const sniff = sniffSpec(res.bytes, res.contentType);
     if (sniff) {
-      hits.push({ url: res.finalUrl, sniff, bytes: res.bytes });
+      collect({ url: res.finalUrl, sniff, bytes: res.bytes });
     } else if (path === APIS_JSON_PATH) {
       for (const specUrl of apisJsonSpecUrls(res.bytes, res.finalUrl)) {
         if (signal.aborted) break;
         const hit = await fetchSpec(specUrl, fetcher, signal);
-        if (hit) hits.push(hit);
+        if (hit) collect(hit);
       }
     }
   }
-  return hits;
 }
 
 async function fetchSpec(
