@@ -26,3 +26,15 @@ const vendorName = await judge.isVendorName("mailchimp", {
 console.log(
   `isVendorName("mailchimp", mailchimp.com): ${JSON.stringify(vendorName)}`,
 );
+
+const vendorApiLink = await judge.isVendorApiLink(
+  { id: "mailchimp.com", name: "Mailchimp" },
+  {
+    url: "https://mailchimp.com/developer/marketing/",
+    text: "Marketing API",
+    context: "Mailchimp Developer",
+  },
+);
+console.log(
+  `isVendorApiLink(mailchimp.com, "Marketing API"): ${JSON.stringify(vendorApiLink)}`,
+);

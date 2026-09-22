@@ -18,6 +18,8 @@ export type FakeJudgeScript = {
   specDescribesApi?: Record<string, YesNoJudgment>;
   /** Answers keyed by the name asked about. */
   isVendorName?: Record<string, YesNoJudgment>;
+  /** Answers keyed by link url. */
+  isVendorApiLink?: Record<string, YesNoJudgment>;
   /**
    * Answers for anything not scripted. Unless set: `whichApi` says `"none"`
    * with certainty, and the yes/no judgments say no with certainty.
@@ -27,6 +29,7 @@ export type FakeJudgeScript = {
     isSpecLink?: YesNoJudgment;
     specDescribesApi?: YesNoJudgment;
     isVendorName?: YesNoJudgment;
+    isVendorApiLink?: YesNoJudgment;
   };
 };
 
@@ -34,13 +37,17 @@ export type FakeJudgeCall =
   | { judgment: "whichApi"; name: string; candidates: ApiRef[] }
   | { judgment: "isSpecLink"; api: ApiRef; link: SpecLink }
   | { judgment: "specDescribesApi"; api: ApiRef; extract: SpecExtract }
-  | { judgment: "isVendorName"; name: string; vendor: VendorRef };
+  | { judgment: "isVendorName"; name: string; vendor: VendorRef }
+  | { judgment: "isVendorApiLink"; vendor: VendorRef; link: SpecLink };
 
 const NO: YesNoJudgment = { probability: 0, confidence: 1 };
 
 /** A Judge with scripted answers, for tests. It never calls TypeSafe. */
 export class FakeJudge implements Judge {
-  /** Every judgment asked, in order; `areSpecLinks` records one per link. */
+  /**
+   * Every judgment asked, in order; `areSpecLinks` and `areVendorApiLinks`
+   * record one per link.
+   */
   readonly calls: FakeJudgeCall[] = [];
   readonly #script: FakeJudgeScript;
 
@@ -95,5 +102,24 @@ export class FakeJudge implements Judge {
       this.#script.defaults?.isVendorName ??
       NO
     );
+  }
+
+  async isVendorApiLink(
+    vendor: VendorRef,
+    link: SpecLink,
+  ): Promise<YesNoJudgment> {
+    this.calls.push({ judgment: "isVendorApiLink", vendor, link });
+    return (
+      this.#script.isVendorApiLink?.[link.url] ??
+      this.#script.defaults?.isVendorApiLink ??
+      NO
+    );
+  }
+
+  async areVendorApiLinks(
+    vendor: VendorRef,
+    links: SpecLink[],
+  ): Promise<YesNoJudgment[]> {
+    return Promise.all(links.map((link) => this.isVendorApiLink(vendor, link)));
   }
 }

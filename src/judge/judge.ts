@@ -58,6 +58,16 @@ export interface Judge {
   specDescribesApi(api: ApiRef, extract: SpecExtract): Promise<YesNoJudgment>;
   /** Whether the name means the Vendor as a whole rather than one of its APIs. */
   isVendorName(name: string, vendor: VendorRef): Promise<YesNoJudgment>;
+  /**
+   * Whether the link names one of the Vendor's distinct APIs, rather than a
+   * guide, a pricing page, an SDK or the portal's own navigation.
+   */
+  isVendorApiLink(vendor: VendorRef, link: SpecLink): Promise<YesNoJudgment>;
+  /** `isVendorApiLink` for several links at once, answered in order. */
+  areVendorApiLinks(
+    vendor: VendorRef,
+    links: SpecLink[],
+  ): Promise<YesNoJudgment[]>;
 }
 
 /** Why a Judge could not answer. */

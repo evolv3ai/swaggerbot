@@ -29,7 +29,10 @@ export const WHICH_API_QUESTION = {
   none: "None of the listed APIs: the name means a different API, or no API at all.",
 };
 
-/** The path in `IS_SPEC_LINK_QUESTION` that is replaced by each link's state path. */
+/**
+ * The path in `IS_SPEC_LINK_QUESTION` and `IS_VENDOR_API_LINK_QUESTION` that
+ * is replaced by each link's state path.
+ */
 export const LINK_PLACEHOLDER = "{link}";
 
 /** Wording of `isSpecLink`, a `noul` per link over `{api, links}`. */
@@ -61,6 +64,16 @@ export const IS_VENDOR_NAME_QUESTION = {
     true: "The name is the company's own name: it means the company as a whole, which offers several APIs.",
     false:
       "The name means one specific API or product of the company, or a different company or thing altogether.",
+  },
+};
+
+/** Wording of `isVendorApiLink`, a `noul` per link over `{vendor, links}`. */
+export const IS_VENDOR_API_LINK_QUESTION = {
+  instructions: `Does the link in \`${LINK_PLACEHOLDER}\`, found on the developer portal of the company in \`vendor\`, name one of that company's distinct APIs?`,
+  criteria: {
+    true: "The link names one distinct API the company offers, such as its Marketing API or its Transactional API.",
+    false:
+      "The link is something else: a guide or tutorial, a pricing page, an SDK or client library, a changelog, the portal's own navigation, or a page not about one API.",
   },
 };
 
@@ -182,6 +195,40 @@ export class JevJudge implements Judge {
       },
     });
     return yesNoFrom(answers, "vendor");
+  }
+
+  async isVendorApiLink(
+    vendor: VendorRef,
+    link: SpecLink,
+  ): Promise<YesNoJudgment> {
+    const [judgment] = await this.areVendorApiLinks(vendor, [link]);
+    if (!judgment) throw badResponse("link0", undefined);
+    return judgment;
+  }
+
+  async areVendorApiLinks(
+    vendor: VendorRef,
+    links: SpecLink[],
+  ): Promise<YesNoJudgment[]> {
+    if (links.length === 0) return [];
+    const questions: Record<string, Question> = {};
+    links.forEach((_, i) => {
+      questions[`link${i}`] = noul(
+        IS_VENDOR_API_LINK_QUESTION.instructions.replace(
+          LINK_PLACEHOLDER,
+          `links[${i}]`,
+        ),
+        IS_VENDOR_API_LINK_QUESTION.criteria,
+      );
+    });
+    const answers = await this.#ask({
+      state: {
+        vendor: { id: vendor.id, name: vendor.name },
+        links: links.map(describeLink),
+      },
+      questions,
+    });
+    return links.map((_, i) => yesNoFrom(answers, `link${i}`));
   }
 
   /** One `systemOne` call, retried once on 429/5xx. */

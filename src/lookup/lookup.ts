@@ -2,6 +2,7 @@ import {
   Api,
   type Source,
   type Spec,
+  slugify,
   type Vendor,
   vendorIdFromDomain,
 } from "~/domain/catalog";
@@ -16,9 +17,20 @@ import {
 import { type SniffResult, sniffSpec } from "~/fetch/sniff";
 import type { Db } from "~/index-store/db";
 import { createRepo, normalizeName, specIdOf } from "~/index-store/repo";
-import { type ApiRef, type Judge, NONE, type SpecLink } from "~/judge/judge";
+import {
+  type ApiRef,
+  type Judge,
+  NONE,
+  type SpecLink,
+  type VendorRef,
+} from "~/judge/judge";
 import type { ApiCandidate, ApisGuru } from "~/sources/apis-guru";
-import { type CrawlResult, crawlForSpecs } from "~/sources/crawl";
+import {
+  type CrawlResult,
+  crawlForSpecs,
+  crawlForVendorApis,
+  type VendorApiHit,
+} from "~/sources/crawl";
 import { registrableDomain } from "~/sources/domain";
 import {
   type GitHubCodeSearch,
@@ -68,6 +80,15 @@ export type LookupDeps = {
    * `crawlForSpecs` with this Lookup's fetcher and Judge; tests inject a fake.
    */
   crawl?: (opts: { startUrl: string; api: ApiRef }) => Promise<CrawlResult>;
+  /**
+   * A shallow crawl of a Developer Portal for the Vendor's APIs. Defaults to
+   * `crawlForVendorApis` with this Lookup's fetcher and Judge; tests inject a
+   * fake.
+   */
+  vendorCrawl?: (opts: {
+    startUrl: string;
+    vendor: VendorRef;
+  }) => Promise<VendorApiHit[]>;
   /**
    * Checks the repo behind a raw.githubusercontent.com origin URL: archived
    * repos are skipped, non-default branches rewritten. Absent, such URLs are
@@ -149,7 +170,8 @@ type SpecCandidate = {
  * 3. Developer Portal Candidates from web search, one per Vendor after
  *    following redirects, judged with step 2's;
  * 4. when nothing is identified yet, a name the Judge takes for the top
- *    Candidate's Vendor as a whole: Ambiguous over that Vendor's APIs;
+ *    Candidate's Vendor as a whole: Ambiguous over that Vendor's APIs, from
+ *    APIs.guru or, when it has fewer than two, the Developer Portal;
  * 5. for the identified API, its Spec: APIs.guru origin URLs (a GitHub
  *    one skipped when its repo is archived, read from the default branch
  *    when it names another), then known paths on the Vendor's domain, then
@@ -173,6 +195,10 @@ export function createLookup(deps: LookupDeps): Lookup {
     deps.crawl ??
     ((opts: { startUrl: string; api: ApiRef }) =>
       crawlForSpecs({ ...opts, fetcher, judge }));
+  const vendorCrawl =
+    deps.vendorCrawl ??
+    ((opts: { startUrl: string; vendor: VendorRef }) =>
+      crawlForVendorApis({ ...opts, fetcher, judge }));
 
   return async function lookup({ name, allowCommunity = false }) {
     const diagnostics: string[] = [];
@@ -216,11 +242,7 @@ export function createLookup(deps: LookupDeps): Lookup {
 
     // 4. A name for the whole Vendor.
     if (verdict?.kind === "unknown" && verdict.top) {
-      const vendorApis = await vendorCandidates(
-        name,
-        verdict.top.vendor,
-        diagnostics,
-      );
+      const vendorApis = await vendorCandidates(name, verdict.top, diagnostics);
       if (vendorApis)
         return finish({ outcome: "Ambiguous", candidates: vendorApis });
     }
@@ -378,24 +400,23 @@ export function createLookup(deps: LookupDeps): Lookup {
 
   /**
    * When the Judge takes the name for the Vendor as a whole, that Vendor's
-   * APIs.guru APIs as equally likely Candidates, if it has at least two;
-   * otherwise `null`, and the Lookup keeps its answer.
+   * APIs as equally likely Candidates, if it has at least two: its APIs.guru
+   * APIs, and when those are fewer than two, the APIs its Developer Portal
+   * names, crawled from `top`'s portal page or else the Vendor's domain.
+   * Otherwise `null`, and the Lookup keeps its answer.
    */
   async function vendorCandidates(
     name: string,
-    vendor: Vendor,
+    top: ApiChoice,
     diagnostics: string[],
   ): Promise<AmbiguousCandidate[] | null> {
-    let members: ApiChoice[];
+    const { vendor } = top;
+    let members: ApiChoice[] = [];
     try {
-      members = mergeGuruChoices(
-        await apisGuru.findVendorApis(vendor.id),
-      ).slice(0, MAX_UMBRELLA_CANDIDATES);
+      members = mergeGuruChoices(await apisGuru.findVendorApis(vendor.id));
     } catch (error) {
       diagnostics.push(`APIs.guru: ${message(error)}`);
-      return null;
     }
-    if (members.length < 2) return null;
     let probability: number;
     try {
       ({ probability } = await judge.isVendorName(name, {
@@ -407,6 +428,25 @@ export function createLookup(deps: LookupDeps): Lookup {
       return null;
     }
     if (probability < t.vendorName) return null;
+
+    if (members.length < 2) {
+      const startUrl = top.portalUrl ?? `https://${vendor.domain}`;
+      let hits: VendorApiHit[] = [];
+      try {
+        hits = await vendorCrawl({
+          startUrl,
+          vendor: { id: vendor.id, name: vendor.name },
+        });
+      } catch (error) {
+        diagnostics.push(`Vendor API crawl: ${message(error)}`);
+      }
+      members = uniqueById([
+        ...members,
+        ...hits.flatMap((hit) => fromVendorApiHit(hit, vendor) ?? []),
+      ]);
+    }
+    members = members.slice(0, MAX_UMBRELLA_CANDIDATES);
+    if (members.length < 2) return null;
     return members.map((c) => ambiguousCandidate(c, 1 / members.length));
   }
 
@@ -953,6 +993,21 @@ function fromPortal(p: PortalCandidate): ApiChoice | null {
     originUrls: [],
     portalUrl: p.url,
   };
+}
+
+/**
+ * An API named on the Vendor's Developer Portal as a Candidate
+ * (`mailchimp.com/marketing-api`), or `null` when no valid id can be made
+ * from its name.
+ */
+function fromVendorApiHit(hit: VendorApiHit, vendor: Vendor): ApiChoice | null {
+  const api = {
+    id: `${vendor.id}/${slugify(hit.name)}`,
+    vendorId: vendor.id,
+    name: hit.name,
+  };
+  if (!Api.safeParse(api).success) return null;
+  return { api, vendor, originUrls: [], portalUrl: hit.url };
 }
 
 function apiRef(c: ApiChoice): ApiRef {

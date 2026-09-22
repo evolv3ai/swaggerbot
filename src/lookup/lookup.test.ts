@@ -16,7 +16,7 @@ import { openDb } from "~/index-store/db";
 import { FakeJudge, type FakeJudgeScript } from "~/judge/fake";
 import { JudgeError, yesNo } from "~/judge/judge";
 import { type ApiCandidate, createApisGuru } from "~/sources/apis-guru";
-import type { CrawlHit, CrawlResult } from "~/sources/crawl";
+import type { CrawlHit, CrawlResult, VendorApiHit } from "~/sources/crawl";
 import type {
   GitHubCodeSearch,
   GitHubRepos,
@@ -74,12 +74,32 @@ function fakeCrawl(result: Partial<CrawlResult> | Error = {}): {
   };
 }
 
+/**
+ * A fake Vendor API crawl answering `hits` (or throwing, for an Error),
+ * recording each start URL.
+ */
+function fakeVendorCrawl(hits: VendorApiHit[] | Error = []): {
+  vendorCrawl: NonNullable<LookupDeps["vendorCrawl"]>;
+  starts: string[];
+} {
+  const starts: string[] = [];
+  return {
+    starts,
+    async vendorCrawl({ startUrl }) {
+      starts.push(startUrl);
+      if (hits instanceof Error) throw hits;
+      return hits;
+    },
+  };
+}
+
 function setup(
   script: FakeJudgeScript,
   webSearch: WebSearch | null = new FakeWebSearch(),
   github?: GitHubRepos,
   crawl = fakeCrawl(),
   githubSearch?: GitHubCodeSearch,
+  vendorCrawl = fakeVendorCrawl(),
 ) {
   const judge = new FakeJudge(script);
   const fetcher = createFetcher({
@@ -106,10 +126,17 @@ function setup(
       });
     },
     crawl: crawl.crawl,
+    vendorCrawl: vendorCrawl.vendorCrawl,
     ...(github ? { github } : {}),
     ...(githubSearch ? { githubSearch } : {}),
   });
-  return { judge, lookup, probed, crawls: crawl.starts };
+  return {
+    judge,
+    lookup,
+    probed,
+    crawls: crawl.starts,
+    vendorCrawls: vendorCrawl.starts,
+  };
 }
 
 /** Parses against the Outcome schema, so every answer is a valid Outcome. */
@@ -575,13 +602,19 @@ describe("lookup", () => {
 
   it("answers Unknown when whichApi says none", async () => {
     const search = new FakeWebSearch([]);
-    const { lookup, judge } = setup({}, search);
+    const { lookup, judge, vendorCrawls } = setup({}, search);
 
     expect(await ask(lookup, "payco billing")).toEqual({
       outcome: "Unknown",
       name: "payco billing",
     });
-    expect(judge.calls.map((c) => c.judgment)).toEqual(["whichApi"]);
+    // PayCo has one APIs.guru API, so the Judge is asked whether the name
+    // means PayCo as a whole before its portal is crawled; it says no.
+    expect(judge.calls.map((c) => c.judgment)).toEqual([
+      "whichApi",
+      "isVendorName",
+    ]);
+    expect(vendorCrawls).toEqual([]);
     expect(search.calls).toHaveLength(1);
   });
 
@@ -732,6 +765,163 @@ describe("lookup", () => {
       name: "nothing like it",
       diagnostics: ["web search: Brave search failed with HTTP 503"],
     });
+  });
+});
+
+describe("lookup with a Vendor's APIs from its Developer Portal", () => {
+  const vendorName = { mailco: yesNo(0.9) };
+  const portalSearch = () => {
+    server.send(
+      "docs.mailco.test",
+      "/developer",
+      "<html>MailCo developers</html>",
+      "text/html",
+    );
+    return new FakeWebSearch([
+      {
+        url: `${server.origin("docs.mailco.test")}/developer`,
+        title: "MailCo Developer",
+        snippet: "Build with MailCo.",
+      },
+    ]);
+  };
+  const hit = (name: string) => ({
+    name,
+    url: `${server.origin("docs.mailco.test")}/${slugify(name)}`,
+  });
+
+  it("answers Ambiguous over the APIs the portal names when APIs.guru has none", async () => {
+    const hits = ["Marketing API", "Transactional API", "Mobile SDK API"].map(
+      hit,
+    );
+    const { lookup, judge, vendorCrawls } = setup(
+      { isVendorName: vendorName },
+      portalSearch(),
+      undefined,
+      fakeCrawl(),
+      undefined,
+      fakeVendorCrawl(hits),
+    );
+
+    expect(await ask(lookup, "mailco")).toEqual({
+      outcome: "Ambiguous",
+      candidates: hits.map(({ name }) => ({
+        apiId: `mailco.test/${slugify(name)}`,
+        name,
+        vendor: "mailco.test",
+        probability: 1 / 3,
+      })),
+    });
+    expect(vendorCrawls).toEqual([
+      `${server.origin("docs.mailco.test")}/developer`,
+    ]);
+    expect(judge.calls.map((c) => c.judgment)).toEqual([
+      "whichApi",
+      "isVendorName",
+    ]);
+  });
+
+  it("merges the portal's APIs with the Vendor's one APIs.guru API by id", async () => {
+    const vendorCrawl = fakeVendorCrawl([
+      { name: "PayCo API", url: "https://payco.test/api" },
+      { name: "PayCo Payouts", url: "https://payco.test/payouts" },
+    ]);
+    const { lookup, vendorCrawls } = setup(
+      {
+        whichApi: {
+          payco: {
+            probabilities: { "payco.test/payco-api": 0.05, none: 0.95 },
+            confidence: 0.95,
+          },
+        },
+        isVendorName: { payco: yesNo(0.9) },
+      },
+      null,
+      undefined,
+      fakeCrawl(),
+      undefined,
+      vendorCrawl,
+    );
+
+    const outcome = await ask(lookup, "payco");
+
+    expect(outcome).toMatchObject({
+      outcome: "Ambiguous",
+      candidates: [
+        { apiId: "payco.test/payco-api", probability: 0.5 },
+        { apiId: "payco.test/payco-payouts", probability: 0.5 },
+      ],
+    });
+    // No portal page: the crawl starts from the Vendor's domain.
+    expect(vendorCrawls).toEqual(["https://payco.test"]);
+  });
+
+  it("does not crawl for a Vendor with two APIs.guru APIs", async () => {
+    const { lookup, vendorCrawls } = setup(
+      {
+        whichApi: {
+          "Umbra Alpha": {
+            probabilities: { "umbra.test/alpha": 0.05, none: 0.95 },
+            confidence: 0.95,
+          },
+        },
+        isVendorName: { "Umbra Alpha": yesNo(0.9) },
+      },
+      null,
+    );
+
+    expect(await ask(lookup, "Umbra Alpha")).toMatchObject({
+      outcome: "Ambiguous",
+      candidates: [{ apiId: "umbra.test/alpha" }, { apiId: "umbra.test/beta" }],
+    });
+    expect(vendorCrawls).toEqual([]);
+  });
+
+  it("keeps today's answer when the portal names only one API", async () => {
+    const { lookup, vendorCrawls } = setup(
+      { isVendorName: vendorName },
+      portalSearch(),
+      undefined,
+      fakeCrawl(),
+      undefined,
+      fakeVendorCrawl([hit("Marketing API")]),
+    );
+
+    expect(await ask(lookup, "mailco")).toEqual({
+      outcome: "Unknown",
+      name: "mailco",
+    });
+    expect(vendorCrawls).toHaveLength(1);
+  });
+
+  it("does not crawl when the name is unlikely to be the Vendor's", async () => {
+    const { lookup, vendorCrawls } = setup(
+      { isVendorName: { mailco: yesNo(0.3) } },
+      portalSearch(),
+      undefined,
+      fakeCrawl(),
+      undefined,
+      fakeVendorCrawl([hit("Marketing API"), hit("Transactional API")]),
+    );
+
+    expect(await ask(lookup, "mailco")).toMatchObject({ outcome: "Unknown" });
+    expect(vendorCrawls).toEqual([]);
+  });
+
+  it("diagnoses a failed crawl and keeps today's answer", async () => {
+    const { lookup } = setup(
+      { isVendorName: vendorName },
+      portalSearch(),
+      undefined,
+      fakeCrawl(),
+      undefined,
+      fakeVendorCrawl(new Error("portal exploded")),
+    );
+
+    const outcome = await ask(lookup, "mailco");
+
+    expect(outcome).toMatchObject({ outcome: "Unknown", name: "mailco" });
+    expect(outcome.diagnostics).toContain("Vendor API crawl: portal exploded");
   });
 });
 
