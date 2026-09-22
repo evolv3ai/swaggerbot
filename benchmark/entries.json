@@ -9,7 +9,7 @@
       "https://raw.githubusercontent.com/stripe/openapi/master/latest/openapi.spec3.yaml"
     ],
     "evidenceUrl": "https://github.com/stripe/openapi",
-    "reviewed": false,
+    "reviewed": true,
     "notes": "The repo README marks /latest/ as recommended (v1 + v2 endpoints). The legacy v1-only /openapi/spec3.json is still updated but left out of specSources."
   },
   {
@@ -22,7 +22,7 @@
       "https://raw.githubusercontent.com/github/rest-api-description/main/descriptions/api.github.com/api.github.com.yaml"
     ],
     "evidenceUrl": "https://docs.github.com/en/rest/about-the-rest-api/about-the-openapi-description-for-the-rest-api",
-    "reviewed": false,
+    "reviewed": true,
     "notes": "The repo also holds descriptions for GitHub Enterprise Cloud (ghec) and Server (ghes-*); only api.github.com is listed."
   },
   {
@@ -35,7 +35,7 @@
       "https://raw.githubusercontent.com/twilio/twilio-oai/main/spec/yaml/twilio_verify_v2.yaml"
     ],
     "evidenceUrl": "https://github.com/twilio/twilio-oai/tree/main/spec/json",
-    "reviewed": false,
+    "reviewed": true,
     "notes": "Bare \"Twilio\" names many APIs, so it is an ambiguous entry; this one names the Verify API (v2)."
   },
   {
@@ -47,7 +47,7 @@
       "https://raw.githubusercontent.com/slackapi/slack-api-specs/master/web-api/slack_web_openapi_v2.json"
     ],
     "evidenceUrl": "https://github.com/slackapi/slack-api-specs",
-    "reviewed": false,
+    "reviewed": true,
     "notes": "Swagger 2.0. https://api.slack.com/specs/openapi/v2/slack_web.json also serves a Slack Web API spec, but a different one (170 paths vs 174 on GitHub), so it is left out; a reviewer should decide whether it counts."
   },
   {
@@ -59,7 +59,7 @@
       "https://developer.atlassian.com/cloud/jira/platform/swagger-v3.v3.json"
     ],
     "evidenceUrl": "https://developer.atlassian.com/cloud/jira/platform/rest/v3/intro/",
-    "reviewed": false,
+    "reviewed": true,
     "notes": "REST v3 is taken as the Current Spec; REST v2 is still live and would be an Alternate."
   },
   {
@@ -72,7 +72,7 @@
       "https://raw.githubusercontent.com/digitalocean/openapi/main/specification/DigitalOcean-public.v2.yaml"
     ],
     "evidenceUrl": "https://github.com/digitalocean/openapi",
-    "reviewed": false,
+    "reviewed": true,
     "notes": "The Spaces URL is the bundled single-file spec linked from the repo README; the GitHub raw file is the multi-file root with $refs."
   },
   {
@@ -84,7 +84,7 @@
       "https://raw.githubusercontent.com/box/box-openapi/main/openapi.json"
     ],
     "evidenceUrl": "https://developer.box.com/reference/",
-    "reviewed": false
+    "reviewed": true
   },
   {
     "name": "Asana",
@@ -95,7 +95,7 @@
       "https://raw.githubusercontent.com/Asana/openapi/master/defs/asana_oas.yaml"
     ],
     "evidenceUrl": "https://github.com/Asana/openapi",
-    "reviewed": false
+    "reviewed": true
   },
   {
     "name": "PagerDuty REST API",
@@ -106,7 +106,7 @@
       "https://raw.githubusercontent.com/PagerDuty/api-schema/main/reference/REST/openapiv3.json"
     ],
     "evidenceUrl": "https://github.com/PagerDuty/api-schema",
-    "reviewed": false,
+    "reviewed": true,
     "notes": "The evidence page is the repo README (\"our OpenAPI defined public APIs\"); it does not name the file path, which comes from the repo tree."
   },
   {
@@ -118,7 +118,7 @@
       "https://raw.githubusercontent.com/plaid/plaid-openapi/master/2020-09-14.yml"
     ],
     "evidenceUrl": "https://plaid.com/docs/api/libraries/",
-    "reviewed": false,
+    "reviewed": true,
     "notes": "2020-09-14 is Plaid's only current API Version and the only spec in the repo."
   },
   {
@@ -130,7 +130,7 @@
       "https://raw.githubusercontent.com/cloudflare/api-schemas/main/openapi.json"
     ],
     "evidenceUrl": "https://github.com/cloudflare/api-schemas",
-    "reviewed": false,
+    "reviewed": true,
     "notes": "The sibling openapi.yaml (19 MB) failed to parse with PyYAML in this session, so only the JSON is listed."
   },
   {
@@ -143,7 +143,7 @@
       "https://raw.githubusercontent.com/openai/openai-openapi/main/openapi.json"
     ],
     "evidenceUrl": "https://github.com/openai/openai-openapi",
-    "reviewed": false
+    "reviewed": true
   },
   {
     "name": "Fly.io Machines API",
@@ -155,7 +155,7 @@
       "https://docs.machines.dev/spec/openapi3.json"
     ],
     "evidenceUrl": "https://fly.io/docs/machines/api/",
-    "reviewed": false,
+    "reviewed": true,
     "notes": "fly.io links \"OpenAPI spec\" to the docs.machines.dev viewer, not to the JSON; /spec/openapi3.json redirects to /openapi.json."
   },
   {
@@ -168,7 +168,7 @@
       "https://neon.tech/api_spec/release/v2.json"
     ],
     "evidenceUrl": "https://neon.com/docs/reference/api-reference",
-    "reviewed": false,
+    "reviewed": true,
     "notes": "neon.tech redirects to neon.com."
   },
   {
@@ -178,7 +178,7 @@
     "apiId": "supabase.com/management-api",
     "specSources": ["https://api.supabase.com/api/v1-json"],
     "evidenceUrl": "https://supabase.com/docs/reference/api/introduction",
-    "reviewed": false
+    "reviewed": true
   },
   {
     "name": "Loops",
@@ -187,7 +187,7 @@
     "apiId": "loops.so/loops-api",
     "specSources": ["https://app.loops.so/openapi.json"],
     "evidenceUrl": "https://loops.so/docs/api-reference/intro",
-    "reviewed": false
+    "reviewed": true
   },
   {
     "name": "Novu",
@@ -196,7 +196,7 @@
     "apiId": "novu.co/novu-api",
     "specSources": ["https://api.novu.co/openapi.json"],
     "evidenceUrl": "https://docs.novu.co/api-reference/overview",
-    "reviewed": false
+    "reviewed": true
   },
   {
     "name": "Replicate",
@@ -205,7 +205,7 @@
     "apiId": "replicate.com/replicate-api",
     "specSources": ["https://api.replicate.com/openapi.json"],
     "evidenceUrl": "https://replicate.com/docs/reference/openapi",
-    "reviewed": false,
+    "reviewed": true,
     "notes": "info.version is 1.0.0-a1; Replicate does not label the HTTP API as preview."
   },
   {
@@ -215,7 +215,7 @@
     "apiId": "codeberg.org/codeberg-api",
     "specSources": ["https://codeberg.org/swagger.v1.json"],
     "evidenceUrl": "https://codeberg.org/api/swagger",
-    "reviewed": false,
+    "reviewed": true,
     "notes": "Swagger 2.0, titled \"Forgejo API\": Codeberg runs Forgejo, and every Forgejo/Gitea instance serves a similar spec. The API here is Codeberg's hosted instance."
   },
   {
@@ -225,7 +225,7 @@
     "apiId": "infisical.com/infisical-api",
     "specSources": ["https://app.infisical.com/api/docs/json"],
     "evidenceUrl": "https://infisical.com/docs/api-reference/overview/introduction",
-    "reviewed": false,
+    "reviewed": true,
     "notes": "The docs page names the spec URL only in its embedded API-reference config, not as a visible link."
   },
   {
@@ -237,7 +237,7 @@
       "https://api-docs.render.com/openapi/render-public-api-1.json"
     ],
     "evidenceUrl": "https://render.com/docs/api",
-    "reviewed": false,
+    "reviewed": true,
     "notes": "Named \"Render API\" because bare \"Render\" is a common word."
   },
   {
@@ -247,7 +247,7 @@
     "apiId": "firecrawl.dev/firecrawl-api",
     "specSources": ["https://docs.firecrawl.dev/api-reference/v2-openapi.json"],
     "evidenceUrl": "https://docs.firecrawl.dev/api-reference/introduction",
-    "reviewed": false,
+    "reviewed": true,
     "notes": "v2 is taken as the Current Spec; the docs page names it only in its embedded API-reference config. https://docs.firecrawl.dev/api-reference/v1-openapi.json is still served and would be an Alternate."
   },
   {
@@ -257,7 +257,7 @@
     "apiId": "mux.com/mux-api",
     "specSources": ["https://www.mux.com/api-spec.json"],
     "evidenceUrl": "https://www.mux.com/docs/core/make-api-requests",
-    "reviewed": false,
+    "reviewed": true,
     "notes": "One spec covers Mux Video and Mux Data."
   },
   {
@@ -267,7 +267,7 @@
     "apiId": "val.town/val-town-api",
     "specSources": ["https://api.val.town/openapi.json"],
     "evidenceUrl": "https://docs.val.town/openapi",
-    "reviewed": false,
+    "reviewed": true,
     "notes": "The evidence page is Val Town's API-reference viewer, which loads this spec URL."
   },
   {

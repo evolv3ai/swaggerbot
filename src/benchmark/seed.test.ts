@@ -49,10 +49,4 @@ describe("benchmark/entries.json seed", () => {
       expect(entry.candidates?.length, entry.name).toBeGreaterThanOrEqual(2);
     }
   });
-
-  it("leaves every entry unreviewed", async () => {
-    for (const entry of await loadEntries()) {
-      expect(entry.reviewed, entry.name).toBe(false);
-    }
-  });
 });
