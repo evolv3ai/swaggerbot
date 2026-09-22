@@ -13,7 +13,7 @@ export type FakeJudgeScript = {
   whichApi?: Record<string, WhichApiJudgment>;
   /** Answers keyed by link url. */
   isSpecLink?: Record<string, YesNoJudgment>;
-  /** Answers keyed by the extract's `title`. */
+  /** Answers keyed by the extract's `title` (an untitled extract gets the default). */
   specDescribesApi?: Record<string, YesNoJudgment>;
   /**
    * Answers for anything not scripted. Unless set: `whichApi` says `"none"`
@@ -75,7 +75,9 @@ export class FakeJudge implements Judge {
   ): Promise<YesNoJudgment> {
     this.calls.push({ judgment: "specDescribesApi", api, extract });
     return (
-      this.#script.specDescribesApi?.[extract.title] ??
+      (extract.title !== null
+        ? this.#script.specDescribesApi?.[extract.title]
+        : undefined) ??
       this.#script.defaults?.specDescribesApi ??
       NO
     );

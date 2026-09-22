@@ -9,7 +9,7 @@ import {
   type RequestOptions,
   type SystemOneRequest,
 } from "@typesafe-ai/sdk";
-import { clampSpecExtract, type SpecExtract } from "../domain/spec-extract";
+import { SPEC_EXTRACT_LIMITS, type SpecExtract } from "../domain/spec-extract";
 import {
   type ApiRef,
   type Judge,
@@ -213,6 +213,17 @@ function describeApi(api: ApiRef) {
     name: api.name,
     vendor: api.vendor,
     ...(api.description ? { description: api.description } : {}),
+  };
+}
+
+/** Cut an extract to its limits, whoever built it: never send a whole Spec. */
+function clampSpecExtract(extract: SpecExtract): SpecExtract {
+  return {
+    ...extract,
+    description:
+      extract.description?.slice(0, SPEC_EXTRACT_LIMITS.description) ?? null,
+    tags: extract.tags.slice(0, SPEC_EXTRACT_LIMITS.tags),
+    samplePaths: extract.samplePaths.slice(0, SPEC_EXTRACT_LIMITS.samplePaths),
   };
 }
 
