@@ -230,7 +230,10 @@
     "group": "longtail",
     "expected": "Resolved",
     "apiId": "infisical.com/infisical-api",
-    "specSources": ["https://app.infisical.com/api/docs/json", "https://infisical.com/openapi.json"],
+    "specSources": [
+      "https://app.infisical.com/api/docs/json",
+      "https://infisical.com/openapi.json"
+    ],
     "evidenceUrl": "https://infisical.com/docs/api-reference/overview/introduction",
     "reviewed": true,
     "notes": "The docs page names the spec URL only in its embedded API-reference config, not as a visible link. `infisical.com/openapi.json` serves the same document (same version, 1510 paths) from the Vendor's own domain; accepted as a second Official Source by Wes 2026-09-22."
@@ -262,7 +265,10 @@
     "group": "longtail",
     "expected": "Resolved",
     "apiId": "mux.com/mux-api",
-    "specSources": ["https://www.mux.com/api-spec.json", "https://www.mux.com/full-combined-spec.json"],
+    "specSources": [
+      "https://www.mux.com/api-spec.json",
+      "https://www.mux.com/full-combined-spec.json"
+    ],
     "evidenceUrl": "https://www.mux.com/docs/core/make-api-requests",
     "reviewed": true,
     "notes": "One spec covers Mux Video and Mux Data. `www.mux.com/full-combined-spec.json` is a strict superset (all 115 paths plus 9 playback/image paths on image.mux.com) from the Vendor's own domain; accepted as a correct Spec Source by Wes 2026-09-22."
