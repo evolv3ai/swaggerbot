@@ -89,9 +89,9 @@ type Page = {
 
 /**
  * A shallow crawl of a Developer Portal for Specs. From `startUrl` it reads
- * HTML pages for links, asks the Judge once per page which links look like
- * the API's Spec, fetches the likely Spec documents and follows the likely
- * pages on the same registrable domain, up to `maxPages` pages, two links
+ * HTML pages for links, asks the Judge once per page which Spec candidates
+ * look like the API's Spec, fetches the likely ones and follows the pages on
+ * the same registrable domain, documentation-looking ones first, up to `maxPages` pages, two links
  * deep, inside `budgetMs`, and reports the other registrable domains it saw
  * linked. Never throws: failures skip a link or a page.
  *
@@ -212,46 +212,43 @@ export async function crawlForSpecs(opts: CrawlOptions): Promise<CrawlResult> {
         pages.push(link);
       }
     }
-    // Rank, then truncate: documentation-looking pages are judged, and
-    // queued against the page budget, ahead of the rest.
-    pages.sort((a, b) => Number(isDocsPage(b.url)) - Number(isDocsPage(a.url)));
-    if (specs.length + pages.length === 0) continue;
-
-    let judgments: YesNoJudgment[];
-    try {
-      judgments = await abortable(
-        judge.areSpecLinks(api, [...specs, ...pages]),
-        signal,
-      );
-    } catch {
-      continue;
-    }
-    const pick = (list: SpecLink[], offset: number, rank = false) =>
-      list
-        .map((link, i) => ({
-          link,
-          p: judgments[offset + i]?.probability ?? 0,
-          docs: rank && isDocsPage(link.url),
-        }))
+    if (specs.length > 0) {
+      let judgments: YesNoJudgment[] | null = null;
+      try {
+        judgments = await abortable(judge.areSpecLinks(api, specs), signal);
+      } catch {
+        // No judgments: no Spec candidate is fetched, but pages still are.
+      }
+      const likely = specs
+        .map((link, i) => ({ link, p: judgments?.[i]?.probability ?? 0 }))
         .filter(({ p }) => p >= threshold)
-        .sort((a, b) => Number(b.docs) - Number(a.docs) || b.p - a.p)
+        .sort((a, b) => b.p - a.p)
         .map(({ link }) => link);
-
-    for (const link of pick(specs, 0)) {
-      if (signal.aborted) break;
-      seen.add(normalize(link.url));
-      const hit = await fetchSpec(link.url, fetcher, signal);
-      if (hit && !hits.some((h) => h.url === hit.url)) {
-        hits.push({
-          ...hit,
-          linkedFrom: res.finalUrl,
-          offHost: registrableDomain(link.url) !== home,
-        });
+      for (const link of likely) {
+        if (signal.aborted) break;
+        seen.add(normalize(link.url));
+        const hit = await fetchSpec(link.url, fetcher, signal);
+        if (hit && !hits.some((h) => h.url === hit.url)) {
+          hits.push({
+            ...hit,
+            linkedFrom: res.finalUrl,
+            offHost: registrableDomain(link.url) !== home,
+          });
+        }
       }
     }
 
+    // Pages are not judged: the Judge is asked whether a link is the Spec,
+    // and a documentation page never is. Rank, then truncate: documentation-
+    // looking pages first, then the rest in document order, cut to what the
+    // page budget has left.
     if (page.depth + 1 < MAX_DEPTH) {
-      for (const link of pick(pages, specs.length, true)) {
+      const room = maxPages - pagesFetched - queue.length;
+      const ranked = [
+        ...pages.filter((link) => isDocsPage(link.url)),
+        ...pages.filter((link) => !isDocsPage(link.url)),
+      ];
+      for (const link of ranked.slice(0, Math.max(0, room))) {
         seen.add(normalize(link.url));
         queue.push({
           url: link.url,

@@ -164,11 +164,10 @@ describe("crawlForSpecs", () => {
     page(
       "docs.acme.test",
       "/",
-      `<a href="/low.json">Low</a> <a href="/high.json">High</a> <a href="/lowpage">Page</a>`,
+      `<a href="/low.json">Low</a> <a href="/high.json">High</a>`,
     );
     specAt("docs.acme.test", "/low.json", "Low");
     specAt("docs.acme.test", "/high.json", "High");
-    page("docs.acme.test", "/lowpage", "");
 
     const { hits } = await crawlForSpecs({
       startUrl: `${o}/`,
@@ -177,16 +176,14 @@ describe("crawlForSpecs", () => {
       judge: judgeSaying({
         [`${o}/low.json`]: 0.5,
         [`${o}/high.json`]: 0.6,
-        [`${o}/lowpage`]: 0.59,
       }),
     });
 
     expect(hits.map((h) => h.url)).toEqual([`${o}/high.json`]);
     expect(requested("docs.acme.test", "/low.json")).toBe(false);
-    expect(requested("docs.acme.test", "/lowpage")).toBe(false);
   });
 
-  it("asks the Judge once per page, with Spec candidates first", async () => {
+  it("asks the Judge once per page, about its Spec candidates only", async () => {
     const o = server.origin("docs.acme.test");
     page(
       "docs.acme.test",
@@ -203,9 +200,11 @@ describe("crawlForSpecs", () => {
 
     await crawlForSpecs({ startUrl: `${o}/`, api, fetcher: fetcher(), judge });
 
+    // `/guide` is a page: followed without a judgment, and it has no links.
     expect(asked.map((links) => links.map((l) => l.url))).toEqual([
-      [`${o}/spec.yaml`, `${o}/guide`],
+      [`${o}/spec.yaml`],
     ]);
+    expect(requested("docs.acme.test", "/guide")).toBe(true);
   });
 
   it("judges and finds a Spec linked past more than 60 navigation links", async () => {
@@ -235,8 +234,7 @@ describe("crawlForSpecs", () => {
       judge,
     });
 
-    expect(asked[0]?.[0]?.url).toBe(`${o}/api-spec.json`);
-    expect(asked[0]).toHaveLength(60);
+    expect(asked[0]?.map((l) => l.url)).toEqual([`${o}/api-spec.json`]);
     expect(hits.map((h) => h.url)).toEqual([`${o}/api-spec.json`]);
   });
 
@@ -617,41 +615,45 @@ describe("crawlForSpecs", () => {
     });
   });
 
-  it("judges and follows documentation-looking pages first when they outrun the page budget", async () => {
+  it("follows documentation-looking pages first, unjudged, when they outrun the page budget", async () => {
     const o = server.origin("docs.acme.test");
     page(
       "docs.acme.test",
       "/start",
       `<a href="/pricing">Pricing</a> <a href="/blog">Blog</a>
-       <a href="/about">About</a> <a href="/api/reference">API</a>`,
+       <a href="/api/reference">API</a> <a href="/about">About</a>
+       <a href="/docs/guide">Guide</a>`,
     );
-    for (const p of ["/pricing", "/blog", "/about", "/api/reference"]) {
+    for (const p of [
+      "/pricing",
+      "/blog",
+      "/api/reference",
+      "/about",
+      "/docs/guide",
+    ]) {
       page("docs.acme.test", p, "");
     }
-    let asked: SpecLink[][] = [];
-    const judge = judgeSaying({
-      [`${o}/pricing`]: 0.9,
-      [`${o}/blog`]: 0.9,
-      [`${o}/about`]: 0.9,
-      [`${o}/api/reference`]: 0.7,
-    });
-    const areSpecLinks = judge.areSpecLinks.bind(judge);
-    judge.areSpecLinks = async (a, links) => {
-      asked = [...asked, links];
-      return areSpecLinks(a, links);
-    };
+    const judge = new FakeJudge();
 
     await crawlForSpecs({
       startUrl: `${o}/start`,
       api,
       fetcher: fetcher(),
       judge,
-      maxPages: 2,
+      maxPages: 4,
     });
 
-    expect(asked[0]?.[0]?.url).toBe(`${o}/api/reference`);
-    expect(requested("docs.acme.test", "/api/reference")).toBe(true);
-    expect(requested("docs.acme.test", "/pricing")).toBe(false);
+    const fetched = server.requests
+      .filter((r) => r.host === "docs.acme.test" && r.path !== "/robots.txt")
+      .map((r) => r.path);
+    // Documentation first in document order, then the rest, to the budget.
+    expect(fetched).toEqual([
+      "/start",
+      "/api/reference",
+      "/docs/guide",
+      "/pricing",
+    ]);
+    expect(judge.calls).toEqual([]);
   });
 
   it("never throws, even when the start URL is unreachable", async () => {
