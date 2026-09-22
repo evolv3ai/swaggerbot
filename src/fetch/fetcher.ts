@@ -14,6 +14,14 @@ const ROBOTS_AGENT = "swagger.bot";
 /** RFC 9309 lets crawlers ignore robots.txt content past 500 KiB. */
 const ROBOTS_MAX_BYTES = 500 * 1024;
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+/**
+ * Default cap on a fetched body: headroom over the largest Spec seen so far
+ * (Cloudflare's, about 26 MB). `MAX_SPEC_BYTES` overrides it. A Spec this size
+ * is held whole as a `Uint8Array` and stored as a SQLite blob, which is fine
+ * one at a time; several such Candidates judged in one Lookup would be heavy,
+ * and that belongs with Slice 3's latency work if it becomes a problem.
+ */
+export const DEFAULT_MAX_SPEC_BYTES = 64 * 1024 * 1024;
 
 export type FetchErrorKind =
   | "robots-disallowed"
@@ -79,7 +87,10 @@ export type FetcherOptions = {
   minIntervalMs?: number;
   /** Per request, headers and body included. Default 10 s. */
   timeoutMs?: number;
-  /** Cap on the (decoded) body. Default 10 MB. */
+  /**
+   * Cap on the (decoded) body. Default `MAX_SPEC_BYTES` from `env` when it is a
+   * positive integer, else 64 MB.
+   */
   maxBytes?: number;
   /** Default 5. */
   maxRedirects?: number;
@@ -89,6 +100,10 @@ export type FetcherOptions = {
   allowPrivate?: boolean;
   /** Replaces DNS resolution. Tests use it to point fixture hosts at 127.0.0.1. */
   lookup?: LookupFunction;
+  /** Where `MAX_SPEC_BYTES` is read from. Default `process.env`. */
+  env?: Record<string, string | undefined>;
+  /** Receives the warning for an unusable `MAX_SPEC_BYTES`. */
+  warn?: (message: string) => void;
 };
 
 type Robots = { isAllowed(url: string, ua?: string): boolean | undefined };
@@ -104,7 +119,9 @@ type RawResponse = {
 export function createFetcher(opts: FetcherOptions = {}): Fetcher {
   const minIntervalMs = opts.minIntervalMs ?? 1000;
   const timeoutMs = opts.timeoutMs ?? 10_000;
-  const maxBytes = opts.maxBytes ?? 10 * 1024 * 1024;
+  const maxBytes =
+    opts.maxBytes ??
+    maxSpecBytesFromEnv(opts.env ?? process.env, opts.warn ?? console.warn);
   const maxRedirects = opts.maxRedirects ?? 5;
   const robotsTtlMs = opts.robotsTtlMs ?? 60 * 60 * 1000;
   const allowPrivate = opts.allowPrivate ?? false;
@@ -304,6 +321,21 @@ export function createFetcher(opts: FetcherOptions = {}): Fetcher {
       }
     },
   };
+}
+
+/** `MAX_SPEC_BYTES` when it is a positive integer, else the default. */
+function maxSpecBytesFromEnv(
+  env: Record<string, string | undefined>,
+  warn: (message: string) => void,
+): number {
+  const raw = env.MAX_SPEC_BYTES?.trim();
+  if (!raw) return DEFAULT_MAX_SPEC_BYTES;
+  const value = /^\d+$/.test(raw) ? Number(raw) : Number.NaN;
+  if (Number.isSafeInteger(value) && value > 0) return value;
+  warn(
+    `MAX_SPEC_BYTES "${raw}" is not a positive integer; using ${DEFAULT_MAX_SPEC_BYTES} bytes (64 MB).`,
+  );
+  return DEFAULT_MAX_SPEC_BYTES;
 }
 
 function readBody(

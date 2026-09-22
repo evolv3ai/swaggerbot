@@ -1,5 +1,5 @@
 import { gzipSync } from "node:zlib";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   type FixtureServer,
   fixtureLookup,
@@ -7,6 +7,7 @@ import {
 } from "./__fixtures__/server";
 import {
   createFetcher,
+  DEFAULT_MAX_SPEC_BYTES,
   FetchError,
   type FetcherOptions,
   isPrivateAddress,
@@ -28,6 +29,7 @@ const testFetcher = (opts: FetcherOptions = {}) =>
     allowPrivate: true,
     lookup: fixtureLookup,
     minIntervalMs: 0,
+    env: {},
     ...opts,
   });
 
@@ -340,6 +342,128 @@ describe("fetchUrl with ignoreRobots (ADR 0003)", () => {
     );
 
     expect(error.kind).toBe("too-large");
+  });
+});
+
+describe("the Spec size cap", () => {
+  const MB = 1024 * 1024;
+
+  /** Declares a body of `size` bytes and sends none of it. */
+  function declare(host: string, path: string, size: number) {
+    server.route(host, path, (_req, res) => {
+      res.writeHead(200, {
+        "content-type": "application/json",
+        "content-length": String(size),
+      });
+      res.flushHeaders();
+    });
+  }
+
+  it("defaults to 64 MB", () => {
+    expect(DEFAULT_MAX_SPEC_BYTES).toBe(64 * MB);
+  });
+
+  it("returns a body over the old 10 MB cap under the default", async () => {
+    const body = "x".repeat(11 * MB);
+    server.send("vendor.test", "/openapi.json", body, "application/json");
+
+    const result = await testFetcher().fetchUrl(
+      `${server.origin("vendor.test")}/openapi.json`,
+    );
+
+    expect(result.bytes.length).toBe(body.length);
+  });
+
+  it("refuses a body declared over the default", async () => {
+    declare("vendor.test", "/huge.json", 64 * MB + 1);
+
+    const error = await fetchError(
+      testFetcher().fetchUrl(`${server.origin("vendor.test")}/huge.json`),
+    );
+
+    expect(error.kind).toBe("too-large");
+    expect(error.message).toContain(`over ${64 * MB} bytes`);
+  });
+
+  it("aborts a stream over an explicit maxBytes instead of buffering it", async () => {
+    let closed!: () => void;
+    const serverSawClose = new Promise<void>((resolve) => {
+      closed = resolve;
+    });
+    let ended = true;
+    server.route("vendor.test", "/endless", (_req, res) => {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.write("x".repeat(2048));
+      // Never ends: a fetcher that buffered the whole body would hang here.
+      res.on("close", () => {
+        ended = res.writableEnded;
+        closed();
+      });
+    });
+
+    const error = await fetchError(
+      testFetcher({ maxBytes: 1024 }).fetchUrl(
+        `${server.origin("vendor.test")}/endless`,
+      ),
+    );
+    await serverSawClose;
+
+    expect(error.kind).toBe("too-large");
+    expect(ended).toBe(false);
+  });
+
+  it("uses MAX_SPEC_BYTES as the default when it is a positive integer", async () => {
+    server.send("vendor.test", "/small", "x".repeat(512), "text/plain");
+    server.send("vendor.test", "/big", "x".repeat(4096), "text/plain");
+    const warn = vi.fn();
+    const fetcher = testFetcher({ env: { MAX_SPEC_BYTES: "1024" }, warn });
+
+    const small = await fetcher.fetchUrl(
+      `${server.origin("vendor.test")}/small`,
+    );
+    const error = await fetchError(
+      fetcher.fetchUrl(`${server.origin("vendor.test")}/big`),
+    );
+
+    expect(small.bytes.length).toBe(512);
+    expect(error.kind).toBe("too-large");
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it.each(["0", "-5", "lots", "1e6"])(
+    "falls back to 64 MB and warns once when MAX_SPEC_BYTES is %j",
+    async (value) => {
+      server.send("vendor.test", "/doc", "x".repeat(4096), "text/plain");
+      declare("vendor.test", "/huge.json", 64 * MB + 1);
+      const warn = vi.fn();
+      const fetcher = testFetcher({ env: { MAX_SPEC_BYTES: value }, warn });
+
+      const result = await fetcher.fetchUrl(
+        `${server.origin("vendor.test")}/doc`,
+      );
+      const error = await fetchError(
+        fetcher.fetchUrl(`${server.origin("vendor.test")}/huge.json`),
+      );
+
+      expect(result.bytes.length).toBe(4096);
+      expect(error.message).toContain(`over ${64 * MB} bytes`);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0]?.[0]).toContain("MAX_SPEC_BYTES");
+    },
+  );
+
+  it("lets an explicit maxBytes beat MAX_SPEC_BYTES", async () => {
+    server.send("vendor.test", "/doc", "x".repeat(4096), "text/plain");
+
+    const error = await fetchError(
+      testFetcher({
+        maxBytes: 1024,
+        env: { MAX_SPEC_BYTES: String(64 * MB) },
+      }).fetchUrl(`${server.origin("vendor.test")}/doc`),
+    );
+
+    expect(error.kind).toBe("too-large");
+    expect(error.message).toContain("over 1024 bytes");
   });
 });
 
