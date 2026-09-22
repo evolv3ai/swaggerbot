@@ -1,52 +1,55 @@
 ---
-status: gate not met; awaiting label review
+status: gate not met; labels reviewed, every false resolution has an issue (WTR-56..61)
 ---
 
 # Slice 2 result
 
 All thirteen planned issues are merged, plus two filed mid-slice (WTR-54, WTR-55).
-`main` = `e352af7`. Two live `pnpm bench` runs on 2026-09-22 (~16:00 and ~16:10),
-fresh Index each, agreed on **every number and every one of the seventeen
-failures**, so what follows is a measurement and not a sample.
+`main` = `d140a87` plus the label review below. Two live `pnpm bench` runs on
+2026-09-22 before the review (~16:00 and ~16:10) agreed on every number; two after
+it (~17:00 and ~17:20, fresh Index each) are below.
 
-| | Slice 1 accepted | Slice 2 now | Slice 2 target |
-|---|---|---|---|
-| False Resolution | 0.0% (0/9) | **33.3% (6/18)** | < 2% |
-| Long-tail coverage | 27.3% | **45.5%** | 60% |
-| Outcome accuracy | — | 72.5% | — |
+| | Slice 1 accepted | Slice 2 before review | Slice 2 after review | Slice 2 target |
+|---|---|---|---|---|
+| False Resolution | 0.0% (0/9) | 33.3% (6/18) | **21.1% (4/19)** | < 2% |
+| Long-tail coverage | 27.3% | 45.5% | **63.6%** | 60% |
+| Outcome accuracy | — | 72.5% | 75.0% | — |
 
 | group | entries | correct | resolved | false |
 |---|---|---|---|---|
-| popular | 12 | 10 | 10 | 3 |
-| longtail | 12 | 9 | 8 | 3 |
+| popular | 12 | 10 | 10 | 2 |
+| longtail | 12 | 10 | 9 | 2 |
 | ambiguous | 10 | 5 | 0 | 0 |
 | negative | 6 | 5 | 0 | 0 |
 
-The chain got substantially better at *finding* Specs — coverage nearly doubled,
-and Resolved went from 9 to 18 entries — and the gate moved the wrong way for a
-reason that needs a person, not a threshold.
+**The coverage target is met; the precision gate is not.** The four remaining false
+resolutions are all real defects with a known cause, each filed.
 
-## The gate fails on six entries, and five of them look right
+## Label review (Wes, 2026-09-22)
 
-Every false resolution is the same shape: **"wrong Spec Source: X is not in
-`specSources`"**. The Spec found is real and served by the Vendor; it is simply
-not one of the URLs the Benchmark entry lists. This is the situation Wes ruled on
-twice in Slice 1 (Stripe's legacy Source, Supabase's second Official Source), and
-it needs the same ruling here. **Nothing has been added to `benchmark/entries.json`.**
+Each Source the Lookup found but the entry didn't list was compared with the
+labelled Spec (version, servers, path count) before asking:
 
-| Entry | Source found | Reading |
-|---|---|---|
-| Cloudflare API | `developers.cloudflare.com/openapi.json` | Cloudflare's own documentation host. Looks like a legitimate second Official Source. |
-| Novu | `docs.novu.co/openapi.json` | The Vendor's own docs host. Same shape. |
-| Infisical | `infisical.com/openapi.json` | The Vendor's own domain. Same shape. |
-| Box Platform API | `box/box-openapi` → `openapi/openapi-v2026.0.json` | The Vendor's own repo, a dated release file. Probably the current Spec under a name the entry doesn't list. |
-| Firecrawl | `firecrawl/firecrawl` → `apps/api/openapi.json` (run 1: `v1-openapi.json`) | The Vendor's own repo, but the **two runs picked different files**. Worth settling which is current before accepting either. |
-| PagerDuty REST API | `PagerDuty/api-schema` → `reference/events-v2/openapiv3.json` (run 1: `events-v1/`) | **Genuinely wrong**: the Events API, not the REST API, and unstable between runs. A ranking problem, not a labelling one. |
+| Entry | Source found | Finding | Ruling |
+|---|---|---|---|
+| Cloudflare API | `developers.cloudflare.com/openapi.json` | Same v4.0.0, same server, 2233 vs 2241 paths | **Accepted**, added to `entries.json` |
+| Infisical | `infisical.com/openapi.json` | Same version, same 1510 paths | **Accepted** |
+| Mux | `www.mux.com/full-combined-spec.json` | Strict superset: all 115 paths plus 9 playback/image paths (surfaced by the first post-review run) | **Accepted** |
+| Novu | `docs.novu.co/openapi.json` | The Vendor's own, but 3.15.0 vs 3.19.2 (93 vs 102 paths) | **Not accepted**: a stale copy stays wrong. Cause found: WTR-61 |
+| Box Platform API | `openapi/openapi-v2026.0.json` | **5 paths.** Box's per-version files hold only the endpoints new in that version; `openapi.json` (2024.0, 187 paths) is the API | A defect: WTR-58 |
+| Firecrawl | `apps/api/openapi.json` or `v1-openapi.json` | Both **v1**; the docs serve `api-reference/v2-openapi.json`, named only in the page's embedded config | A defect: WTR-59 |
+| PagerDuty REST API | `reference/events-v1/` or `events-v2/` | The REST Spec is 2.7 MB, beyond code search's index, so it is never a hit; WTR-52's `specsInRepo` would list it and is called by nothing | A defect: WTR-57 |
 
-So five are candidates for accepting as correct Sources; PagerDuty is a real
-defect. Until Wes rules, the gate number is not meaningful.
+Two structural rulings from the same review:
 
-## The eleven non-Resolved failures, by cause
+- **A bare Vendor name always runs the whole-Vendor step** (one API → its Spec,
+  several → Ambiguous). WTR-56. Covers Mailchimp, Zoho, Intuit; watch the
+  single-word Resolved entries for regressions.
+- **Vendor identity is derived from evidence, not a curated alias list.** For Neon:
+  `neon.tech`'s apex redirects to `neon.com`, while `neoncrm.com`'s goes to
+  `neonone.com`. WTR-60.
+
+## The ten non-Resolved failures, by cause
 
 **Already diagnosed, recorded on their issues:**
 
@@ -54,16 +57,17 @@ defect. Until Wes rules, the gate number is not meaningful.
   Vendor-API crawl, and it never runs: step 4 in `findSpec` is guarded by
   `verdict?.kind === "unknown"`, and for a bare Vendor name the Judge confidently
   identifies a single API instead. A judgment question — should one Candidate from
-  a bare Vendor name count as identified? — not a threshold. See WTR-51.
+  a bare Vendor name count as identified? — not a threshold. See WTR-51. **Ruled
+  2026-09-22: always run the whole-Vendor step; WTR-56.**
 - **Neon API** (expected Resolved, got Ambiguous). Not the redirect problem WTR-50
   assumed. `api-docs.neon.tech` is a live ReadMe-hosted reference Neon still runs;
   it doesn't redirect, so `neon.tech` and `neon.com` are two real domains of one
   Vendor. Needs Vendor identity, and `neoncrm.com` is a *different company*, so the
-  rule has to tell those apart. See WTR-50.
-- **Mux** (expected Resolved, got NoSpec) — but `lookup({ name: "Mux Video API" })`
-  **is** Resolved Official on `www.mux.com/api-spec.json` (845,959 bytes), verified
-  live after WTR-55. The Benchmark asks for the bare name "Mux", which hits the same
-  umbrella gate as Mailchimp. One fix likely covers both.
+  rule has to tell those apart. See WTR-50. **Ruled 2026-09-22: identity from
+  evidence (the apex redirect); WTR-60.**
+- **Mux** was NoSpec before the review; after it, it resolves on
+  `www.mux.com/full-combined-spec.json`, accepted as correct (see the label review).
+  WTR-56 may change how the bare name "Mux" is routed, so watch it.
 
 **Not yet diagnosed:**
 
@@ -84,15 +88,16 @@ defect. Until Wes rules, the gate number is not meaningful.
 code search cannot index) are **exported, tested and called by nothing**. WTR-47's
 issue predated them and wires only `searchSpecs`. Cloudflare resolves anyway by
 another route, so nothing is broken — but the capability the slice paid for is
-unused, and the next person would reasonably assume it isn't.
+unused, and the next person would reasonably assume it isn't. **It is also why
+PagerDuty fails** (its 2.7 MB REST Spec is never a code-search hit); WTR-57 wires it.
 
 ## What to do next
 
-1. **Wes rules on the five plausible Sources** above; add the accepted ones to
-   `benchmark/entries.json` with a note saying who accepted them and when, as
-   Slice 1 did. Then re-run and see what the gate really says.
-2. **Fix PagerDuty's ranking** — the Events Spec beating the REST one, unstably.
-3. **Settle the umbrella-name question** (Mailchimp/Zoho/Intuit/Mux/Atlassian/Cisco).
-   It is the single biggest block of failures and one decision covers them all.
-4. Then tune `src/lookup/thresholds.ts` on the reviewed entries — tuning before the
-   labels are settled would fit the thresholds to wrong answers.
+1. **Merge WTR-56..61** (all in Backlog, each with a named live check). 57 also
+   closes the unused-WTR-52 gap above. Run each PR's live check with keys before
+   merging: agents' worktrees have none.
+2. Re-run `pnpm bench` twice and update this document in place.
+3. Only then tune `src/lookup/thresholds.ts` on the reviewed entries.
+4. Still undiagnosed: Slack (Unconfirmed), Asana (Unconfirmed), Render (NoSpec),
+   Atlassian and Cisco (Unknown), Steam Web API (a negative entry answering
+   Ambiguous).

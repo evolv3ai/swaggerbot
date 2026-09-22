@@ -129,11 +129,12 @@
     "expected": "Resolved",
     "apiId": "cloudflare.com/cloudflare-api",
     "specSources": [
-      "https://raw.githubusercontent.com/cloudflare/api-schemas/main/openapi.json"
+      "https://raw.githubusercontent.com/cloudflare/api-schemas/main/openapi.json",
+      "https://developers.cloudflare.com/openapi.json"
     ],
     "evidenceUrl": "https://github.com/cloudflare/api-schemas",
     "reviewed": true,
-    "notes": "The sibling openapi.yaml (19 MB) failed to parse with PyYAML in this session, so only the JSON is listed."
+    "notes": "The sibling openapi.yaml (19 MB) failed to parse with PyYAML in this session, so only the JSON is listed. `developers.cloudflare.com/openapi.json` is the same Cloudflare API v4.0.0 (same server, 2233 vs 2241 paths) from the Vendor's own docs host; accepted as a second Official Source by Wes 2026-09-22."
   },
   {
     "name": "OpenAI API",
@@ -229,10 +230,10 @@
     "group": "longtail",
     "expected": "Resolved",
     "apiId": "infisical.com/infisical-api",
-    "specSources": ["https://app.infisical.com/api/docs/json"],
+    "specSources": ["https://app.infisical.com/api/docs/json", "https://infisical.com/openapi.json"],
     "evidenceUrl": "https://infisical.com/docs/api-reference/overview/introduction",
     "reviewed": true,
-    "notes": "The docs page names the spec URL only in its embedded API-reference config, not as a visible link."
+    "notes": "The docs page names the spec URL only in its embedded API-reference config, not as a visible link. `infisical.com/openapi.json` serves the same document (same version, 1510 paths) from the Vendor's own domain; accepted as a second Official Source by Wes 2026-09-22."
   },
   {
     "name": "Render API",
@@ -261,10 +262,10 @@
     "group": "longtail",
     "expected": "Resolved",
     "apiId": "mux.com/mux-api",
-    "specSources": ["https://www.mux.com/api-spec.json"],
+    "specSources": ["https://www.mux.com/api-spec.json", "https://www.mux.com/full-combined-spec.json"],
     "evidenceUrl": "https://www.mux.com/docs/core/make-api-requests",
     "reviewed": true,
-    "notes": "One spec covers Mux Video and Mux Data."
+    "notes": "One spec covers Mux Video and Mux Data. `www.mux.com/full-combined-spec.json` is a strict superset (all 115 paths plus 9 playback/image paths on image.mux.com) from the Vendor's own domain; accepted as a correct Spec Source by Wes 2026-09-22."
   },
   {
     "name": "Val Town",
