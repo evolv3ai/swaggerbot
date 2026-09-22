@@ -15,6 +15,7 @@ import {
 } from "~/judge/judge";
 import {
   crawlForSpecs,
+  crawlForVendorApis,
   DOCS_PATHS,
   extractLinks,
   isSpecCandidate,
@@ -665,6 +666,205 @@ describe("crawlForSpecs", () => {
         judge: new FakeJudge(),
       }),
     ).resolves.toEqual({ hits: [], offHostHosts: [] });
+  });
+});
+
+describe("crawlForVendorApis", () => {
+  const vendor = { id: "acme.test", name: "Acme" };
+
+  /** Says yes to every vendor API link listed, no to anything else. */
+  const apiJudge = (yes: Record<string, number>) =>
+    new FakeJudge({
+      isVendorApiLink: Object.fromEntries(
+        Object.entries(yes).map(([url, p]) => [url, yesNo(p)]),
+      ),
+    });
+
+  it("returns the links the Judge takes for APIs, in score order", async () => {
+    const o = server.origin("developer.acme.test");
+    page(
+      "developer.acme.test",
+      "/",
+      `<a href="/pricing">Pricing</a> <a href="/mail">Mail API</a>
+       <a href="/crm">CRM API</a> <a href="/guides">Guides</a>
+       <a href="/books">Books API</a>`,
+    );
+    for (const p of ["/mail", "/crm", "/books"])
+      page("developer.acme.test", p, "");
+
+    const judge = apiJudge({
+      [`${o}/mail`]: 0.7,
+      [`${o}/crm`]: 0.95,
+      [`${o}/books`]: 0.8,
+      [`${o}/guides`]: 0.5,
+    });
+    const hits = await crawlForVendorApis({
+      startUrl: `${o}/`,
+      vendor,
+      fetcher: fetcher(),
+      judge,
+    });
+
+    expect(hits).toEqual([
+      { name: "CRM API", url: `${o}/crm` },
+      { name: "Books API", url: `${o}/books` },
+      { name: "Mail API", url: `${o}/mail` },
+    ]);
+    const asked = judge.calls.filter((c) => c.judgment === "isVendorApiLink");
+    expect(asked[0]).toMatchObject({ vendor });
+  });
+
+  it("collapses links naming the same API, keeping the best-scored one", async () => {
+    const o = server.origin("developer.acme.test");
+    page(
+      "developer.acme.test",
+      "/",
+      `<a href="/mail">Mail API</a> <a href="/mail/v2">mail  api</a>
+       <a href="/mail-overview">Mail</a> <a href="/crm">CRM API</a>`,
+    );
+
+    const hits = await crawlForVendorApis({
+      startUrl: `${o}/`,
+      vendor,
+      fetcher: fetcher(),
+      judge: apiJudge({
+        [`${o}/mail`]: 0.7,
+        [`${o}/mail/v2`]: 0.9,
+        [`${o}/mail-overview`]: 0.8,
+        [`${o}/crm`]: 0.85,
+      }),
+    });
+
+    expect(hits).toEqual([
+      { name: "mail api", url: `${o}/mail/v2` },
+      { name: "CRM API", url: `${o}/crm` },
+    ]);
+  });
+
+  it("reads the API pages it finds, one link deep, for more APIs", async () => {
+    const o = server.origin("developer.acme.test");
+    page("developer.acme.test", "/", `<a href="/mail">Mail API</a>`);
+    page(
+      "developer.acme.test",
+      "/mail",
+      `<a href="/mail">Mail API</a> <a href="/sms">SMS API</a>`,
+    );
+    page("developer.acme.test", "/sms", `<a href="/fax">Fax API</a>`);
+
+    const hits = await crawlForVendorApis({
+      startUrl: `${o}/`,
+      vendor,
+      fetcher: fetcher(),
+      judge: apiJudge({
+        [`${o}/mail`]: 0.9,
+        [`${o}/sms`]: 0.8,
+        [`${o}/fax`]: 0.8,
+      }),
+    });
+
+    expect(hits.map((h) => h.name)).toEqual(["Mail API", "SMS API"]);
+    expect(requested("developer.acme.test", "/sms")).toBe(false);
+  });
+
+  it("never asks about links off the portal's registrable domain", async () => {
+    const o = server.origin("developer.acme.test");
+    const other = `${server.origin("elsewhere.test")}/api`;
+    page(
+      "developer.acme.test",
+      "/",
+      `<a href="${other}">Other API</a> <a href="/crm">CRM API</a>`,
+    );
+    const judge = apiJudge({ [other]: 0.9, [`${o}/crm`]: 0.9 });
+
+    const hits = await crawlForVendorApis({
+      startUrl: `${o}/`,
+      vendor,
+      fetcher: fetcher(),
+      judge,
+    });
+
+    expect(hits).toEqual([{ name: "CRM API", url: `${o}/crm` }]);
+    expect(
+      judge.calls.some(
+        (c) => c.judgment === "isVendorApiLink" && c.link.url === other,
+      ),
+    ).toBe(false);
+  });
+
+  it("returns at most 10 and reads at most maxPages pages", async () => {
+    const o = server.origin("developer.acme.test");
+    const paths = Array.from({ length: 12 }, (_, i) => `/api${i}`);
+    page(
+      "developer.acme.test",
+      "/",
+      paths.map((p, i) => `<a href="${p}">API number ${i}</a>`).join(" "),
+    );
+    for (const p of paths) page("developer.acme.test", p, "");
+
+    const hits = await crawlForVendorApis({
+      startUrl: `${o}/`,
+      vendor,
+      fetcher: fetcher(),
+      judge: apiJudge(
+        Object.fromEntries(paths.map((p, i) => [`${o}${p}`, 0.9 - i * 0.01])),
+      ),
+    });
+
+    expect(hits).toHaveLength(10);
+    expect(hits[0]?.name).toBe("API number 0");
+    expect(hits[9]?.name).toBe("API number 9");
+    const pagesRead = server.requests.filter(
+      (r) => r.host === "developer.acme.test" && r.path !== "/robots.txt",
+    );
+    expect(pagesRead).toHaveLength(4);
+  });
+
+  it("stops when the budget runs out and keeps what it has", async () => {
+    const o = server.origin("developer.acme.test");
+    page("developer.acme.test", "/", `<a href="/slow">Slow API</a>`);
+    server.route("developer.acme.test", "/slow", (_req, res) => {
+      setTimeout(() => {
+        res.writeHead(200, { "content-type": "text/html" });
+        res.end(html(`<a href="/late">Late API</a>`));
+      }, 1000);
+    });
+
+    const began = Date.now();
+    const hits = await crawlForVendorApis({
+      startUrl: `${o}/`,
+      vendor,
+      fetcher: fetcher(),
+      judge: apiJudge({ [`${o}/slow`]: 0.9, [`${o}/late`]: 0.9 }),
+      budgetMs: 200,
+    });
+
+    expect(hits).toEqual([{ name: "Slow API", url: `${o}/slow` }]);
+    expect(Date.now() - began).toBeLessThan(900);
+  });
+
+  it("never throws: an unreachable portal or a failing Judge is nothing found", async () => {
+    const o = server.origin("developer.acme.test");
+    page("developer.acme.test", "/", `<a href="/crm">CRM API</a>`);
+    const failing = new FakeJudge();
+    failing.areVendorApiLinks = () =>
+      Promise.reject(new JudgeError("timeout", "slow"));
+
+    await expect(
+      crawlForVendorApis({
+        startUrl: `${o}/`,
+        vendor,
+        fetcher: fetcher(),
+        judge: failing,
+      }),
+    ).resolves.toEqual([]);
+    await expect(
+      crawlForVendorApis({
+        startUrl: "not a url",
+        vendor,
+        fetcher: fetcher(),
+        judge: apiJudge({}),
+      }),
+    ).resolves.toEqual([]);
   });
 });
 

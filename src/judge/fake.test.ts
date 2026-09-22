@@ -101,4 +101,28 @@ describe("FakeJudge", () => {
       "isSpecLink",
     ]);
   });
+
+  it("answers vendor API links by url, no by default, and records every call", async () => {
+    const j = new FakeJudge({
+      isVendorApiLink: {
+        "https://mailchimp.com/developer/marketing/": {
+          probability: 0.9,
+          confidence: 0.9,
+        },
+      },
+    });
+    const vendor = { id: "mailchimp.com", name: "Mailchimp" };
+    const result = await j.areVendorApiLinks(vendor, [
+      { url: "https://mailchimp.com/pricing/", text: "Pricing" },
+      {
+        url: "https://mailchimp.com/developer/marketing/",
+        text: "Marketing API",
+      },
+    ]);
+    expect(result.map((r) => r.probability)).toEqual([0, 0.9]);
+    expect(j.calls.map((c) => c.judgment)).toEqual([
+      "isVendorApiLink",
+      "isVendorApiLink",
+    ]);
+  });
 });

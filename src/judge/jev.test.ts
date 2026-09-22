@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import type { SpecExtract } from "../domain/spec-extract";
 import {
   IS_SPEC_LINK_QUESTION,
+  IS_VENDOR_API_LINK_QUESTION,
   IS_VENDOR_NAME_QUESTION,
   JevJudge,
   SPEC_DESCRIBES_API_QUESTION,
@@ -215,6 +216,88 @@ describe("JevJudge.isVendorName", () => {
     const { client } = stubClient({ answers: { vendor: { type: "score" } } });
     const err = await new JevJudge(client)
       .isVendorName("mailchimp", { id: "mailchimp.com", name: "Mailchimp" })
+      .catch((e) => e);
+    expect(err).toBeInstanceOf(JudgeError);
+    expect(err.kind).toBe("bad-response");
+  });
+});
+
+describe("JevJudge.isVendorApiLink", () => {
+  const mailchimp = { id: "mailchimp.com", name: "Mailchimp" };
+
+  it("sends several links as one call over the Vendor and answers them in order", async () => {
+    const { client, requests } = stubClient({
+      answers: {
+        link0: { type: "noul", noul: 0.9 },
+        link1: { type: "noul", noul: 0.05 },
+      },
+    });
+    const links = [
+      {
+        url: "https://mailchimp.com/developer/marketing/",
+        text: "Marketing API",
+        context: "APIs",
+      },
+      { url: "https://mailchimp.com/pricing/", text: "Pricing" },
+    ];
+    const result = await new JevJudge(client).areVendorApiLinks(
+      mailchimp,
+      links,
+    );
+
+    expect(result).toEqual([
+      { probability: 0.9, confidence: 0.9 },
+      { probability: 0.05, confidence: 0.95 },
+    ]);
+    expect(requests).toHaveLength(1);
+    expect(requests[0]).toEqual({
+      state: { vendor: mailchimp, links },
+      questions: {
+        link0: {
+          type: "noul",
+          instructions: IS_VENDOR_API_LINK_QUESTION.instructions.replace(
+            "{link}",
+            "links[0]",
+          ),
+          criteria: IS_VENDOR_API_LINK_QUESTION.criteria,
+        },
+        link1: {
+          type: "noul",
+          instructions: IS_VENDOR_API_LINK_QUESTION.instructions.replace(
+            "{link}",
+            "links[1]",
+          ),
+          criteria: IS_VENDOR_API_LINK_QUESTION.criteria,
+        },
+      },
+    });
+    expect(requests[0]?.questions.link1?.instructions).toContain("`links[1]`");
+  });
+
+  it("answers one link through the batch form", async () => {
+    const { client, requests } = stubClient({
+      answers: { link0: { type: "noul", noul: 0.7 } },
+    });
+    const result = await new JevJudge(client).isVendorApiLink(mailchimp, {
+      url: "https://mailchimp.com/developer/transactional/",
+      text: "Transactional API",
+    });
+    expect(result.probability).toBe(0.7);
+    expect(Object.keys(requests[0]?.questions ?? {})).toEqual(["link0"]);
+  });
+
+  it("makes no call for no links", async () => {
+    const { client, requests } = stubClient();
+    await expect(
+      new JevJudge(client).areVendorApiLinks(mailchimp, []),
+    ).resolves.toEqual([]);
+    expect(requests).toHaveLength(0);
+  });
+
+  it("rejects an answer of the wrong type", async () => {
+    const { client } = stubClient({ answers: { link0: { type: "score" } } });
+    const err = await new JevJudge(client)
+      .isVendorApiLink(mailchimp, { url: "https://x.test", text: "x" })
       .catch((e) => e);
     expect(err).toBeInstanceOf(JudgeError);
     expect(err.kind).toBe("bad-response");

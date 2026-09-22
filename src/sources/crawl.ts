@@ -1,6 +1,12 @@
 import { FetchError, type Fetcher, type FetchResult } from "~/fetch/fetcher";
 import { type SniffResult, sniffSpec } from "~/fetch/sniff";
-import type { ApiRef, Judge, SpecLink, YesNoJudgment } from "~/judge/judge";
+import type {
+  ApiRef,
+  Judge,
+  SpecLink,
+  VendorRef,
+  YesNoJudgment,
+} from "~/judge/judge";
 import { registrableDomain } from "./domain";
 
 export type CrawlHit = {
@@ -259,6 +265,118 @@ export async function crawlForSpecs(opts: CrawlOptions): Promise<CrawlResult> {
     }
   }
   return { hits, offHostHosts };
+}
+
+/** One of a Vendor's APIs, as a link on its Developer Portal names it. */
+export type VendorApiHit = {
+  /** The link's anchor text: the name the Judge was shown. */
+  name: string;
+  url: string;
+};
+
+const VENDOR_APIS_MAX_PAGES = 4;
+const VENDOR_APIS_BUDGET_MS = 15_000;
+const MAX_VENDOR_APIS = 10;
+/** The start page's API links are read; theirs are not followed. */
+const VENDOR_APIS_MAX_DEPTH = 1;
+
+/**
+ * A shallow crawl of a Developer Portal for the Vendor's APIs, rather than a
+ * Spec. The start page's links on its registrable domain go to the Judge
+ * (`areVendorApiLinks`); the ones it takes for an API are kept and, best
+ * first, read in turn for their own links (a portal's API page often lists
+ * its siblings), one link deep, up to `maxPages` pages inside `budgetMs`.
+ * Returns at most 10 hits in score order, one per API name. Never throws.
+ */
+export async function crawlForVendorApis(opts: {
+  startUrl: string;
+  vendor: VendorRef;
+  fetcher: Fetcher;
+  judge: Judge;
+  /** Default 4. */
+  maxPages?: number;
+  /** Default 15 s, for the whole crawl. */
+  budgetMs?: number;
+  /** Default 0.6. */
+  threshold?: number;
+}): Promise<VendorApiHit[]> {
+  const threshold = opts.threshold ?? DEFAULT_THRESHOLD;
+  const maxPages = opts.maxPages ?? VENDOR_APIS_MAX_PAGES;
+  const signal = AbortSignal.timeout(opts.budgetMs ?? VENDOR_APIS_BUDGET_MS);
+  const { vendor, fetcher, judge } = opts;
+  const home = registrableDomain(opts.startUrl);
+
+  /** The best-scored link per normalised API name. */
+  const best = new Map<string, { hit: VendorApiHit; p: number }>();
+  const seen = new Set<string>([normalize(opts.startUrl)]);
+  const queue: Page[] = [{ url: opts.startUrl, depth: 0, from: opts.startUrl }];
+  let pagesFetched = 0;
+
+  while (queue.length > 0 && pagesFetched < maxPages && !signal.aborted) {
+    const page = queue.shift() as Page;
+    pagesFetched++;
+    let res: FetchResult;
+    try {
+      res = await fetcher.fetchUrl(page.url, { signal });
+    } catch {
+      continue;
+    }
+    if (!isHtml(res.contentType)) continue;
+
+    const links = extractLinks(
+      new TextDecoder().decode(res.bytes),
+      res.finalUrl,
+    ).filter(
+      (link) =>
+        link.text !== "" &&
+        home !== null &&
+        registrableDomain(link.url) === home &&
+        normalize(link.url) !== normalize(res.finalUrl),
+    );
+    if (links.length === 0) continue;
+
+    let judgments: YesNoJudgment[];
+    try {
+      judgments = await abortable(
+        judge.areVendorApiLinks(vendor, links),
+        signal,
+      );
+    } catch {
+      continue;
+    }
+    const picked = links
+      .map((link, i) => ({ link, p: judgments[i]?.probability ?? 0 }))
+      .filter(({ p }) => p >= threshold)
+      .sort((a, b) => b.p - a.p);
+
+    for (const { link, p } of picked) {
+      const key = apiNameKey(link.text);
+      const current = best.get(key);
+      if (!current || p > current.p) {
+        best.set(key, { hit: { name: link.text, url: link.url }, p });
+      }
+      if (
+        page.depth < VENDOR_APIS_MAX_DEPTH &&
+        !seen.has(normalize(link.url))
+      ) {
+        seen.add(normalize(link.url));
+        queue.push({
+          url: link.url,
+          depth: page.depth + 1,
+          from: res.finalUrl,
+        });
+      }
+    }
+  }
+  return [...best.values()]
+    .sort((a, b) => b.p - a.p)
+    .slice(0, MAX_VENDOR_APIS)
+    .map(({ hit }) => hit);
+}
+
+/** An API name for deduplication: case, spacing and a trailing "API" ignored. */
+function apiNameKey(name: string): string {
+  return name.toLowerCase().replace(/\s+/g, " ").trim().replace(/ api$/, "");
 }
 
 /**
