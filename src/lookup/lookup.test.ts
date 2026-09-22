@@ -1833,6 +1833,45 @@ describe("lookup with GitHub code search", () => {
     expect(calls).toEqual([["nospec", "NoSpec API"]]);
   });
 
+  it("fetches the likeliest hit first, so a tree file can settle ahead of code search's hits", async () => {
+    // PagerDuty: code search finds the Events Spec, the tree adds the REST
+    // Spec; both pass the link threshold, and whichever is fetched first
+    // settles the Lookup.
+    const events = hit("nospec/api-schema", "reference/events/openapi.json");
+    const rest = hit("nospec/api-schema", "reference/REST/openapi.json");
+    for (const h of [events, rest]) {
+      server.send(
+        RAW,
+        `/nospec/api-schema/HEAD/${h.path}`,
+        spec("NoSpec API"),
+        "application/json",
+      );
+    }
+    const { search } = fakeSearch([events], [], [], {
+      "nospec/api-schema": [events, rest],
+    });
+    const { lookup } = setup(
+      {
+        ...script,
+        isSpecLink: { [events.url]: yesNo(0.7), [rest.url]: yesNo(0.95) },
+      },
+      undefined,
+      undefined,
+      undefined,
+      search,
+    );
+
+    const outcome = await ask(lookup, "nospec");
+
+    expect(outcome).toMatchObject({
+      outcome: "Resolved",
+      sources: [{ url: rest.url, provenance: "Official" }],
+    });
+    expect(rawPaths()).toEqual([
+      "/nospec/api-schema/HEAD/reference/REST/openapi.json",
+    ]);
+  });
+
   it("carries on with the hits after a diagnostic when a repo tree can't be read", async () => {
     const found = hit("nospec/openapi");
     server.send(

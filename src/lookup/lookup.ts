@@ -790,8 +790,15 @@ export function createLookup(deps: LookupDeps): Lookup {
         diagnostics.push(`Judge areSpecLinks: ${message(error)}`);
         return;
       }
-      for (const [i, hit] of hits.entries()) {
-        if ((probabilities[i] ?? 0) < t.specLink || !goOn(hit.url)) continue;
+      // Likeliest first: the first Spec fetched may settle the Lookup, and a
+      // repo tree lists the right Spec after code search's wrong ones
+      // (PagerDuty's Events Specs before its REST Spec).
+      const ranked = hits
+        .map((hit, i) => ({ hit, p: probabilities[i] ?? 0 }))
+        .filter(({ p }) => p >= t.specLink)
+        .sort((a, b) => b.p - a.p);
+      for (const { hit } of ranked) {
+        if (!goOn(hit.url)) continue;
         await fetchOrigin(hit.url);
       }
     }
