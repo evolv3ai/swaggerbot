@@ -1,15 +1,13 @@
 import {
   Api,
-  apiId,
   type Source,
   type Spec,
-  slugify,
   type Vendor,
   vendorIdFromDomain,
 } from "~/domain/catalog";
 import type { Outcome } from "~/domain/outcome";
 import type { Provenance } from "~/domain/provenance";
-import type { Fetcher } from "~/fetch/fetcher";
+import { FetchError, type Fetcher } from "~/fetch/fetcher";
 import { type KnownPathHit, probeKnownPaths } from "~/fetch/known-paths";
 import { type SniffResult, sniffSpec } from "~/fetch/sniff";
 import type { Db } from "~/index-store/db";
@@ -106,7 +104,8 @@ type SpecCandidate = {
  *
  * 1. the Index, for a name already resolved;
  * 2. APIs.guru Candidates, judged by `whichApi`;
- * 3. Developer Portal Candidates from web search, judged with step 2's;
+ * 3. Developer Portal Candidates from web search, one per Vendor after
+ *    following redirects, judged with step 2's;
  * 4. for the identified API, its Spec: APIs.guru origin URLs (a GitHub
  *    one skipped when its repo is archived, read from the default branch
  *    when it names another), then known paths on the Vendor's domain, then
@@ -156,7 +155,7 @@ export function createLookup(deps: LookupDeps): Lookup {
       }
       const all = uniqueById([
         ...guru,
-        ...portals.flatMap((p) => fromPortal(p) ?? []),
+        ...portalChoices(await followPortals(portals), guru),
       ]);
       if (all.length > guru.length) {
         verdict = (await whichApi(name, all, diagnostics)) ?? verdict;
@@ -171,6 +170,42 @@ export function createLookup(deps: LookupDeps): Lookup {
     // 4. The identified API's Spec.
     return finish(await findSpec(name, verdict.choice, diagnostics));
   };
+
+  /**
+   * Fetches each portal's origin once and moves the Candidate to the
+   * registrable domain it ends up on (`neon.tech` → `neon.com`). An origin
+   * that fails still names the domain it failed on; one that can't be reached
+   * at all keeps its search domain.
+   */
+  async function followPortals(
+    portals: PortalCandidate[],
+  ): Promise<PortalCandidate[]> {
+    const finalDomains = new Map<string, Promise<string | null>>();
+    const finalDomain = (origin: string) => {
+      let domain = finalDomains.get(origin);
+      if (!domain) {
+        domain = fetcher.fetchUrl(origin).then(
+          (res) => registrableDomain(res.finalUrl),
+          (error) =>
+            error instanceof FetchError ? registrableDomain(error.url) : null,
+        );
+        finalDomains.set(origin, domain);
+      }
+      return domain;
+    };
+    return Promise.all(
+      portals.map(async (p) => {
+        let origin: string;
+        try {
+          origin = new URL(p.url).origin;
+        } catch {
+          return p;
+        }
+        const domain = await finalDomain(origin);
+        return domain && domain !== p.domain ? { ...p, domain } : p;
+      }),
+    );
+  }
 
   /** Resolved from a confirmed Spec with an Official Source, if the name is known. */
   function answerFromIndex(name: string): Outcome | null {
@@ -532,14 +567,38 @@ function fromApisGuru(c: ApiCandidate): ApiChoice {
 }
 
 /**
- * A Developer Portal's domain as a Candidate API of the Vendor at that domain,
- * or `null` when no valid ids can be made from it.
+ * Developer Portals as Candidate APIs: one per Vendor, the highest-ranked,
+ * leaving out Vendors that APIs.guru already has a Candidate for.
+ */
+function portalChoices(
+  portals: PortalCandidate[],
+  guru: ApiChoice[],
+): ApiChoice[] {
+  const known = new Set(
+    guru.flatMap((c) => [
+      c.vendor.id,
+      registrableDomain(c.vendor.domain) ?? c.vendor.id,
+    ]),
+  );
+  const choices: ApiChoice[] = [];
+  for (const p of portals) {
+    const choice = fromPortal(p);
+    if (!choice || known.has(choice.vendor.id)) continue;
+    known.add(choice.vendor.id);
+    choices.push(choice);
+  }
+  return choices;
+}
+
+/**
+ * A Developer Portal's domain as the Vendor's API, named after the Vendor
+ * (`neon.com/api`, "Neon API"), or `null` when no valid ids can be made from it.
  */
 function fromPortal(p: PortalCandidate): ApiChoice | null {
   const vendorId = vendorIdFromDomain(p.domain);
-  const title = p.title.trim();
-  const name = slugify(title) ? title : p.domain;
-  const api = { id: apiId(vendorId, name), vendorId, name };
+  const label = vendorId.split(".")[0] ?? vendorId;
+  const brand = label.charAt(0).toUpperCase() + label.slice(1);
+  const api = { id: `${vendorId}/api`, vendorId, name: `${brand} API` };
   if (!Api.safeParse(api).success) return null;
   return {
     api,

@@ -172,7 +172,7 @@ describe("lookup", () => {
       {
         whichApi: {
           acme: {
-            probabilities: { "acme.test/acme-api-reference": 0.9, none: 0.1 },
+            probabilities: { "acme.test/api": 0.9, none: 0.1 },
             confidence: 0.9,
           },
         },
@@ -186,7 +186,7 @@ describe("lookup", () => {
     expect(search.calls).toHaveLength(1);
     expect(outcome).toMatchObject({
       outcome: "Resolved",
-      api: { id: "acme.test/acme-api-reference" },
+      api: { id: "acme.test/api", name: "Acme API" },
       vendor: { id: "acme.test", domain: "acme.test" },
       provenance: "Official",
       sources: [
@@ -198,8 +198,97 @@ describe("lookup", () => {
     });
     const asked = judge.calls.find((c) => c.judgment === "whichApi");
     expect(asked).toMatchObject({
-      candidates: [{ id: "acme.test/acme-api-reference", vendor: "acme.test" }],
+      candidates: [
+        { id: "acme.test/api", name: "Acme API", vendor: "acme.test" },
+      ],
     });
+  });
+
+  it("merges portal Candidates whose domains redirect to one Vendor", async () => {
+    // neon-tech.test redirects to neon.test, as neon.tech does to neon.com.
+    server.route("www.neon-tech.test", "/", (_req, res) => {
+      res.writeHead(301, { location: `${server.origin("neon.test")}/` }).end();
+    });
+    server.send("neon.test", "/", "<html>Neon</html>", "text/html");
+    const search = new FakeWebSearch([
+      {
+        url: `${server.origin("www.neon-tech.test")}/neon-api-reference`,
+        title: "Neon API Reference",
+        snippet: "The Neon API.",
+      },
+      {
+        url: `${server.origin("neon.test")}/docs/neon-api`,
+        title: "Neon API | Neon Docs",
+        snippet: "Manage Neon.",
+      },
+      {
+        url: `${server.origin("docs.neon.test")}/other-page`,
+        title: "Another Neon page",
+        snippet: "",
+      },
+    ]);
+    const { lookup, judge } = setup(
+      {
+        whichApi: {
+          neon: {
+            probabilities: { "neon.test/api": 0.9, none: 0.1 },
+            confidence: 0.9,
+          },
+        },
+      },
+      search,
+    );
+
+    const outcome = await ask(lookup, "neon");
+
+    expect(judge.calls[0]).toEqual({
+      judgment: "whichApi",
+      name: "neon",
+      candidates: [
+        {
+          id: "neon.test/api",
+          name: "Neon API",
+          vendor: "neon.test",
+          description: "The Neon API.",
+        },
+      ],
+    });
+    expect(outcome).toMatchObject({
+      outcome: "NoSpec",
+      api: { id: "neon.test/api", name: "Neon API" },
+      vendor: { id: "neon.test", domain: "neon.test" },
+    });
+    // Each origin fetched once.
+    const roots = server.requests.filter((r) => r.path === "/");
+    expect(roots.map((r) => r.host).sort()).toEqual([
+      "neon.test",
+      "neon.test",
+      "www.neon-tech.test",
+    ]);
+  });
+
+  it("drops a portal Candidate for a Vendor APIs.guru already has", async () => {
+    const search = new FakeWebSearch([
+      {
+        url: `${server.origin("docs.payco.test")}/api`,
+        title: "PayCo API docs",
+        snippet: "",
+      },
+      {
+        url: `${server.origin("www.payco-rival.test")}/developers`,
+        title: "PayCo Rival developers",
+        snippet: "",
+      },
+    ]);
+    const { lookup, judge } = setup({}, search);
+
+    expect(await ask(lookup, "payco")).toMatchObject({ outcome: "Unknown" });
+
+    const asked = judge.calls.filter((c) => c.judgment === "whichApi");
+    expect(asked).toHaveLength(2);
+    expect(
+      asked[1]?.judgment === "whichApi" && asked[1].candidates.map((c) => c.id),
+    ).toEqual(["payco.test/payco-api", "payco-rival.test/api"]);
   });
 
   it("answers Ambiguous when the top Candidate's margin is too small", async () => {
