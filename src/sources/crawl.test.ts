@@ -1,4 +1,3 @@
-import http from "node:http";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   type FixtureServer,
@@ -324,7 +323,7 @@ describe("crawlForSpecs", () => {
     const hits = await crawlForSpecs({
       startUrl: start,
       api,
-      fetcher: withRobotsException(fetcher()),
+      fetcher: fetcher(),
       judge: judgeSaying({ [specUrl]: 0.9, [blockedPage]: 0.9 }),
     });
 
@@ -347,7 +346,7 @@ describe("crawlForSpecs", () => {
     const hits = await crawlForSpecs({
       startUrl: `${o}/`,
       api,
-      fetcher: fetcher(),
+      fetcher: withoutRobotsException(fetcher()),
       judge: judgeSaying({ [`${o}/openapi.json`]: 0.9 }),
     });
 
@@ -497,45 +496,12 @@ describe("isSpecCandidate", () => {
  * under `ignoreRobots` the URL is fetched straight from the fixture server and
  * reported as disallowed.
  */
-function withRobotsException(inner: Fetcher): Fetcher {
+/**
+ * A fetcher from before ADR 0003: it drops `ignoreRobots`, so a disallowed URL
+ * throws `robots-disallowed` again and `crawlForSpecs` must skip the link.
+ */
+function withoutRobotsException(inner: Fetcher): Fetcher {
   return {
-    fetchUrl(url, opts) {
-      const ignore = (opts as { ignoreRobots?: boolean } | undefined)
-        ?.ignoreRobots;
-      if (!ignore) return inner.fetchUrl(url, opts);
-      return fetchDirect(url);
-    },
+    fetchUrl: (url, opts) => inner.fetchUrl(url, { signal: opts?.signal }),
   };
-}
-
-function fetchDirect(
-  url: string,
-): Promise<FetchResult & { robotsDisallowed: boolean }> {
-  const target = new URL(url);
-  return new Promise((resolve, reject) => {
-    const req = http.request(
-      {
-        host: "127.0.0.1",
-        port: server.port,
-        path: target.pathname,
-        headers: { host: target.host },
-      },
-      (res) => {
-        const chunks: Buffer[] = [];
-        res.on("data", (c: Buffer) => chunks.push(c));
-        res.on("end", () =>
-          resolve({
-            url,
-            finalUrl: url,
-            status: res.statusCode ?? 0,
-            contentType: res.headers["content-type"] ?? null,
-            bytes: new Uint8Array(Buffer.concat(chunks)),
-            robotsDisallowed: true,
-          }),
-        );
-      },
-    );
-    req.on("error", reject);
-    req.end();
-  });
 }
