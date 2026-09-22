@@ -22,7 +22,7 @@ describe("findPortalCandidates", () => {
     ]);
   });
 
-  it("keeps the first result per registrable domain", async () => {
+  it("keeps one Candidate per registrable domain, its highest-ranked result", async () => {
     const search = new FakeWebSearch([
       hit("https://www.twilio.com/docs/usage/api"),
       hit("https://twilio.com/docs/sms"),
@@ -60,6 +60,31 @@ describe("findPortalCandidates", () => {
 
     const candidates = await findPortalCandidates("twilio", search);
     expect(candidates.map((c) => c.domain)).toEqual(["twilio.com"]);
+  });
+
+  it("drops API directories and package registries, including subdomains", async () => {
+    const search = new FakeWebSearch([
+      hit("https://apitracker.io/a/mux-com"),
+      hit("https://www.npmjs.com/package/@novu/node"),
+      hit("https://hexdocs.pm/mux/Mux.html"),
+      hit("https://pkg.go.dev/github.com/muxinc/mux-go"),
+      hit("https://pypi.org/project/mux-python/"),
+      hit("https://www.openbankingtracker.com/provider/mercury"),
+      hit("https://mercury-docs.readthedocs.io/en/latest/"),
+      hit("https://docs.readthedocs.org/en/stable/"),
+    ]);
+
+    expect(await findPortalCandidates("mux", search)).toEqual([]);
+  });
+
+  it("does not drop a Vendor whose domain only ends like an excluded one", async () => {
+    const search = new FakeWebSearch([
+      hit("https://go.dev/doc"),
+      hit("https://notnpmjs.com/docs"),
+    ]);
+
+    const candidates = await findPortalCandidates("go", search);
+    expect(candidates.map((c) => c.domain)).toEqual(["go.dev", "notnpmjs.com"]);
   });
 
   it("returns at most five Candidates", async () => {
