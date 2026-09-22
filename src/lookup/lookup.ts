@@ -194,9 +194,11 @@ type SpecCandidate = ApiVersionOf & {
  * 2. APIs.guru Candidates, judged by `whichApi`;
  * 3. Developer Portal Candidates from web search, one per Vendor after
  *    following redirects, judged with step 2's;
- * 4. when nothing is identified yet, a name the Judge takes for the top
- *    Candidate's Vendor as a whole: Ambiguous over that Vendor's APIs, from
- *    APIs.guru or, when it has fewer than two, the Developer Portal;
+ * 4. when nothing is identified yet, or the name is the Vendor's own name: a
+ *    name the Judge takes for the top (or identified) Candidate's Vendor as a
+ *    whole answers Ambiguous over that Vendor's APIs, from APIs.guru or, when
+ *    it has fewer than two, the Developer Portal; a Vendor with one API goes
+ *    on to that API's Spec;
  * 5. for the identified API, its Spec: APIs.guru origin URLs (a GitHub
  *    one skipped when its repo is archived, read from the default branch
  *    when it names another), then known paths on the Vendor's domain, then
@@ -266,8 +268,14 @@ export function createLookup(deps: LookupDeps): Lookup {
     }
 
     // 4. A name for the whole Vendor.
-    if (verdict?.kind === "unknown" && verdict.top) {
-      const vendorApis = await vendorCandidates(name, verdict.top, diagnostics);
+    const top =
+      verdict?.kind === "identified"
+        ? verdict.choice
+        : verdict?.kind === "unknown"
+          ? verdict.top
+          : undefined;
+    if (top) {
+      const vendorApis = await vendorCandidates(name, top, diagnostics);
       if (vendorApis)
         return finish({ outcome: "Ambiguous", candidates: vendorApis });
     }
