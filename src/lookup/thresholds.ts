@@ -25,7 +25,7 @@ export type Thresholds = {
 
 export const DEFAULT_THRESHOLDS: Thresholds = {
   none: 0.6,
-  apiPick: 0.75,
+  apiPick: 0.7,
   apiMargin: 0.3,
   ambiguousFloor: 0.1,
   describes: 0.8,

@@ -11,6 +11,7 @@ export const NON_VENDOR_DOMAINS: readonly string[] = [
   "stackoverflow.com",
   "medium.com",
   "apis.guru",
+  "apis.io",
   "rapidapi.com",
   "postman.com",
   "wikipedia.org",
