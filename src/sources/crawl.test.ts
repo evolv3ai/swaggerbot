@@ -13,7 +13,12 @@ import {
   type YesNoJudgment,
   yesNo,
 } from "~/judge/judge";
-import { crawlForSpecs, extractLinks, isSpecCandidate } from "./crawl";
+import {
+  crawlForSpecs,
+  DOCS_PATHS,
+  extractLinks,
+  isSpecCandidate,
+} from "./crawl";
 
 let server: FixtureServer;
 
@@ -239,14 +244,14 @@ describe("crawlForSpecs", () => {
     const o = server.origin("docs.acme.test");
     page(
       "docs.acme.test",
-      "/",
+      "/start",
       `<a href="/not-a-spec.json">x</a> <a href="/a">a</a> <a href="/b">b</a> <a href="/c">c</a>`,
     );
     server.send("docs.acme.test", "/not-a-spec.json", "{}", "application/json");
     for (const p of ["/a", "/b", "/c"]) page("docs.acme.test", p, "");
 
     await crawlForSpecs({
-      startUrl: `${o}/`,
+      startUrl: `${o}/start`,
       api,
       fetcher: fetcher(),
       judge: judgeSaying({
@@ -461,6 +466,192 @@ describe("crawlForSpecs", () => {
     expect(offHostHosts).toEqual(["machines.test", "github.test", "chat.test"]);
     // Reported, never fetched.
     expect(requested("docs.machines.test", "/")).toBe(false);
+  });
+
+  describe("from a bare origin", () => {
+    const probed = (host: string) =>
+      server.requests
+        .filter((r) => r.host === host && DOCS_PATHS.includes(r.path))
+        .map((r) => r.path);
+
+    it("starts at the documentation page and finds the Spec it links", async () => {
+      const o = server.origin("www.acme.test");
+      page("www.acme.test", "/", `<a href="/pricing">Pricing</a>`);
+      page("www.acme.test", "/docs", `<a href="/api-spec.json">API spec</a>`);
+      specAt("www.acme.test", "/api-spec.json");
+
+      const { hits } = await crawlForSpecs({
+        startUrl: `${o}/`,
+        api,
+        fetcher: fetcher(),
+        judge: judgeSaying({ [`${o}/api-spec.json`]: 0.9 }),
+      });
+
+      expect(requested("www.acme.test", "/docs")).toBe(true);
+      expect(hits).toHaveLength(1);
+      expect(hits[0]).toMatchObject({
+        url: `${o}/api-spec.json`,
+        linkedFrom: `${o}/docs`,
+      });
+    });
+
+    it("stops probing at the first documentation page that answers", async () => {
+      const o = server.origin("www.acme.test");
+      page("www.acme.test", "/docs", "<p>Docs</p>");
+      page("www.acme.test", "/developers", "<p>Developers</p>");
+
+      await crawlForSpecs({
+        startUrl: `${o}/`,
+        api,
+        fetcher: fetcher(),
+        judge: new FakeJudge(),
+      });
+
+      expect(probed("www.acme.test")).toEqual(["/docs"]);
+    });
+
+    it("makes at most 4 probes, each counted against maxPages", async () => {
+      const o = server.origin("www.acme.test");
+      page("www.acme.test", "/", `<a href="/a">a</a> <a href="/b">b</a>`);
+      for (const p of ["/a", "/b"]) page("www.acme.test", p, "");
+
+      await crawlForSpecs({
+        startUrl: `${o}/`,
+        api,
+        fetcher: fetcher(),
+        judge: judgeSaying({ [`${o}/a`]: 0.9, [`${o}/b`]: 0.8 }),
+        maxPages: 6,
+      });
+
+      expect(probed("www.acme.test")).toEqual(DOCS_PATHS.slice(0, 4));
+      // 4 probes and the origin leave room for one page of the two.
+      expect(requested("www.acme.test", "/a")).toBe(true);
+      expect(requested("www.acme.test", "/b")).toBe(false);
+    });
+
+    it("does not count a probe robots.txt refused", async () => {
+      const o = server.origin("www.acme.test");
+      server.send(
+        "www.acme.test",
+        "/robots.txt",
+        "User-agent: *\nDisallow: /docs\n",
+        "text/plain",
+      );
+      page("www.acme.test", "/api", `<a href="/api-spec.json">API spec</a>`);
+      specAt("www.acme.test", "/api-spec.json");
+
+      const { hits } = await crawlForSpecs({
+        startUrl: `${o}/`,
+        api,
+        fetcher: fetcher(),
+        judge: judgeSaying({ [`${o}/api-spec.json`]: 0.9 }),
+      });
+
+      // `/docs` and `/docs/api` are disallowed, so never requested.
+      expect(probed("www.acme.test")).toEqual([
+        "/developers",
+        "/developer",
+        "/api",
+      ]);
+      expect(hits.map((h) => h.url)).toEqual([`${o}/api-spec.json`]);
+    });
+
+    it("makes no probe when the start URL has a path", async () => {
+      const o = server.origin("www.acme.test");
+      page("www.acme.test", "/start", "<p>Start</p>");
+
+      await crawlForSpecs({
+        startUrl: `${o}/start`,
+        api,
+        fetcher: fetcher(),
+        judge: new FakeJudge(),
+      });
+
+      expect(probed("www.acme.test")).toEqual([]);
+    });
+
+    it("crawls from the origin when no documentation path answers", async () => {
+      const o = server.origin("www.acme.test");
+      page("www.acme.test", "/", `<a href="/openapi.yaml">Spec</a>`);
+      server.send(
+        "www.acme.test",
+        "/openapi.yaml",
+        "openapi: 3.0.0\ninfo:\n  title: Acme\n  version: '1'\npaths: {}\n",
+        "application/yaml",
+      );
+
+      const { hits } = await crawlForSpecs({
+        startUrl: `${o}/`,
+        api,
+        fetcher: fetcher(),
+        judge: judgeSaying({ [`${o}/openapi.yaml`]: 0.9 }),
+      });
+
+      expect(probed("www.acme.test")).toEqual(DOCS_PATHS.slice(0, 4));
+      expect(hits).toHaveLength(1);
+      expect(hits[0]).toMatchObject({
+        url: `${o}/openapi.yaml`,
+        linkedFrom: `${o}/`,
+      });
+    });
+
+    it("still crawls the origin once the documentation runs dry", async () => {
+      const o = server.origin("www.acme.test");
+      page("www.acme.test", "/docs", "<p>Coming soon</p>");
+      page("www.acme.test", "/", `<a href="/openapi.yaml">Spec</a>`);
+      server.send(
+        "www.acme.test",
+        "/openapi.yaml",
+        "openapi: 3.0.0\ninfo:\n  title: Acme\n  version: '1'\npaths: {}\n",
+        "application/yaml",
+      );
+
+      const { hits } = await crawlForSpecs({
+        startUrl: `${o}/`,
+        api,
+        fetcher: fetcher(),
+        judge: judgeSaying({ [`${o}/openapi.yaml`]: 0.9 }),
+      });
+
+      expect(hits.map((h) => h.url)).toEqual([`${o}/openapi.yaml`]);
+    });
+  });
+
+  it("judges and follows documentation-looking pages first when they outrun the page budget", async () => {
+    const o = server.origin("docs.acme.test");
+    page(
+      "docs.acme.test",
+      "/start",
+      `<a href="/pricing">Pricing</a> <a href="/blog">Blog</a>
+       <a href="/about">About</a> <a href="/api/reference">API</a>`,
+    );
+    for (const p of ["/pricing", "/blog", "/about", "/api/reference"]) {
+      page("docs.acme.test", p, "");
+    }
+    let asked: SpecLink[][] = [];
+    const judge = judgeSaying({
+      [`${o}/pricing`]: 0.9,
+      [`${o}/blog`]: 0.9,
+      [`${o}/about`]: 0.9,
+      [`${o}/api/reference`]: 0.7,
+    });
+    const areSpecLinks = judge.areSpecLinks.bind(judge);
+    judge.areSpecLinks = async (a, links) => {
+      asked = [...asked, links];
+      return areSpecLinks(a, links);
+    };
+
+    await crawlForSpecs({
+      startUrl: `${o}/start`,
+      api,
+      fetcher: fetcher(),
+      judge,
+      maxPages: 2,
+    });
+
+    expect(asked[0]?.[0]?.url).toBe(`${o}/api/reference`);
+    expect(requested("docs.acme.test", "/api/reference")).toBe(true);
+    expect(requested("docs.acme.test", "/pricing")).toBe(false);
   });
 
   it("never throws, even when the start URL is unreachable", async () => {

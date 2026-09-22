@@ -49,6 +49,25 @@ const MAX_TEXT = 200;
 const MAX_CONTEXT = 300;
 const MAX_OFF_HOST_HOSTS = 3;
 const SPEC_PATH = /\.(json|ya?ml)$|openapi|swagger|api-spec|api_spec|api-docs/i;
+/** A page whose path looks like documentation, followed ahead of the rest. */
+const DOCS_PATH = /docs|developer|api|reference/i;
+/**
+ * Where a Vendor's documentation usually lives, tried in order on a bare
+ * origin before its marketing homepage (WTR-55). Page probes: robots.txt
+ * applies as usual.
+ */
+export const DOCS_PATHS = [
+  "/docs",
+  "/docs/api",
+  "/developers",
+  "/developer",
+  "/api",
+  "/api-docs",
+  "/reference",
+  "/api-reference",
+];
+/** Documentation paths fetched at most, each counted against `maxPages`. */
+const MAX_DOCS_PROBES = 4;
 
 /**
  * `fetchUrl` with the ADR 0003 exception (WTR-44): `ignoreRobots` skips the
@@ -75,6 +94,11 @@ type Page = {
  * pages on the same registrable domain, up to `maxPages` pages, two links
  * deep, inside `budgetMs`, and reports the other registrable domains it saw
  * linked. Never throws: failures skip a link or a page.
+ *
+ * Started at a bare origin, it first looks for the documentation at the
+ * usual paths (`/docs`, `/developers`, …) and crawls from the first that
+ * answers with HTML, falling back to the origin itself once that runs dry:
+ * a homepage's own links are mostly marketing.
  */
 export async function crawlForSpecs(opts: CrawlOptions): Promise<CrawlResult> {
   const threshold = opts.threshold ?? DEFAULT_THRESHOLD;
@@ -86,17 +110,67 @@ export async function crawlForSpecs(opts: CrawlOptions): Promise<CrawlResult> {
   const hits: CrawlHit[] = [];
   const offHostHosts: string[] = [];
   const seen = new Set<string>([normalize(opts.startUrl)]);
-  const queue: Page[] = [{ url: opts.startUrl, depth: 0, from: opts.startUrl }];
+  const origin: Page = { url: opts.startUrl, depth: 0, from: opts.startUrl };
+  const queue: Page[] = [];
   let pagesFetched = 0;
 
-  while (queue.length > 0 && pagesFetched < maxPages && !signal.aborted) {
-    const page = queue.shift() as Page;
-    pagesFetched++;
+  /** The documentation page found on a bare origin, already fetched. */
+  let docs: { page: Page; res: FetchResult } | null = null;
+  const probes = isBareOrigin(opts.startUrl)
+    ? DOCS_PATHS.map((path) => new URL(path, opts.startUrl).href)
+    : [];
+  let probesMade = 0;
+  for (const url of probes) {
+    if (
+      probesMade >= MAX_DOCS_PROBES ||
+      pagesFetched >= maxPages ||
+      signal.aborted
+    )
+      break;
+    seen.add(normalize(url));
     let res: FetchResult;
     try {
-      res = await fetcher.fetchUrl(page.url, { signal });
-    } catch {
+      res = await fetcher.fetchUrl(url, { signal });
+    } catch (error) {
+      // robots.txt shut the path before any request was made: no fetch spent.
+      if (error instanceof FetchError && error.kind === "robots-disallowed") {
+        continue;
+      }
+      probesMade++;
+      pagesFetched++;
       continue;
+    }
+    probesMade++;
+    pagesFetched++;
+    if (res.status === 200 && isHtml(res.contentType)) {
+      seen.add(normalize(res.finalUrl));
+      docs = { page: { url, depth: 0, from: url }, res };
+      break;
+    }
+  }
+  /** Crawled after the documentation, never instead of it. */
+  let fallback: Page | null = docs ? origin : null;
+  if (!docs) queue.push(origin);
+
+  while (!signal.aborted) {
+    let page: Page;
+    let res: FetchResult;
+    if (docs) {
+      ({ page, res } = docs);
+      docs = null;
+    } else {
+      if (queue.length === 0 && fallback) {
+        queue.push(fallback);
+        fallback = null;
+      }
+      if (queue.length === 0 || pagesFetched >= maxPages) break;
+      page = queue.shift() as Page;
+      pagesFetched++;
+      try {
+        res = await fetcher.fetchUrl(page.url, { signal });
+      } catch {
+        continue;
+      }
     }
 
     if (!isHtml(res.contentType)) {
@@ -138,6 +212,9 @@ export async function crawlForSpecs(opts: CrawlOptions): Promise<CrawlResult> {
         pages.push(link);
       }
     }
+    // Rank, then truncate: documentation-looking pages are judged, and
+    // queued against the page budget, ahead of the rest.
+    pages.sort((a, b) => Number(isDocsPage(b.url)) - Number(isDocsPage(a.url)));
     if (specs.length + pages.length === 0) continue;
 
     let judgments: YesNoJudgment[];
@@ -149,14 +226,15 @@ export async function crawlForSpecs(opts: CrawlOptions): Promise<CrawlResult> {
     } catch {
       continue;
     }
-    const pick = (list: SpecLink[], offset: number) =>
+    const pick = (list: SpecLink[], offset: number, rank = false) =>
       list
         .map((link, i) => ({
           link,
           p: judgments[offset + i]?.probability ?? 0,
+          docs: rank && isDocsPage(link.url),
         }))
         .filter(({ p }) => p >= threshold)
-        .sort((a, b) => b.p - a.p)
+        .sort((a, b) => Number(b.docs) - Number(a.docs) || b.p - a.p)
         .map(({ link }) => link);
 
     for (const link of pick(specs, 0)) {
@@ -173,7 +251,7 @@ export async function crawlForSpecs(opts: CrawlOptions): Promise<CrawlResult> {
     }
 
     if (page.depth + 1 < MAX_DEPTH) {
-      for (const link of pick(pages, specs.length)) {
+      for (const link of pick(pages, specs.length, true)) {
         seen.add(normalize(link.url));
         queue.push({
           url: link.url,
@@ -241,6 +319,24 @@ function isHtml(contentType: string | null): boolean {
 export function isSpecCandidate(url: string): boolean {
   try {
     return SPEC_PATH.test(new URL(url).pathname);
+  } catch {
+    return false;
+  }
+}
+
+/** A same-domain page whose path looks like documentation. */
+function isDocsPage(url: string): boolean {
+  try {
+    return DOCS_PATH.test(new URL(url).pathname);
+  } catch {
+    return false;
+  }
+}
+
+/** A start URL with no path of its own: a Vendor's homepage. */
+function isBareOrigin(url: string): boolean {
+  try {
+    return new URL(url).pathname === "/";
   } catch {
     return false;
   }
