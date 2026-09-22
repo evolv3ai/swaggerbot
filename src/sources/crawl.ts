@@ -54,6 +54,9 @@ const MAX_LINKS_PER_PAGE = 60;
 const MAX_TEXT = 200;
 const MAX_CONTEXT = 300;
 const MAX_OFF_HOST_HOSTS = 3;
+/** Spec URLs taken from one page's scripts at most (WTR-59). */
+const MAX_EMBEDDED_SPECS = 10;
+const EMBEDDED_CONTEXT = "Named in the page's embedded configuration";
 const SPEC_PATH = /\.(json|ya?ml)$|openapi|swagger|api-spec|api_spec|api-docs/i;
 /** A page whose path looks like documentation, followed ahead of the rest. */
 const DOCS_PATH = /docs|developer|api|reference/i;
@@ -196,9 +199,10 @@ export async function crawlForSpecs(opts: CrawlOptions): Promise<CrawlResult> {
       continue;
     }
 
-    const links = extractLinks(
-      new TextDecoder().decode(res.bytes),
-      res.finalUrl,
+    const text = new TextDecoder().decode(res.bytes);
+    const links = withEmbeddedSpecs(
+      extractLinks(text, res.finalUrl),
+      extractEmbeddedSpecUrls(text, res.finalUrl),
     ).filter((link) => !seen.has(normalize(link.url)));
     for (const link of links) {
       const domain = registrableDomain(link.url);
@@ -561,6 +565,74 @@ export function extractLinks(html: string, baseUrl: string): SpecLink[] {
     kept.add(link);
   }
   return links.filter((link) => kept.has(link));
+}
+
+const SCRIPT = /<script\b[^>]*>([\s\S]*?)<\/script\s*>/gi;
+/**
+ * A Spec-looking URL in script text: absolute, or a site path with or without
+ * its leading slash, whose last segment names `openapi` or `swagger` and ends
+ * in `.json`, `.yaml` or `.yml`, or that ends in `/api/docs/json`.
+ */
+const EMBEDDED_SPEC =
+  /(?<![\w.~%/:@-])(?:https?:\/\/[\w.-]+(?::\d+)?)?\/?(?:[\w.~%@-]+\/)*?(?:[\w.~%-]*(?:openapi|swagger)[\w.~%-]*\.(?:json|ya?ml)|api\/docs\/json)(?![\w.~%/-])/gi;
+
+/**
+ * Spec URLs a page names outside its anchors, in its inline `<script>`
+ * bodies and JSON, as documentation sites built from a Spec (Mintlify,
+ * Scalar) do: `"api-reference/v2-openapi.json"` in a config, never in an
+ * `<a href>`. Resolved against `baseUrl`; a path without a leading slash
+ * resolves from the site root, as those configs mean it. In document order,
+ * deduplicated, at most 10.
+ */
+export function extractEmbeddedSpecUrls(
+  html: string,
+  baseUrl: string,
+): string[] {
+  const urls: string[] = [];
+  let base: URL;
+  try {
+    base = new URL(baseUrl);
+  } catch {
+    return urls;
+  }
+  for (const script of html.matchAll(SCRIPT)) {
+    // JSON inside a string escapes its slashes: `https:\/\/…`, `\u002F`.
+    const body = (script[1] ?? "")
+      .replace(/\\+\//g, "/")
+      .replace(/\\u002f/gi, "/");
+    for (const match of body.matchAll(EMBEDDED_SPEC)) {
+      const ref = match[0];
+      let url: URL;
+      try {
+        url = /^https?:/i.test(ref)
+          ? new URL(ref)
+          : new URL(ref.startsWith("/") ? ref : `/${ref}`, base);
+      } catch {
+        continue;
+      }
+      if (urls.includes(url.href)) continue;
+      urls.push(url.href);
+      if (urls.length >= MAX_EMBEDDED_SPECS) return urls;
+    }
+  }
+  return urls;
+}
+
+/**
+ * A page's anchors with the Spec URLs its scripts name put first: they name
+ * a Spec outright, so at an equal score they are fetched ahead of an
+ * ordinary link. A URL that is also an anchor is one candidate, carrying the
+ * anchor's text.
+ */
+function withEmbeddedSpecs(
+  anchors: SpecLink[],
+  embedded: string[],
+): SpecLink[] {
+  const byUrl = new Map(anchors.map((link) => [link.url, link]));
+  const named = embedded.map(
+    (url) => byUrl.get(url) ?? { url, text: "", context: EMBEDDED_CONTEXT },
+  );
+  return [...named, ...anchors.filter((link) => !embedded.includes(link.url))];
 }
 
 function resolveLink(href: string, base: URL): string | null {

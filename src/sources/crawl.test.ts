@@ -17,6 +17,7 @@ import {
   crawlForSpecs,
   crawlForVendorApis,
   DOCS_PATHS,
+  extractEmbeddedSpecUrls,
   extractLinks,
   isSpecCandidate,
 } from "./crawl";
@@ -657,6 +658,97 @@ describe("crawlForSpecs", () => {
     expect(judge.calls).toEqual([]);
   });
 
+  it("finds a Spec named only in a script, resolved from the site root", async () => {
+    const o = server.origin("docs.acme.test");
+    page(
+      "docs.acme.test",
+      "/api-reference/introduction",
+      `<a href="/guide">Guide</a><script>self.__next_f.push([1,"{\\"openapi\\":\\"api-reference/v2-openapi.json\\"}"])</script>`,
+    );
+    specAt("docs.acme.test", "/api-reference/v2-openapi.json");
+    let asked: SpecLink[][] = [];
+    const judge = judgeSaying({ [`${o}/api-reference/v2-openapi.json`]: 0.9 });
+    const areSpecLinks = judge.areSpecLinks.bind(judge);
+    judge.areSpecLinks = async (a, links) => {
+      asked = [...asked, links];
+      return areSpecLinks(a, links);
+    };
+
+    const { hits } = await crawlForSpecs({
+      startUrl: `${o}/api-reference/introduction`,
+      api,
+      fetcher: fetcher(),
+      judge,
+    });
+
+    expect(asked[0]?.map((l) => l.url)).toEqual([
+      `${o}/api-reference/v2-openapi.json`,
+    ]);
+    expect(hits.map((h) => h.url)).toEqual([
+      `${o}/api-reference/v2-openapi.json`,
+    ]);
+    expect(hits[0]?.linkedFrom).toBe(`${o}/api-reference/introduction`);
+  });
+
+  it("finds an absolute Spec URL in inline JSON, ranked ahead of an equal anchor", async () => {
+    const o = server.origin("docs.acme.test");
+    const specUrl = `${server.origin("app.acme.test")}/v2/openapi.yaml`;
+    const escaped = specUrl.replaceAll("/", "\\/");
+    page(
+      "docs.acme.test",
+      "/api",
+      `<a href="/other-openapi.json">Other</a><script type="application/json">{"spec":{"url":"${escaped}"}}</script>`,
+    );
+    server.send(
+      "app.acme.test",
+      "/v2/openapi.yaml",
+      "openapi: 3.1.0\ninfo:\n  title: Acme\n  version: '2'\npaths: {}\n",
+      "application/yaml",
+    );
+    specAt("docs.acme.test", "/other-openapi.json", "Other");
+
+    const { hits } = await crawlForSpecs({
+      startUrl: `${o}/api`,
+      api,
+      fetcher: fetcher(),
+      judge: judgeSaying({
+        [specUrl]: 0.9,
+        [`${o}/other-openapi.json`]: 0.9,
+      }),
+    });
+
+    expect(hits.map((h) => h.url)).toEqual([
+      specUrl,
+      `${o}/other-openapi.json`,
+    ]);
+    expect(hits[0]).toMatchObject({ linkedFrom: `${o}/api`, offHost: false });
+  });
+
+  it("makes one candidate of a Spec URL that is both an anchor and in a script", async () => {
+    const o = server.origin("docs.acme.test");
+    page(
+      "docs.acme.test",
+      "/api",
+      `<a href="/openapi.json">OpenAPI</a><script>window.cfg={spec:"/openapi.json"}</script>`,
+    );
+    let asked: SpecLink[][] = [];
+    const judge = new FakeJudge();
+    const areSpecLinks = judge.areSpecLinks.bind(judge);
+    judge.areSpecLinks = async (a, links) => {
+      asked = [...asked, links];
+      return areSpecLinks(a, links);
+    };
+
+    await crawlForSpecs({
+      startUrl: `${o}/api`,
+      api,
+      fetcher: fetcher(),
+      judge,
+    });
+
+    expect(asked).toEqual([[{ url: `${o}/openapi.json`, text: "OpenAPI" }]]);
+  });
+
   it("never throws, even when the start URL is unreachable", async () => {
     await expect(
       crawlForSpecs({
@@ -941,6 +1033,30 @@ describe("extractLinks", () => {
     expect(links).toHaveLength(60);
     expect(links[59]?.url).toBe("https://docs.acme.test/api-spec.json");
     expect(links[58]?.url).toBe("https://docs.acme.test/nav58");
+  });
+});
+
+describe("extractEmbeddedSpecUrls", () => {
+  const base = "https://docs.acme.test/api-reference/introduction";
+
+  it("reads scripts only, resolving a path with or without its leading slash from the site root", () => {
+    const html = `<a href="/in-anchor/openapi.json">x</a><p>openapi.json in text</p>
+      <script>a="api-reference/v2-openapi.json";b='/specs/swagger.yml';</script>
+      <script type="application/json">{"u":"https:\\/\\/app.acme.test\\/api\\/docs\\/json","v":"https://x.test/openapi.js"}</script>`;
+    expect(extractEmbeddedSpecUrls(html, base)).toEqual([
+      "https://docs.acme.test/api-reference/v2-openapi.json",
+      "https://docs.acme.test/specs/swagger.yml",
+      "https://app.acme.test/api/docs/json",
+    ]);
+  });
+
+  it("dedupes and caps at 10 per page", () => {
+    const refs = Array.from({ length: 15 }, (_, i) => `"/v${i}/openapi.json"`);
+    const html = `<script>${[refs[0], ...refs].join(",")}</script>`;
+    const urls = extractEmbeddedSpecUrls(html, base);
+    expect(urls).toHaveLength(10);
+    expect(urls[0]).toBe("https://docs.acme.test/v0/openapi.json");
+    expect(urls[9]).toBe("https://docs.acme.test/v9/openapi.json");
   });
 });
 
