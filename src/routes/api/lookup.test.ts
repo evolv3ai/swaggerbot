@@ -76,4 +76,24 @@ describe("POST /api/lookup", () => {
       name: "no such api",
     });
   });
+
+  it("passes allowCommunity through to the Lookup", async () => {
+    const lookup = vi.fn(async () => ({ outcome: "Unknown", name: "fans" }));
+    createAppLookup.mockImplementationOnce(() => lookup);
+    vi.resetModules();
+    const { Route: fresh } = await import("./lookup");
+    const handlers = fresh.options.server?.handlers;
+    const handler = typeof handlers === "function" ? undefined : handlers?.POST;
+    if (typeof handler !== "function") throw new Error("no POST handler");
+
+    await handler({
+      request: new Request("http://localhost/api/lookup", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: "fans", allowCommunity: true }),
+      }),
+    } as never);
+
+    expect(lookup).toHaveBeenCalledWith({ name: "fans", allowCommunity: true });
+  });
 });
