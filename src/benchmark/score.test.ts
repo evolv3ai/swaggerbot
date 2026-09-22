@@ -18,6 +18,8 @@ function resolvedTo(name: string, apiId: string, urls: string[]): Outcome {
       apiId,
       specVersion: "3.0.0",
       apiVersion: null,
+      isPreview: false,
+      supersededAt: null,
       format: "json",
       byteLength: 1,
     },

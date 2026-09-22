@@ -14,6 +14,8 @@ import { apiNames, apis, sources, specs, vendors } from "./schema";
 export type SpecMeta = {
   specVersion: string;
   apiVersion: string | null;
+  /** Default false. */
+  isPreview?: boolean;
   format: SpecFormat;
 };
 
@@ -44,6 +46,8 @@ const specColumns = {
   apiId: specs.apiId,
   specVersion: specs.specVersion,
   apiVersion: specs.apiVersion,
+  isPreview: specs.isPreview,
+  supersededAt: specs.supersededAt,
   format: specs.format,
   byteLength: specs.byteLength,
 };
@@ -102,21 +106,29 @@ export function createRepo(db: Db) {
 
     /**
      * Stores a Spec's Published Form under its sha256. Storing the same bytes
-     * again returns the existing Spec unchanged.
+     * again keeps the stored Spec, takes its API Version and Preview flag as
+     * read now, and clears `supersededAt`: it was just found being served.
      */
     putSpec(apiId: string, bytes: Uint8Array, meta: SpecMeta): Spec {
       const id = specIdOf(bytes);
+      const version = {
+        apiVersion: meta.apiVersion,
+        isPreview: meta.isPreview ?? false,
+      };
       db.insert(specs)
         .values({
           id,
           apiId,
           specVersion: meta.specVersion,
-          apiVersion: meta.apiVersion,
+          ...version,
           format: meta.format,
           byteLength: bytes.byteLength,
           publishedBytes: Buffer.from(bytes),
         })
-        .onConflictDoNothing({ target: specs.id })
+        .onConflictDoUpdate({
+          target: specs.id,
+          set: { ...version, supersededAt: null },
+        })
         .run();
       const spec = getSpec(id);
       if (!spec) throw new Error(`Spec ${id} missing after insert`);
@@ -128,6 +140,17 @@ export function createRepo(db: Db) {
       db.update(specs)
         .set({ confirmedAt: at })
         .where(and(eq(specs.id, specId), isNull(specs.confirmedAt)))
+        .run();
+    },
+
+    /**
+     * Marks a Spec Superseded: every Source stopped serving it. The first
+     * time is kept; `putSpec` of its bytes clears it.
+     */
+    supersedeSpec(specId: string, at: string): void {
+      db.update(specs)
+        .set({ supersededAt: at })
+        .where(and(eq(specs.id, specId), isNull(specs.supersededAt)))
         .run();
     },
 

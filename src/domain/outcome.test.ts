@@ -12,6 +12,8 @@ const spec = {
   apiId: api.id,
   specVersion: "3.0.0",
   apiVersion: "2024-06-20",
+  isPreview: false,
+  supersededAt: null,
   format: "json",
   byteLength: 1024,
 };

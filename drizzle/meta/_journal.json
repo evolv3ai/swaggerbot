@@ -15,6 +15,13 @@
       "when": 1790061489781,
       "tag": "0001_spec_confirmed_at",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1790109624174,
+      "tag": "0002_spec_api_versions",
+      "breakpoints": true
     }
   ]
 }

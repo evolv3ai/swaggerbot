@@ -152,6 +152,61 @@ describe("repo", () => {
     expect(confirmed()).toBe("2026-09-01T00:00:00.000Z");
   });
 
+  it("stores a Spec's API Version and Preview flag, not Superseded", () => {
+    const spec = repo.putSpec(stripeApi.id, specBytes, {
+      ...specMeta,
+      apiVersion: "2025-01-01.preview",
+      isPreview: true,
+    });
+
+    expect(spec).toMatchObject({
+      apiVersion: "2025-01-01.preview",
+      isPreview: true,
+      supersededAt: null,
+    });
+  });
+
+  it("defaults is_preview to 0 and superseded_at to null in the migrated table", () => {
+    const columns = db.$client.pragma("table_info(specs)") as {
+      name: string;
+      type: string;
+      notnull: number;
+    }[];
+    expect(columns.find((c) => c.name === "is_preview")).toMatchObject({
+      type: "INTEGER",
+      notnull: 1,
+    });
+    expect(columns.find((c) => c.name === "superseded_at")).toMatchObject({
+      type: "TEXT",
+      notnull: 0,
+    });
+
+    // A row written without them, as by code from before the migration.
+    db.$client
+      .prepare(
+        "INSERT INTO specs (id, api_id, spec_version, format, byte_length, published_bytes) VALUES (?, ?, '3.0.0', 'json', 1, x'00')",
+      )
+      .run("f".repeat(64), stripeApi.id);
+    expect(
+      db.$client
+        .prepare("SELECT is_preview, superseded_at FROM specs WHERE id = ?")
+        .get("f".repeat(64)),
+    ).toEqual({ is_preview: 0, superseded_at: null });
+  });
+
+  it("marks a Spec Superseded once, and clears it when its bytes are put again", () => {
+    const spec = repo.putSpec(stripeApi.id, specBytes, specMeta);
+    const stored = () => repo.getApiWithSpecs(stripeApi.id)?.specs[0]?.spec;
+
+    repo.supersedeSpec(spec.id, "2026-09-01T00:00:00.000Z");
+    repo.supersedeSpec(spec.id, "2026-09-22T00:00:00.000Z");
+    expect(stored()?.supersededAt).toBe("2026-09-01T00:00:00.000Z");
+
+    const again = repo.putSpec(stripeApi.id, specBytes, specMeta);
+    expect(again.supersededAt).toBeNull();
+    expect(stored()?.supersededAt).toBeNull();
+  });
+
   it("finds an API by a remembered name, however it is written", () => {
     repo.rememberName("stripe", stripeApi.id);
 

@@ -42,6 +42,10 @@ export const Spec = z.object({
   apiId: ApiId,
   specVersion: SpecVersion,
   apiVersion: z.string().nullable(),
+  /** A Preview Version: never returned unless the Caller asks for it. */
+  isPreview: z.boolean(),
+  /** When every Source was seen to stop serving it; null while any may still. */
+  supersededAt: Timestamp.nullable(),
   format: SpecFormat,
   byteLength: z.number().int().nonnegative(),
 });

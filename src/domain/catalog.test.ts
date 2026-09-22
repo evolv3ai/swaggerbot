@@ -42,6 +42,8 @@ describe("ids", () => {
       id: "a".repeat(64),
       apiId: "stripe.com/stripe-api",
       apiVersion: null,
+      isPreview: false,
+      supersededAt: null,
       format: "yaml",
       byteLength: 10,
     };

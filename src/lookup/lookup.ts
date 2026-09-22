@@ -1,4 +1,10 @@
 import {
+  type ApiVersionOf,
+  apiVersionOf,
+  currentAndAlternates,
+  urlNamesApiVersion,
+} from "~/domain/api-version";
+import {
   Api,
   type Source,
   type Spec,
@@ -7,7 +13,11 @@ import {
   vendorIdFromDomain,
 } from "~/domain/catalog";
 import type { Outcome } from "~/domain/outcome";
-import { bestProvenance, type Provenance } from "~/domain/provenance";
+import {
+  bestProvenance,
+  PROVENANCE_TIERS,
+  type Provenance,
+} from "~/domain/provenance";
 import { FetchError, type Fetcher } from "~/fetch/fetcher";
 import {
   type KnownPathHit,
@@ -45,7 +55,11 @@ import { DEFAULT_THRESHOLDS, type Thresholds } from "./thresholds";
 
 export type LookupRequest = {
   name: string;
-  /** Accepted, not yet acted on: API Versions arrive in a later slice. */
+  /**
+   * Selects this API Version exactly, even a Preview Version or a Superseded
+   * Spec; `NoSpec` when the API has no such Version. Absent, the Current Spec
+   * answers, with the Alternates.
+   */
   apiVersion?: string;
   /**
    * Lets a Community Spec answer. Off (the default), Community Specs are only
@@ -145,7 +159,7 @@ type Verdict =
   | { kind: "ambiguous"; candidates: AmbiguousCandidate[] };
 
 /** A fetched Spec for the identified API, with the Judge's answer on it. */
-type SpecCandidate = {
+type SpecCandidate = ApiVersionOf & {
   url: string;
   bytes: Uint8Array;
   specId: string;
@@ -200,13 +214,13 @@ export function createLookup(deps: LookupDeps): Lookup {
     ((opts: { startUrl: string; vendor: VendorRef }) =>
       crawlForVendorApis({ ...opts, fetcher, judge }));
 
-  return async function lookup({ name, allowCommunity = false }) {
+  return async function lookup({ name, apiVersion, allowCommunity = false }) {
     const diagnostics: string[] = [];
     const finish = (outcome: Outcome): Outcome =>
       diagnostics.length > 0 ? { ...outcome, diagnostics } : outcome;
 
     // 1. The Index.
-    const indexed = answerFromIndex(name, allowCommunity);
+    const indexed = answerFromIndex(name, allowCommunity, apiVersion);
     if (indexed) return indexed;
 
     // 2. APIs.guru.
@@ -254,7 +268,12 @@ export function createLookup(deps: LookupDeps): Lookup {
 
     // 5. The identified API's Spec.
     return finish(
-      await findSpec(name, verdict.choice, allowCommunity, diagnostics),
+      await findSpec(
+        name,
+        verdict.choice,
+        { allowCommunity, apiVersion },
+        diagnostics,
+      ),
     );
   };
 
@@ -310,29 +329,51 @@ export function createLookup(deps: LookupDeps): Lookup {
   }
 
   /**
-   * Resolved from a confirmed Spec with an Official or Endorsed Source (or a
-   * Community one, when allowed), if the name is known.
+   * Resolved from the confirmed Specs with an Official or Endorsed Source (or
+   * Community ones, when allowed and there are no others), if the name is
+   * known: the Current Spec with its Alternates, leaving out Preview Versions
+   * and Superseded Specs; or, with `apiVersion`, that API Version's Spec,
+   * whatever it is. `null` sends the Lookup on to Discovery.
    */
   function answerFromIndex(
     name: string,
     allowCommunity: boolean,
+    apiVersion: string | undefined,
   ): Outcome | null {
     const api = repo.findApiByName(name);
     if (!api) return null;
     const stored = repo.getApiWithSpecs(api.id);
-    // Newest confirmed Spec first; an Unconfirmed one never answers Resolved.
-    const confirmed = stored?.specs
-      .filter((s) => s.confirmedAt !== null)
-      .reverse()
-      .find((s) =>
-        s.sources.some(
-          (src) =>
-            isVendorBacked(src.provenance) ||
-            (allowCommunity && src.provenance === "Community"),
-        ),
+    if (!stored) return null;
+    // An Unconfirmed Spec never answers Resolved; newest first, for ties.
+    const confirmed = stored.specs.filter((s) => s.confirmedAt !== null);
+    confirmed.reverse();
+    const at = (ok: (p: Provenance) => boolean) =>
+      confirmed.filter((s) => s.sources.some((src) => ok(src.provenance)));
+    let pool = at(isVendorBacked);
+    if (pool.length === 0 && allowCommunity)
+      pool = at((p) => p === "Community");
+    const live = pool.filter((s) => s.spec.supersededAt === null);
+    const versionOf = (s: (typeof pool)[number]) => s.spec;
+
+    if (apiVersion !== undefined) {
+      const chosen = pool.find((s) => s.spec.apiVersion === apiVersion);
+      if (!chosen) return null;
+      const others = otherVersions(chosen, live, versionOf);
+      return resolved(
+        stored.api,
+        stored.vendor,
+        chosen,
+        others.map((s) => s.spec),
       );
-    if (!stored || !confirmed) return null;
-    return resolved(stored.api, stored.vendor, confirmed);
+    }
+    const picked = currentAndAlternates(live, versionOf);
+    if (!picked) return null;
+    return resolved(
+      stored.api,
+      stored.vendor,
+      picked.current,
+      picked.alternates.map((s) => s.spec),
+    );
   }
 
   async function whichApi(
@@ -453,13 +494,21 @@ export function createLookup(deps: LookupDeps): Lookup {
   async function findSpec(
     name: string,
     choice: ApiChoice,
-    allowCommunity: boolean,
+    {
+      allowCommunity,
+      apiVersion,
+    }: { allowCommunity: boolean; apiVersion: string | undefined },
     diagnostics: string[],
   ): Promise<Outcome> {
     const ref = apiRef(choice);
     const candidates: SpecCandidate[] = [];
     const checked: string[] = [];
     let judgeFailed = false;
+    /**
+     * What each URL fetched in this Lookup served: a Spec id, or `null` for
+     * no Spec (not one, or a 404/410). For marking Specs Superseded.
+     */
+    const served = new Map<string, string | null>();
 
     async function consider(
       url: string,
@@ -473,6 +522,7 @@ export function createLookup(deps: LookupDeps): Lookup {
     ) {
       if (candidates.some((c) => c.url === url)) return;
       const specId = specIdOf(bytes);
+      served.set(url, specId);
       // The same bytes from another Source are the same Spec: judge it once.
       const known = candidates.find((c) => c.specId === specId);
       let probability = known?.probability;
@@ -494,6 +544,7 @@ export function createLookup(deps: LookupDeps): Lookup {
         sniff,
         provenance,
         probability,
+        ...apiVersionOf(sniff.versionInfo, url),
         ...found,
       });
     }
@@ -512,9 +563,11 @@ export function createLookup(deps: LookupDeps): Lookup {
         const sniff = sniffSpec(res.bytes, res.contentType);
         if (!sniff) {
           checked.push(`${url} (not a Spec)`);
+          served.set(url, null).set(res.finalUrl, null);
           return false;
         }
         checked.push(url);
+        served.set(url, specIdOf(res.bytes));
         const provenance = mirror
           ? "Mirror"
           : provenanceOf(res.finalUrl, choice.vendor, false, githubOrg);
@@ -529,6 +582,12 @@ export function createLookup(deps: LookupDeps): Lookup {
       } catch (error) {
         checked.push(`${url} (unreachable)`);
         diagnostics.push(`fetch: ${message(error)}`);
+        // Gone, not merely unreachable.
+        if (
+          error instanceof FetchError &&
+          (error.status === 404 || error.status === 410)
+        )
+          served.set(url, null);
         return false;
       }
     }
@@ -586,6 +645,7 @@ export function createLookup(deps: LookupDeps): Lookup {
         ...result.hits.filter((hit) => hit.offHost),
       ];
       for (const hit of hits) {
+        if (!goOn(hit.url)) continue;
         if (hit.robotsDisallowed) diagnostics.push(robotsDiagnostic(hit.url));
         await consider(
           hit.url,
@@ -594,12 +654,12 @@ export function createLookup(deps: LookupDeps): Lookup {
           provenanceOf(hit.url, choice.vendor, true),
           { offHost: hit.offHost, robotsDisallowed: hit.robotsDisallowed },
         );
-        if (settled()) return;
       }
 
       const vendorDomain =
         registrableDomain(choice.vendor.domain) ?? choice.vendor.domain;
       for (const host of result.offHostHosts) {
+        if (settled()) return;
         // The Vendor's own domain was probed in the step before.
         if (host === vendorDomain) continue;
         const budgetMs = deadline - Date.now();
@@ -614,6 +674,7 @@ export function createLookup(deps: LookupDeps): Lookup {
           diagnostics.push(`known paths on ${host}: ${message(error)}`);
         }
         for (const hit of hits) {
+          if (!goOn(hit.url)) continue;
           await consider(
             hit.url,
             hit.bytes,
@@ -621,7 +682,6 @@ export function createLookup(deps: LookupDeps): Lookup {
             provenanceOf(hit.url, choice.vendor, true),
             { offHost: true },
           );
-          if (settled()) return;
         }
       }
     }
@@ -675,26 +735,38 @@ export function createLookup(deps: LookupDeps): Lookup {
         return;
       }
       for (const [i, hit] of hits.entries()) {
-        if ((probabilities[i] ?? 0) < t.specLink) continue;
+        if ((probabilities[i] ?? 0) < t.specLink || !goOn(hit.url)) continue;
         await fetchOrigin(hit.url);
-        if (settled()) return;
       }
     }
 
-    /** The likeliest candidate at `tier` that describes the API. */
+    /**
+     * A Spec the Caller may be answered with: the API Version asked for, or,
+     * when none was, any but a Preview Version.
+     */
+    const wanted = (c: SpecCandidate) =>
+      apiVersion === undefined ? !c.isPreview : c.apiVersion === apiVersion;
+    /** The likeliest wanted candidate at `tier` that describes the API. */
     const describing = (tier: Provenance) =>
       best(
         candidates.filter(
-          (c) => c.provenance === tier && c.probability >= t.describes,
+          (c) =>
+            c.provenance === tier && c.probability >= t.describes && wanted(c),
         ),
       );
     // The Vendor's own Spec wins over one it links to.
     const confirmed = () => describing("Official") ?? describing("Endorsed");
     const settled = () => confirmed() !== undefined;
+    /**
+     * Whether a step goes on to its next Source. Once settled, it still takes
+     * those whose URL names an API Version (`openapi-v2026.0.json` beside
+     * `openapi-v2025.0.json`), which may be Alternates; later steps don't run.
+     */
+    const goOn = (url: string) => !settled() || urlNamesApiVersion(url);
 
     for (const url of choice.originUrls) {
+      if (!goOn(url)) continue;
       await fetchOrigin(url);
-      if (settled()) break;
     }
     if (!settled()) {
       let hits: KnownPathHit[] = [];
@@ -708,6 +780,7 @@ export function createLookup(deps: LookupDeps): Lookup {
         `known paths on ${choice.vendor.domain} (${hits.length} found)`,
       );
       for (const hit of hits) {
+        if (!goOn(hit.url)) continue;
         if (hit.robotsDisallowed) diagnostics.push(robotsDiagnostic(hit.url));
         await consider(
           hit.url,
@@ -716,7 +789,6 @@ export function createLookup(deps: LookupDeps): Lookup {
           provenanceOf(hit.url, choice.vendor, false),
           { robotsDisallowed: hit.robotsDisallowed },
         );
-        if (settled()) break;
       }
     }
     if (!settled()) await crawlStep();
@@ -739,80 +811,196 @@ export function createLookup(deps: LookupDeps): Lookup {
       )
         c.provenance = "Community";
 
-    const answer =
-      confirmed() ?? (allowCommunity ? describing("Community") : undefined);
-    if (answer) {
-      const stored = store(name, choice, answer, candidates, true);
-      return resolved(choice.api, choice.vendor, stored);
-    }
+    const outcome = answer();
+    supersedeUnserved(choice.api.id, served);
+    return outcome;
 
-    // The Vendor's own copy is preferred to a likelier third-party one.
-    const doubtful = candidates.filter((c) => c.probability >= t.doubt);
-    const allowed = doubtful.filter(
-      (c) => allowCommunity || c.provenance !== "Community",
-    );
-    const pick =
-      best(allowed.filter((c) => c.provenance === "Official")) ??
-      best(allowed.filter((c) => c.provenance === "Endorsed")) ??
-      best(allowed);
-    if (pick) {
-      const stored = store(name, choice, pick, candidates, false);
-      const reasons: string[] = [];
-      if (pick.provenance === "Community")
-        reasons.push("only a Community Spec found");
-      else if (pick.provenance === "Mirror")
-        reasons.push("only a third-party copy found");
-      reasons.push(
-        `the Judge gave ${pick.probability.toFixed(2)} that the Spec at ${pick.url} describes ${choice.api.name}; Resolved needs ${t.describes} from an Official or Endorsed Source`,
-        `checked: ${checked.join("; ")}`,
+    function answer(): Outcome {
+      // Every Spec that could answer Resolved, one candidate each, in order
+      // of preference: Official, then Endorsed, then likeliest.
+      const describes = candidates.filter((c) => c.probability >= t.describes);
+      let pool = describes.filter((c) => isVendorBacked(c.provenance));
+      if (pool.length === 0 && allowCommunity)
+        pool = describes.filter((c) => c.provenance === "Community");
+      pool = uniqueSpecs(
+        [...pool].sort(
+          (a, b) =>
+            tierRank(a.provenance) - tierRank(b.provenance) ||
+            b.probability - a.probability,
+        ),
       );
+      const stored = store(name, choice, pool, candidates, true);
+      const storedOf = (c: SpecCandidate) =>
+        stored[pool.indexOf(c)] as StoredSpec;
+
+      if (apiVersion !== undefined) {
+        const chosen = pool.find((c) => c.apiVersion === apiVersion);
+        if (chosen)
+          return resolved(
+            choice.api,
+            choice.vendor,
+            storedOf(chosen),
+            otherVersions(chosen, pool, (c) => c).map((c) => storedOf(c).spec),
+          );
+      } else {
+        const picked = currentAndAlternates(pool, (c) => c);
+        if (picked)
+          return resolved(
+            choice.api,
+            choice.vendor,
+            storedOf(picked.current),
+            picked.alternates.map((c) => storedOf(c).spec),
+          );
+      }
+      if (pool.length > 0) diagnostics.push(versionsDiagnostic(pool));
+
+      // The Vendor's own copy is preferred to a likelier third-party one.
+      const doubtful = candidates.filter((c) => c.probability >= t.doubt);
+      const allowed = doubtful.filter(
+        (c) =>
+          wanted(c) &&
+          !pool.some((p) => p.specId === c.specId) &&
+          (allowCommunity || c.provenance !== "Community"),
+      );
+      const pick =
+        best(allowed.filter((c) => c.provenance === "Official")) ??
+        best(allowed.filter((c) => c.provenance === "Endorsed")) ??
+        best(allowed);
+      if (pick) {
+        const [unconfirmed] = store(name, choice, [pick], candidates, false);
+        if (!unconfirmed) throw new Error("store returned no Spec");
+        const reasons: string[] = [];
+        if (pick.provenance === "Community")
+          reasons.push("only a Community Spec found");
+        else if (pick.provenance === "Mirror")
+          reasons.push("only a third-party copy found");
+        reasons.push(
+          `the Judge gave ${pick.probability.toFixed(2)} that the Spec at ${pick.url} describes ${choice.api.name}; Resolved needs ${t.describes} from an Official or Endorsed Source`,
+          `checked: ${checked.join("; ")}`,
+        );
+        return {
+          outcome: "Unconfirmed",
+          api: choice.api,
+          vendor: choice.vendor,
+          spec: unconfirmed.spec,
+          sources: unconfirmed.sources,
+          reasons,
+          verifiedAt: now().toISOString(),
+        };
+      }
+
+      // A Spec the Judge could not weigh may still exist: don't claim No Spec.
+      if (judgeFailed) return { outcome: "Unknown", name };
       return {
-        outcome: "Unconfirmed",
+        outcome: "NoSpec",
         api: choice.api,
         vendor: choice.vendor,
-        spec: stored.spec,
-        sources: stored.sources,
-        reasons,
-        verifiedAt: now().toISOString(),
+        communityAvailable: doubtful.some((c) => c.provenance === "Community"),
       };
     }
 
-    // A Spec the Judge could not weigh may still exist: don't claim No Spec.
-    if (judgeFailed) return { outcome: "Unknown", name };
-    return {
-      outcome: "NoSpec",
-      api: choice.api,
-      vendor: choice.vendor,
-      communityAvailable: doubtful.some((c) => c.provenance === "Community"),
-    };
+    /** What the pool had instead of what was asked for. */
+    function versionsDiagnostic(pool: SpecCandidate[]): string {
+      const found = pool
+        .map(
+          (c) =>
+            `${c.apiVersion ?? "no API Version"}${c.isPreview ? " (Preview)" : ""}`,
+        )
+        .join(", ");
+      return apiVersion === undefined
+        ? `only Preview Versions found: ${found}`
+        : `no Spec for API Version ${apiVersion}; found: ${found}`;
+    }
   }
 
   /**
-   * Stores the Vendor, API, Spec and every Source it was found at, and
-   * remembers the name. Only a Spec that answers Resolved is marked confirmed.
+   * Stores the Vendor, API, each Spec with its API Version, and every Source
+   * it was found at, and remembers the name; returns the Specs as stored, in
+   * order. Only Specs that could answer Resolved are marked confirmed.
    */
   function store(
     name: string,
     choice: ApiChoice,
-    pick: SpecCandidate,
+    picks: SpecCandidate[],
     all: SpecCandidate[],
     confirm: boolean,
-  ) {
+  ): StoredSpec[] {
+    if (picks.length === 0) return [];
     const at = now().toISOString();
     repo.upsertVendor(choice.vendor);
     repo.upsertApi(choice.api);
-    const spec = repo.putSpec(choice.api.id, pick.bytes, {
-      specVersion: pick.sniff.specVersion,
-      apiVersion: null,
-      format: pick.sniff.format,
+    const stored = picks.map((pick) => {
+      const spec = repo.putSpec(choice.api.id, pick.bytes, {
+        specVersion: pick.sniff.specVersion,
+        apiVersion: pick.apiVersion,
+        isPreview: pick.isPreview,
+        format: pick.sniff.format,
+      });
+      if (confirm) repo.confirmSpec(spec.id, at);
+      const sources = [pick, ...all.filter((c) => c !== pick)]
+        .filter((c) => c.specId === spec.id)
+        .map((c) => repo.addSource(spec.id, c.url, c.provenance, at));
+      return { spec, sources };
     });
-    if (confirm) repo.confirmSpec(spec.id, at);
-    const sources = [pick, ...all.filter((c) => c !== pick)]
-      .filter((c) => c.specId === spec.id)
-      .map((c) => repo.addSource(spec.id, c.url, c.provenance, at));
     repo.rememberName(name, choice.api.id);
-    return { spec, sources };
+    return stored;
   }
+
+  /**
+   * Marks Superseded each stored Spec of the API whose every Source was seen
+   * in this Lookup serving another Spec or none. A Source not fetched this
+   * time, or unreachable, may still serve it.
+   */
+  function supersedeUnserved(
+    apiId: string,
+    served: Map<string, string | null>,
+  ): void {
+    if (served.size === 0) return;
+    const stored = repo.getApiWithSpecs(apiId);
+    if (!stored) return;
+    const at = now().toISOString();
+    for (const { spec, sources } of stored.specs) {
+      if (spec.supersededAt !== null || sources.length === 0) continue;
+      const gone = sources.every(
+        (src) => served.has(src.url) && served.get(src.url) !== spec.id,
+      );
+      if (gone) repo.supersedeSpec(spec.id, at);
+    }
+  }
+}
+
+type StoredSpec = { spec: Spec; sources: Source[] };
+
+/**
+ * The other live, non-Preview API Versions beside a Spec the Caller chose by
+ * its API Version: the Current Spec and Alternates of the rest, less any of
+ * the chosen one's API Version.
+ */
+function otherVersions<T>(
+  chosen: T,
+  specs: T[],
+  versionOf: (spec: T) => ApiVersionOf,
+): T[] {
+  const picked = currentAndAlternates(
+    specs.filter(
+      (s) =>
+        s !== chosen &&
+        versionOf(s).apiVersion !== versionOf(chosen).apiVersion,
+    ),
+    versionOf,
+  );
+  return picked ? [picked.current, ...picked.alternates] : [];
+}
+
+/** The first candidate for each Spec id. */
+function uniqueSpecs(candidates: SpecCandidate[]): SpecCandidate[] {
+  const seen = new Set<string>();
+  return candidates.filter((c) => !seen.has(c.specId) && seen.add(c.specId));
+}
+
+/** Official first. */
+function tierRank(provenance: Provenance): number {
+  return PROVENANCE_TIERS.indexOf(provenance);
 }
 
 /**
@@ -822,7 +1010,8 @@ export function createLookup(deps: LookupDeps): Lookup {
 function resolved(
   api: Api,
   vendor: Vendor,
-  stored: { spec: Spec; sources: Source[] },
+  stored: StoredSpec,
+  alternateSpecs: Spec[] = [],
 ): Outcome {
   const provenance =
     bestProvenance(stored.sources.map((s) => s.provenance)) ?? "Official";
@@ -837,7 +1026,7 @@ function resolved(
     api,
     vendor,
     currentSpec: stored.spec,
-    alternateSpecs: [],
+    alternateSpecs,
     provenance,
     sources: stored.sources,
     validityIssues: [],
