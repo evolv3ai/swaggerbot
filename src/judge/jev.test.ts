@@ -13,6 +13,7 @@ import {
   JevJudge,
   SPEC_DESCRIBES_API_QUESTION,
   type SystemOneClient,
+  shortenFreeText,
   WHICH_API_QUESTION,
 } from "./jev";
 import { JudgeError } from "./judge";
@@ -61,6 +62,22 @@ const extract: SpecExtract = {
 function http(status: number) {
   return APIError.fromResponse(status, { error: "nope" }, new Headers());
 }
+
+/** The 403 Cloudflare's WAF answers with in front of TypeSafe. */
+function blockPage() {
+  return APIError.fromResponse(
+    403,
+    "<!DOCTYPE html><html><head><title>Attention Required! | Cloudflare</title></head><body>Sorry, you have been blocked</body></html>",
+    new Headers(),
+  );
+}
+
+/** Like the description of Cisco's PSIRT openVuln API on APIs.guru. */
+const ciscoDescription = [
+  "The Cisco PSIRT openVuln API is a RESTful API that allows customers to obtain Cisco security vulnerability information.",
+  "",
+  'curl -s -k -H "Content-Type: application/x-www-form-urlencoded" -X POST -d "client_id=abc" https://id.cisco.com/oauth2/default/v1/token',
+].join("\n");
 
 describe("JevJudge.whichApi", () => {
   it("asks one choice over the Candidates plus none and maps the answer", async () => {
@@ -368,5 +385,152 @@ describe("JevJudge errors", () => {
       .catch((e) => e);
     expect(err).toBeInstanceOf(JudgeError);
     expect(err.kind).toBe("bad-response");
+  });
+});
+
+describe("shortenFreeText", () => {
+  it("keeps a Cisco-like description's first paragraph only, without curl", () => {
+    expect(shortenFreeText(ciscoDescription)).toBe(
+      "The Cisco PSIRT openVuln API is a RESTful API that allows customers to obtain Cisco security vulnerability information.",
+    );
+  });
+
+  it("stops at a code fence and drops curl lines within the paragraph", () => {
+    expect(
+      shortenFreeText(
+        "Adyen Checkout API.\ncurl -U user:pass https://x.test\nUse it to pay.\n```\ncurl -H x\n```",
+      ),
+    ).toBe("Adyen Checkout API.\nUse it to pay.");
+  });
+
+  it("cuts to 300 characters and gives undefined when nothing is left", () => {
+    expect(shortenFreeText("y".repeat(1000))).toHaveLength(300);
+    expect(shortenFreeText('curl -H "Content-Type: x"\n\nmore')).toBe(
+      undefined,
+    );
+  });
+});
+
+describe("JevJudge on Cloudflare's block page", () => {
+  const cisco = {
+    id: "cisco.com/psirt-openvuln",
+    name: "PSIRT openVuln API",
+    vendor: "Cisco",
+    description: ciscoDescription,
+  };
+  const picked = {
+    answers: {
+      api: {
+        type: "choice",
+        choice: cisco.id,
+        confidence: 0.8,
+        probabilities: { [cisco.id]: 0.8, none: 0.2 },
+      },
+    },
+  } as const;
+  const expected = {
+    probabilities: { [cisco.id]: 0.8, none: 0.2 },
+    confidence: 0.8,
+  };
+  const candidateSent = (request: SystemOneRequest | undefined) => {
+    const api = request?.questions.api as
+      | { criteria: Record<string, unknown> }
+      | undefined;
+    return api?.criteria[cisco.id];
+  };
+
+  it("retries with shortened descriptions and answers", async () => {
+    const { client, requests } = stubClient(blockPage(), picked);
+    const result = await new JevJudge(client, { retryDelayMs: 0 }).whichApi(
+      "cisco",
+      [cisco],
+    );
+
+    expect(result).toEqual(expected);
+    expect(requests).toHaveLength(2);
+    expect(candidateSent(requests[0])).toEqual({
+      name: cisco.name,
+      vendor: "Cisco",
+      description: ciscoDescription,
+    });
+    expect(candidateSent(requests[1])).toEqual({
+      name: cisco.name,
+      vendor: "Cisco",
+      description: shortenFreeText(ciscoDescription),
+    });
+    expect(JSON.stringify(requests[1])).not.toContain("curl");
+  });
+
+  it("retries without descriptions when the shortened call is blocked too", async () => {
+    const { client, requests } = stubClient(blockPage(), blockPage(), picked);
+    const result = await new JevJudge(client, { retryDelayMs: 0 }).whichApi(
+      "cisco",
+      [cisco],
+    );
+
+    expect(result).toEqual(expected);
+    expect(requests).toHaveLength(3);
+    expect(candidateSent(requests[2])).toEqual({
+      name: cisco.name,
+      vendor: "Cisco",
+    });
+  });
+
+  it("throws a JudgeError naming the block after three blocked calls", async () => {
+    const last = blockPage();
+    const { client, requests } = stubClient(blockPage(), blockPage(), last);
+    const err = await new JevJudge(client, { retryDelayMs: 0 })
+      .whichApi("cisco", [cisco])
+      .catch((e) => e);
+
+    expect(err).toBeInstanceOf(JudgeError);
+    expect(err.kind).toBe("http");
+    expect(err.message).toBe(
+      "Jev returned HTTP 403 (Cloudflare block page; also with shortened and without descriptions)",
+    );
+    expect(err.cause).toBe(last);
+    expect(requests).toHaveLength(3);
+  });
+
+  it("does not retry a 403 whose body is not the block page", async () => {
+    const { client, requests } = stubClient(http(403));
+    const err = await new JevJudge(client, { retryDelayMs: 0 })
+      .whichApi("cisco", [cisco])
+      .catch((e) => e);
+
+    expect(err).toBeInstanceOf(JudgeError);
+    expect(err.message).toBe("Jev returned HTTP 403");
+    expect(requests).toHaveLength(1);
+  });
+
+  it("shortens and then omits link text, context and the extract's description", async () => {
+    const yes = { answers: { describes: { type: "noul", noul: 1 } } } as const;
+    const { client, requests } = stubClient(blockPage(), blockPage(), yes);
+    await new JevJudge(client, { retryDelayMs: 0 }).specDescribesApi(cisco, {
+      ...extract,
+      description: ciscoDescription,
+    });
+    const specs = requests.map(
+      (r) => (r.state as { spec: Partial<SpecExtract> }).spec,
+    );
+    expect(specs[1]?.description).toBe(shortenFreeText(ciscoDescription));
+    expect(specs[2]).not.toHaveProperty("description");
+    expect(specs[2]?.tags).toHaveLength(20);
+
+    const links = stubClient(blockPage(), blockPage(), {
+      answers: { link0: { type: "noul", noul: 0.9 } },
+    });
+    await new JevJudge(links.client, { retryDelayMs: 0 }).areSpecLinks(cisco, [
+      { url: "https://x.test/spec", text: "Spec", context: ciscoDescription },
+    ]);
+    const sent = links.requests.map(
+      (r) => (r.state as { links: unknown[] }).links[0],
+    );
+    expect(sent[1]).toEqual({
+      url: "https://x.test/spec",
+      text: "Spec",
+      context: shortenFreeText(ciscoDescription),
+    });
+    expect(sent[2]).toEqual({ url: "https://x.test/spec" });
   });
 });
