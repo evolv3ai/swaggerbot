@@ -6,6 +6,7 @@ import { createApisGuru } from "~/sources/apis-guru";
 import { crawlForSpecs } from "~/sources/crawl";
 import { createGitHubCodeSearch, createGitHubRepos } from "~/sources/github";
 import { createWebSearch } from "~/sources/web-search";
+import { createFormsWorker, type FormsWorker } from "~/spec-forms/worker";
 import { createLookup, type IndexedLookup, type Lookup } from "./lookup";
 import { DEFAULT_FRESHNESS_DAYS, SPEC_STEP_BUDGET_MS } from "./thresholds";
 import { createVerifier, type Verifier } from "./verify";
@@ -22,7 +23,8 @@ import { createVerifier, type Verifier } from "./verify";
  * the Spec step's parallel Sources stop after `SPEC_STEP_BUDGET_MS`
  * (default 9000, `Infinity` for none).
  * Used by `pnpm bench` and the scripts: it queues the Verifications of Stale
- * answers but starts no worker to run them (see `createApp`).
+ * answers but starts no worker to run them, and builds no Spec's forms
+ * (see `createApp`).
  */
 export function createAppLookup(env: NodeJS.ProcessEnv = process.env): Lookup {
   return buildAppLookup(env).lookup;
@@ -30,18 +32,22 @@ export function createAppLookup(env: NodeJS.ProcessEnv = process.env): Lookup {
 
 /**
  * The app as the server runs it: `createAppLookup`'s Lookup, the API keys
- * in the same Index, and the background Verification worker over the same
- * Lookup and Index, started. Used by `POST /api/lookup`.
+ * in the same Index, the background Verification worker over the same
+ * Lookup and Index, and the worker that builds each Spec's forms over the
+ * same Index and fetcher (ADR 0004), both started. Used by `POST /api/lookup`.
  */
 export function createApp(env: NodeJS.ProcessEnv = process.env): {
   lookup: IndexedLookup;
   keys: Keys;
   verifier: Verifier;
+  formsWorker: FormsWorker;
 } {
-  const { lookup, db, freshnessDays } = buildAppLookup(env);
+  const { lookup, db, fetcher, freshnessDays } = buildAppLookup(env);
   const verifier = createVerifier({ db, lookup, freshnessDays });
   verifier.start();
-  return { lookup, keys: createKeys(db), verifier };
+  const formsWorker = createFormsWorker({ db, fetcher, env });
+  formsWorker.start();
+  return { lookup, keys: createKeys(db), verifier, formsWorker };
 }
 
 /** `FRESHNESS_DAYS`, a positive number of days; unset, the default. */
@@ -93,5 +99,5 @@ function buildAppLookup(env: NodeJS.ProcessEnv) {
     freshnessDays,
     specStepBudgetMs: specStepBudgetMsOf(env),
   });
-  return { lookup, db, freshnessDays };
+  return { lookup, db, fetcher, freshnessDays };
 }
