@@ -36,7 +36,7 @@ The operator runbook for the live service ([Slice 3](slices/slice-3-backlog.md),
 
   **To restore for real:** stop the app in Coolify, then either delete the volume's `swaggerbot.db*` (the entrypoint restores when the database is missing and a replica exists), or restore into a new volume as in step 2 and mount it at `/app/data`. Then start the app, which replicates again.
   **Gotcha:** the app needs its API keys (`TYPESAFE_API_KEY` and the rest) even to serve Index answers, because `createApp` builds the Judge on the first request. Booted without them, every Lookup returns 500.
-- [ ] **O6. Load check**, after WTR-93: `scripts/loadcheck.ts https://swaggerbot.dev`. The numbers go in `docs/slices/slice-3-result.md`.
+- [x] **O6. Load check** (2026-09-23, image `b7c880b`): `set -a; . ./.env.local; set +a; pnpm tsx scripts/loadcheck.ts https://swaggerbot.dev --json` (the key comes from `LOADCHECK_KEY`). **Index p90 80 ms; Discovery p90 14.2 s, and 12.3 s on a second run.** Both pass. Details are in [`slices/slice-3-result.md`](slices/slice-3-result.md). A full run uses one quota unit per Benchmark entry (40).
 
 ## Gotchas
 
