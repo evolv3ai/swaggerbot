@@ -39,16 +39,18 @@ What it taught, and the issues must respect:
 
 ## Order
 
+Filed 2026-09-23 as WTR-104..111 (Backlog, `swaggerbot` only), with Linear "blocked by" relations mirroring this table.
+
 | # | Linear | Issue | Depends on | Wave |
 |---|---|---|---|---|
-| 1 | — | `src/spec-forms/`: build the Normalized Form, Validity Issues and Spec Outline with Scalar | — | 1 |
-| 2 | — | Store the forms: `spec_forms` table, background build worker, backfill | 1 | 2 |
-| 3 | — | The Outcome carries download URLs, the Normalized Form's status and real Validity Issues | 2 | 3 |
-| 4 | — | Download routes, and one shared app and per-IP gate for every route | 2 | 3 |
-| 5 | — | `get_spec_outline`: `GET /api/apis/{apiId}/outline` | 3, 4 | 4 |
-| 6 | — | `get_operation`: `GET /api/apis/{apiId}/operation` | 3, 4 | 4 |
-| 7 | — | `list_vendor_apis`: `GET /api/vendors/{vendor}/apis` | 3, 4 | 4 |
-| 8 | — | `scripts/formscheck.ts`: the acceptance check against a deployed URL | 5, 6, 7 | 5 |
+| 1 | WTR-104 | `src/spec-forms/`: build the Normalized Form, Validity Issues and Spec Outline with Scalar | — | 1 |
+| 2 | WTR-105 | Store the forms: `spec_forms` table, background build worker, backfill | 1 | 2 |
+| 3 | WTR-106 | The Outcome carries download URLs, the Normalized Form's status and real Validity Issues | 2 | 3 |
+| 4 | WTR-107 | Download routes, and one shared app and per-IP gate for every route | 2 | 3 |
+| 5 | WTR-108 | `get_spec_outline`: `GET /api/apis/{apiId}/outline` | 3, 4 | 4 |
+| 6 | WTR-109 | `get_operation`: `GET /api/apis/{apiId}/operation` | 3, 4 | 4 |
+| 7 | WTR-110 | `list_vendor_apis`: `GET /api/vendors/{vendor}/apis` | 3, 4 | 4 |
+| 8 | WTR-111 | `scripts/formscheck.ts`: the acceptance check against a deployed URL | 5, 6, 7 | 5 |
 
 #3 and #4 touch different files (`lookup.ts` and `outcome.ts`; routes and `src/server/`), so they run together. #5, #6 and #7 each add a route file, and TanStack's generated `src/routeTree.gen.ts` changes with each. That's a mechanical conflict, so wave 4 is merged one PR at a time, regenerating the route tree (`pnpm build`) on each rebase.
 
