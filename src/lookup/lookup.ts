@@ -116,7 +116,7 @@ export type LookupDeps = {
   github?: GitHubRepos;
   /**
    * GitHub code search for Spec files in the Vendor's org, then across
-   * GitHub. Absent (no `GITHUB_TOKEN`), the step is skipped.
+   * GitHub. Absent (no `GITHUB_SEARCH_TOKEN`), the step is skipped.
    */
   githubSearch?: GitHubCodeSearch;
   /**
@@ -135,11 +135,11 @@ const CRAWL_STEP_BUDGET_MS = 20_000;
 
 /** The diagnostic when GitHub code search answers `null`, which gives no reason. */
 const GITHUB_SEARCH_SKIPPED =
-  "GitHub code search: skipped (no GITHUB_TOKEN, rate-limited or failed)";
+  "GitHub code search: skipped (no GITHUB_SEARCH_TOKEN, rate-limited or failed)";
 
 /** The diagnostic when GitHub repo search answers `null`, which gives no reason. */
 const GITHUB_REPO_SEARCH_SKIPPED =
-  "GitHub repo search: skipped (no GITHUB_TOKEN, rate-limited or failed)";
+  "GitHub repo search: skipped (no GITHUB_SEARCH_TOKEN, rate-limited or failed)";
 
 /** The GitHub search step searches at most this many orgs verified by their website. */
 const MAX_VERIFIED_ORGS = 3;

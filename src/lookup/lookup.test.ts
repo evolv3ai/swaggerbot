@@ -2301,7 +2301,7 @@ describe("lookup with GitHub code search", () => {
     expect(
       outcome.diagnostics?.filter((d) => d.startsWith("GitHub code search")),
     ).toEqual([
-      "GitHub code search: skipped (no GITHUB_TOKEN, rate-limited or failed)",
+      "GitHub code search: skipped (no GITHUB_SEARCH_TOKEN, rate-limited or failed)",
     ]);
   });
 
@@ -2462,7 +2462,7 @@ describe("lookup with GitHub code search", () => {
       [null, "NoSpec API"],
     ]);
     expect(outcome.diagnostics).toContain(
-      "GitHub repo search: skipped (no GITHUB_TOKEN, rate-limited or failed)",
+      "GitHub repo search: skipped (no GITHUB_SEARCH_TOKEN, rate-limited or failed)",
     );
   });
 
@@ -2564,7 +2564,7 @@ describe("lookup with GitHub code search", () => {
         "GitHub org nospec: no such org (HTTP 422)",
       );
       expect(outcome.diagnostics ?? []).not.toContain(
-        "GitHub repo search: skipped (no GITHUB_TOKEN, rate-limited or failed)",
+        "GitHub repo search: skipped (no GITHUB_SEARCH_TOKEN, rate-limited or failed)",
       );
       expect(calls).toEqual([
         ["nospec", "NoSpec API"],
