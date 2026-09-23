@@ -1,19 +1,24 @@
 ---
-status: gate met on one run (FR 0/21, run 5), not yet on two; coverage 90.9%; round 3 merged (WTR-56, 64, 65, 79, 80, 81, 84), then WTR-85
+status: gate MET on two runs (FR 0/22 and 0/21, runs 6 and 7); coverage 100% and 90.9%; after round 3, WTR-85, WTR-86 and the token rename
 ---
 
 # Slice 2 result
 
 All thirteen planned issues are merged, plus WTR-54 and WTR-55 (filed mid-slice), WTR-57..62
-after the label review, and in round 3 **WTR-56, 64, 65, 79, 80, 81 and 84**. `main` =
-`5126aec`. Two live `pnpm bench` runs on that `main`, 2026-09-22, finished ~20:55 and ~20:59, fresh
-Index each:
+after the label review, in round 3 **WTR-56, 64, 65, 79, 80, 81 and 84**, then **WTR-85**
+(Benchmark trace), **WTR-86** (crawl retry and failure reporting) and #46
+(`GITHUB_SEARCH_TOKEN`). `main` = `8cbd7be`. **The precision gate is met:** two live
+`pnpm bench` runs on the WTR-86 PR merged with `a805578` (code identical to `8cbd7be`),
+2026-09-22, started 21:46 and 21:50, fresh Index each, **FR 0/22 and 0/21**.
 
-| | Slice 1 accepted | Slice 2 before review | After review | After WTR-57..62 | **After round 3** | Slice 2 target |
-|---|---|---|---|---|---|---|
-| False Resolution | 0.0% (0/9) | 33.3% (6/18) | 21.1% (4/19) | 15.0% (3/20), 10.0% (2/20) | **4.5% (1/22), 4.8% (1/21)** | < 2% |
-| Long-tail coverage | 27.3% | 45.5% | 63.6% | 72.7% | **90.9%** (both runs) | 60% |
-| Outcome accuracy | — | 72.5% | 75.0% | 77.5% | **85.0%, 80.0%** | — |
+| | Slice 1 accepted | Slice 2 before review | After review | After WTR-57..62 | After round 3 | **After WTR-86 (runs 6, 7)** | Slice 2 target |
+|---|---|---|---|---|---|---|---|
+| False Resolution | 0.0% (0/9) | 33.3% (6/18) | 21.1% (4/19) | 15.0% (3/20), 10.0% (2/20) | 4.5% (1/22), 4.8% (1/21) | **0.0% (0/22), 0.0% (0/21)** | < 2% |
+| Long-tail coverage | 27.3% | 45.5% | 63.6% | 72.7% | 90.9% (both runs) | **100%, 90.9%** | 60% |
+| Outcome accuracy | — | 72.5% | 75.0% | 77.5% | 85.0%, 80.0% | **85.0%, 82.5%** | — |
+
+The round-3 columns below (runs 3 and 4) are kept for the record; the Loops label is now
+accepted, and the Box and Render failures they list didn't recur in runs 5–7.
 
 | group | entries | correct (run 3 / 4) | resolved | false (run 3 / 4) |
 |---|---|---|---|---|
@@ -35,6 +40,27 @@ WTR-85 proposes the Benchmark trace needed to catch it.
 
 The GitHub → GHEC false resolution (WTR-65) is gone: 4 of 4 Benchmark runs and 3 of 3
 live Lookups answer `api.github.com.json`.
+
+## Runs 6 and 7: the gate (2026-09-22, ~21:46–21:54)
+
+**WTR-86** (#47, `8cbd7be`): the crawl retries a chosen Spec's fetch once on HTTP 429, a
+5xx or a timeout. It waits for `Retry-After` or 1 s, and only within the crawl's budget.
+Candidates and Vendor API pages it still can't fetch now always appear in `diagnostics`
+as `crawl fetch failed: <url> (<reason>)`. #46 renamed the app's token to
+`GITHUB_SEARCH_TOKEN` (`GITHUB_TOKEN` is still read), because weawr and `gh` took the
+read-only token in `.env` as their own.
+
+- **Both runs: 0 false resolutions.** Box answered 2024.0 (187 paths) in both, Render was
+  Resolved in both, and Mailchimp was Ambiguous in both.
+- **No `fetch failed` line appeared in either run**, so no 429 happened and the retry
+  wasn't exercised. Render resolving twice means the failure didn't recur, not that the
+  retry has been proven live (its unit tests cover it). If it recurs, the diagnostics
+  will now name it.
+- **Loops, run 7: Ambiguous.** The Judge scored `loops.so/api` at 0.69, against
+  `apiPick` 0.7. That's noise at the threshold, and it costs coverage, not precision.
+  Not tuned.
+- Remaining misses in both runs: Slack (accepted miss), Atlassian and Cisco (Unknown),
+  Zoho and Intuit (NoSpec), Steam (Ambiguous, negative).
 
 ## Run 5 and the Render diagnosis (2026-09-22, ~21:40)
 
@@ -125,8 +151,7 @@ Cisco 0.56 for single Candidates) wants Ambiguous, which a lower `apiPick` would
 1. ~~Wes: accept Loops' `openapi.yaml`; decide WTR-83~~ Done 2026-09-22: Loops accepted,
    Slack stays a coverage miss.
 2. ~~Queue WTR-85~~ merged. Render caught (a 429 dropped without a trace); Box not caught yet.
-3. Wes: queue WTR-86. Then two `pnpm bench` runs. A failed Box fetch would now show in
-   `diagnostics`, so a Box miss is either fixed by the retry or named by it.
+3. ~~Queue WTR-86, then bench twice~~ Done: runs 6 and 7, FR 0/22 and 0/21. **Gate met.**
 4. Later: Atlassian, Cisco (single-Candidate umbrella names), Zoho, Intuit (crawl finds
    nothing), Steam (one Vendor across two domains).
 
