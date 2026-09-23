@@ -132,3 +132,17 @@ export const apiKeyUsage = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.keyId, t.day] })],
 );
+
+/** The background Verification queue (ADR 0002): one row per name. */
+export const verifications = sqliteTable("verifications", {
+  /** A name as `normalizeName` leaves it. */
+  nameNormalized: text("name_normalized").primaryKey(),
+  requestedAt: text("requested_at").notNull().default(now),
+  /** When the worker took it; null while it waits. */
+  startedAt: text("started_at"),
+  /** When it last finished, or gave up; null while it waits or runs. */
+  finishedAt: text("finished_at"),
+  /** Failed runs since it was queued. */
+  attempts: integer("attempts").notNull().default(0),
+  lastError: text("last_error"),
+});

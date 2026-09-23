@@ -13,10 +13,10 @@ const dir = mkdtempSync(join(tmpdir(), "swaggerbot-route-"));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
 // The route's real dependencies, faked: an empty APIs.guru, no web search.
-const createAppLookup = vi.hoisted(() => vi.fn());
-vi.mock("~/lookup/app", () => ({ createAppLookup }));
-createAppLookup.mockImplementation(() =>
-  createLookup({
+const createApp = vi.hoisted(() => vi.fn());
+vi.mock("~/lookup/app", () => ({ createApp }));
+createApp.mockImplementation(() => ({
+  lookup: createLookup({
     db: openDb(join(dir, "index.db")),
     judge: new FakeJudge(),
     apisGuru: {
@@ -26,7 +26,7 @@ createAppLookup.mockImplementation(() =>
     webSearch: null,
     fetcher: createFetcher(),
   }),
-);
+}));
 
 async function post(body: string): Promise<Response> {
   const handlers = Route.options.server?.handlers;
@@ -54,7 +54,7 @@ describe("POST /api/lookup", () => {
     expect(response.status).toBe(400);
     const json = await response.json();
     expect(json.issues.length).toBeGreaterThan(0);
-    expect(createAppLookup).not.toHaveBeenCalled();
+    expect(createApp).not.toHaveBeenCalled();
   });
 
   it("answers 400 for a body that isn't JSON", async () => {
@@ -79,7 +79,7 @@ describe("POST /api/lookup", () => {
 
   it("passes allowCommunity through to the Lookup", async () => {
     const lookup = vi.fn(async () => ({ outcome: "Unknown", name: "fans" }));
-    createAppLookup.mockImplementationOnce(() => lookup);
+    createApp.mockImplementationOnce(() => ({ lookup }));
     vi.resetModules();
     const { Route: fresh } = await import("./lookup");
     const handlers = fresh.options.server?.handlers;

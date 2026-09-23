@@ -54,11 +54,14 @@ import { findPortalCandidates, type PortalCandidate } from "~/sources/portal";
 import type { WebSearch } from "~/sources/web-search";
 import { crawledNamesCovered } from "./coverage";
 import {
+  DEFAULT_FRESHNESS_DAYS,
   DEFAULT_THRESHOLDS,
+  freshnessMs,
   PARTIAL_SPEC_RATIO,
   type Thresholds,
 } from "./thresholds";
 import { stepTimer, type Timed } from "./timings";
+import { enqueueVerification } from "./verify";
 
 export type LookupRequest = {
   name: string;
@@ -74,13 +77,23 @@ export type LookupRequest = {
    */
   allowCommunity?: boolean;
   /**
-   * Accepted and ignored in Slice 1: there is no Verification yet (Slice 3),
-   * so an answer from the Index is returned as stored.
+   * Demands a fresh Verification: the Lookup skips the Index and answers
+   * from Discovery, which moves `verifiedAt`. Off (the default), an answer
+   * from the Index is returned as stored, even when Stale.
    */
   fresh?: boolean;
 };
 
-export type Lookup = (request: LookupRequest) => Promise<Outcome>;
+/** How the app runs a Lookup; never set by a Caller. */
+export type LookupOptions = {
+  /** Skips step 1, the Index: a Verification of the name. */
+  skipIndex?: boolean;
+};
+
+export type Lookup = (
+  request: LookupRequest,
+  options?: LookupOptions,
+) => Promise<Outcome>;
 
 export type LookupDeps = {
   db: Db;
@@ -91,6 +104,12 @@ export type LookupDeps = {
   fetcher: Fetcher;
   thresholds?: Partial<Thresholds>;
   now?: () => Date;
+  /**
+   * The freshness window: an answer from the Index verified longer ago is
+   * Stale and queues a background Verification. Defaults to
+   * `DEFAULT_FRESHNESS_DAYS`.
+   */
+  freshnessDays?: number;
   /**
    * Checks a Vendor's domain for Specs at well-known paths. Defaults to
    * `probeKnownPaths` over https; tests point it at a fixture server.
@@ -203,7 +222,9 @@ type SpecCandidate = ApiVersionOf & {
  * The Lookup pipeline: turns a name into an Outcome. The Source chain runs in
  * order and stops once the Outcome is settled:
  *
- * 1. the Index, for a name already resolved;
+ * 1. the Index, for a name already resolved, unless `fresh` or `skipIndex`
+ *    (a Verification). A Stale answer is returned at once and queues a
+ *    background Verification of the name;
  * 2. APIs.guru Candidates, judged by `whichApi`;
  * 3. Developer Portal Candidates from web search, one per Vendor after
  *    following redirects, judged with step 2's;
@@ -229,6 +250,7 @@ export function createLookup(deps: LookupDeps): Lookup {
   const repo = createRepo(deps.db);
   const t: Thresholds = { ...DEFAULT_THRESHOLDS, ...deps.thresholds };
   const now = deps.now ?? (() => new Date());
+  const freshnessDays = deps.freshnessDays ?? DEFAULT_FRESHNESS_DAYS;
   const probe =
     deps.probe ??
     ((domain: string, opts: ProbeOptions) =>
@@ -242,7 +264,10 @@ export function createLookup(deps: LookupDeps): Lookup {
     ((opts: { startUrl: string; vendor: VendorRef }) =>
       crawlForVendorApis({ ...opts, fetcher, judge }));
 
-  return async function lookup({ name, apiVersion, allowCommunity = false }) {
+  return async function lookup(
+    { name, apiVersion, allowCommunity = false, fresh = false },
+    { skipIndex = false } = {},
+  ) {
     const diagnostics: string[] = [];
     const { timed, timings } = stepTimer();
     const finish = (outcome: Outcome): Outcome => ({
@@ -252,10 +277,15 @@ export function createLookup(deps: LookupDeps): Lookup {
     });
 
     // 1. The Index.
-    const indexed = await timed("Index", () =>
-      answerFromIndex(name, allowCommunity, apiVersion),
-    );
-    if (indexed) return finish(indexed);
+    if (!fresh && !skipIndex) {
+      const indexed = await timed("Index", () =>
+        answerFromIndex(name, allowCommunity, apiVersion),
+      );
+      if (indexed) {
+        if (isStale(indexed)) queueVerification(name, diagnostics);
+        return finish(indexed);
+      }
+    }
 
     // 2. APIs.guru.
     let guru: ApiChoice[] = [];
@@ -479,6 +509,25 @@ export function createLookup(deps: LookupDeps): Lookup {
       picked.current,
       picked.alternates.map((s) => s.spec),
     );
+  }
+
+  /** Verified longer ago than the freshness window, or never. */
+  function isStale(outcome: Outcome): boolean {
+    if (!("verifiedAt" in outcome)) return false;
+    const verifiedAt = Date.parse(outcome.verifiedAt);
+    return (
+      Number.isNaN(verifiedAt) ||
+      now().getTime() - verifiedAt > freshnessMs(freshnessDays)
+    );
+  }
+
+  /** Queues a background Verification; a failure is only diagnosed. */
+  function queueVerification(name: string, diagnostics: string[]): void {
+    try {
+      enqueueVerification(deps.db, name, now(), freshnessDays);
+    } catch (error) {
+      diagnostics.push(`Verification: not queued: ${message(error)}`);
+    }
   }
 
   async function whichApi(

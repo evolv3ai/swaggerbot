@@ -47,3 +47,15 @@ export const DEFAULT_THRESHOLDS: Thresholds = {
  * Alternate.
  */
 export const PARTIAL_SPEC_RATIO = 0.5;
+
+/**
+ * The freshness window, in days (`FRESHNESS_DAYS`): an answer from the Index
+ * whose `verifiedAt` is older is Stale, and a name whose last Verification
+ * finished within it is not queued again. The PRD's starting assumption.
+ */
+export const DEFAULT_FRESHNESS_DAYS = 7;
+
+/** The freshness window in milliseconds. */
+export function freshnessMs(days: number): number {
+  return days * 24 * 60 * 60 * 1000;
+}
