@@ -1,5 +1,5 @@
 ---
-status: gate not met (FR 1/22 and 1/21); coverage 90.9%; round 3 merged (WTR-56, 64, 65, 79, 80, 81, 84)
+status: gate met on one run (FR 0/21, run 5), not yet on two; coverage 90.9%; round 3 merged (WTR-56, 64, 65, 79, 80, 81, 84), then WTR-85
 ---
 
 # Slice 2 result
@@ -35,6 +35,34 @@ WTR-85 proposes the Benchmark trace needed to catch it.
 
 The GitHub → GHEC false resolution (WTR-65) is gone: 4 of 4 Benchmark runs and 3 of 3
 live Lookups answer `api.github.com.json`.
+
+## Run 5 and the Render diagnosis (2026-09-22, ~21:40)
+
+Wes accepted Loops' `openapi.yaml` (`b1c5e8b`) and chose option 1 for Slack (WTR-83):
+it stays a coverage miss. **WTR-85** (#45, `628db37`) is merged. `pnpm bench --json` now
+keeps every entry's Outcome under `answers[]`, and it sets `LOOKUP_TRACE=1`, so each Spec
+step lists what it checked and each Spec's pool position, API Version, path count and
+Judge score.
+
+**Run 5** (PR head merged with `b1c5e8b`, code identical to `628db37`, fresh Index):
+**False Resolution 0/21 (0%)**, long-tail coverage 90.9%, accuracy 80.0%. Box was right
+this time: its pool held 2024.0 (187 paths, Judge 0.97) first and 2025.0 (24 paths)
+second. The failures were Slack (accepted miss), Render and Mailchimp (NoSpec), Atlassian and Cisco
+(Unknown), Zoho and Intuit (NoSpec), and Steam (Ambiguous). One run meets the gate. It
+needs a second, and the Box defect below isn't fixed.
+
+**Render, diagnosed.** Five solo Lookups, each on a fresh Index, logged the crawl's
+fetches and Judge calls. Four were Resolved. In the fifth, the Judge took
+`api-docs.render.com/openapi/render-public-api-1.json` at 0.92, and **the fetch got HTTP
+429 after 95 ms** (Render's Cloudflare edge; it was our only request to that host, and
+`curl` gets 200s back to back). `fetchSpec` in `src/sources/crawl.ts` returns `null` on any
+fetch error without recording it, so the Lookup reported `crawl from … (0 found)` and
+answered NoSpec. That matches the Benchmark failure line for line. Nothing in `src/`
+handles 429 or `Retry-After`. **Box's** intermittent 2025.0 answer fits the same pattern:
+its Specs come only from the crawl, so a failed fetch of the 187-path file would leave
+2025.0 on top with no trace of why. That failure hasn't been caught yet. Filed: **WTR-86** (retry a
+Spec fetch once on 429/5xx/timeout; report failed fetches in `diagnostics`), in Backlog
+awaiting approval.
 
 ## Round 3 (2026-09-22 evening)
 
@@ -81,9 +109,8 @@ Agent cost this round about $10.50 (65 $1.14, 79 $0.79, 80 $0.55, 64 $2.09, 84 $
 - **Slack Web API** (Unconfirmed, both): its Spec is linked from no live page. WTR-83:
   Wes chose option 1 (2026-09-22): keep the label and accept it as a coverage miss.
   Unconfirmed is not a False Resolution, so it doesn't touch the gate.
-- **Render API** (NoSpec, run 4): intermittent. The crawl finds the label from
-  `render.com/docs/api` in every traced Lookup (10 of 10), but plain ones answer NoSpec
-  about half the time; not explained yet. WTR-85's trace would show which step differs.
+- **Render API** (NoSpec, runs 4 and 5): intermittent. **Cause found:** an HTTP 429 on the
+  Spec fetch, dropped by the crawl without a trace (see "Run 5"). WTR-86.
 - **Mailchimp** (NoSpec, run 4 only): intermittent; the crawl found fewer than two APIs.
 - **Atlassian** (Unknown): its only APIs.guru Candidate is Jira (0.51), below `apiPick`.
 - **Cisco** (Unknown): the 403 is fixed; its only Candidate, PSIRT openVuln, is at 0.56.
@@ -97,8 +124,9 @@ Cisco 0.56 for single Candidates) wants Ambiguous, which a lower `apiPick` would
 
 1. ~~Wes: accept Loops' `openapi.yaml`; decide WTR-83~~ Done 2026-09-22: Loops accepted,
    Slack stays a coverage miss.
-2. Queue WTR-85 (Benchmark trace), then catch Box and Render failing with it.
-3. Then two more `pnpm bench` runs; with Loops accepted and Box fixed, the gate is met.
+2. ~~Queue WTR-85~~ merged. Render caught (a 429 dropped without a trace); Box not caught yet.
+3. Wes: queue WTR-86. Then two `pnpm bench` runs. A failed Box fetch would now show in
+   `diagnostics`, so a Box miss is either fixed by the retry or named by it.
 4. Later: Atlassian, Cisco (single-Candidate umbrella names), Zoho, Intuit (crawl finds
    nothing), Steam (one Vendor across two domains).
 
