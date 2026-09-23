@@ -2,7 +2,7 @@
 
 **Acceptance** ([PRD](../PRD.md#slice-3--live-service)): in production, answers from the Index hit p90 < 200 ms, Discovery hits p90 < 15 s, and a restore from the backup has been done. Precision must hold: False Resolution < 2%.
 
-**All three conditions are met (2026-09-23). Wes has not yet accepted the slice.**
+**All three conditions are met. Slice 3 ACCEPTED by Wes, 2026-09-23.**
 
 | Condition | Target | Measured in production | |
 |---|---|---|---|
