@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { indexLabel, parseBenchArgs, withIndex } from "./cli";
+import { indexLabel, latencyLine, parseBenchArgs, withIndex } from "./cli";
 import { score } from "./score";
 
 describe("parseBenchArgs", () => {
@@ -12,9 +12,29 @@ describe("parseBenchArgs", () => {
         search: undefined,
         index: undefined,
         keepIndex: false,
+        concurrency: 4,
       },
     });
   });
+
+  it("reads --concurrency", () => {
+    const parsed = parseBenchArgs(["--concurrency", "2"]);
+    expect(parsed.ok && parsed.options.concurrency).toBe(2);
+    expect(parseBenchArgs(["--concurrency=1"])).toMatchObject({
+      ok: true,
+      options: { concurrency: 1 },
+    });
+  });
+
+  it.each([["0"], ["x"], ["-1"], ["1.5"], [""]])(
+    "rejects --concurrency %j, exit 2",
+    (value) => {
+      expect(parseBenchArgs(["--concurrency", value])).toMatchObject({
+        ok: false,
+        exitCode: 2,
+      });
+    },
+  );
 
   it("reads --index and --keep-index", () => {
     const withPath = parseBenchArgs(["--index", "/tmp/a.db", "--json"]);
@@ -58,6 +78,21 @@ describe("the Index in the report", () => {
     expect(
       withIndex(report, { path: "data/a.db", fresh: false, kept: true }),
     ).toMatchObject({ indexPath: "data/a.db", indexFresh: false });
+  });
+
+  it("prints latency in seconds, saying when answers came from the Index", () => {
+    const timed = {
+      ...report,
+      latency: { count: 40, p50: 9800, p90: 31_234, max: 57_500 },
+    };
+    const fresh = { path: "/t/index.db", fresh: true, kept: false };
+    expect(latencyLine(withIndex(timed, fresh))).toBe(
+      "Latency (Discovery): p50 9.8 s · p90 31.2 s · max 57.5 s (n=40)",
+    );
+    const given = { path: "data/a.db", fresh: false, kept: true };
+    expect(latencyLine(withIndex(timed, given))).toBe(
+      "Latency (Discovery and Index): p50 9.8 s · p90 31.2 s · max 57.5 s (n=40)",
+    );
   });
 
   it("names the Index in the header", () => {

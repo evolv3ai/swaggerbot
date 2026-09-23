@@ -9,25 +9,31 @@ The operator runbook for the live service ([Slice 3](slices/slice-3-backlog.md),
 | Coolify | `https://coolify.8gnc.com` (v4.3.23), on the Contabo server `cbo-01-217-110` (`217.216.90.110`, SSH alias `cbo-01-217-110`, user `admin` with sudo) |
 | CLI access | `coolify --context 8gnc …`. The API token is `claude-swaggerbot` (abilities read, write, deploy), stored only in `~/.config/coolify/config.json` on WOPR3's WSL. Revoke it in Coolify under Keys & Tokens. |
 | Project | `swaggerbot` (`sk3lxvcsepxflz8srxm1vzm6`), environment `production` |
-| Application | `swaggerbot` (`z1hr4xe7sa8ni5s5zbryey6y`), public repo `evolv3ai/swaggerbot`, branch `main`, Dockerfile build pack, port 3000, health check `/api/health`, memory limit 2 GB, domain `https://swaggerbot.dev` |
+| Application | `swaggerbot` (`z1hr4xe7sa8ni5s5zbryey6y`), public repo `evolv3ai/swaggerbot`, branch `main`, Dockerfile build pack, port 3000, memory limit 2 GB, domain `https://swaggerbot.dev`. **Coolify's health check is off**: Coolify probes with curl or wget inside the container, and the image has neither. The image's own `HEALTHCHECK` (node `fetch` of `/api/health`) is what Docker reports. |
 | Volume | `z1hr4xe7sa8ni5s5zbryey6y-swaggerbot-data` mounted at `/app/data` (a local named volume; SQLite must not sit on a network filesystem) |
 | Backup | B2 bucket `swaggerbot-litestream` (private, account endpoint `s3.us-east-005.backblazeb2.com`). A lifecycle rule deletes hidden file versions after 1 day, so Litestream's own retention decides what is kept. Replica path `swaggerbot`. |
 | B2 key | application key `swaggerbot-litestream`, restricted to that bucket (listBuckets, listFiles, readFiles, writeFiles, deleteFiles). Its secret exists only in Coolify's env vars. |
-| DNS | `swaggerbot.dev` at Namecheap (BasicDNS). |
+| DNS | `swaggerbot.dev` is registered at Namecheap, with nameservers moved to Cloudflare (`ashley`/`kyle.ns.cloudflare.com`) and proxied. Cloudflare's SSL mode must be **Full or Full (strict)**: Flexible would loop against Traefik's HTTPS redirect. |
 
-**Environment variables set in Coolify** (values in Coolify only): `LITESTREAM_BUCKET`, `LITESTREAM_PATH`, `LITESTREAM_ENDPOINT` (the full `https://` URL), `LITESTREAM_ACCESS_KEY_ID`, `LITESTREAM_SECRET_ACCESS_KEY`, `TYPESAFE_API_KEY`, `BRAVE_API_KEY`, `TAVILY_API_KEY` and `GITHUB_SEARCH_TOKEN`. The app keys were copied from the repo's local `.env` and `.env.local`. `DATABASE_PATH` comes from the Dockerfile (`/app/data/swaggerbot.db`). Coolify keeps a preview copy of each variable; preview deployments are off.
+**Environment variables set in Coolify** (values in Coolify only): `LITESTREAM_BUCKET`, `LITESTREAM_PATH`, `LITESTREAM_ENDPOINT` (the full `https://` URL), `LITESTREAM_ACCESS_KEY_ID`, `LITESTREAM_SECRET_ACCESS_KEY`, `TYPESAFE_API_KEY`, `BRAVE_API_KEY`, `TAVILY_API_KEY`, `GITHUB_SEARCH_TOKEN` and `CLIENT_IP_HEADER=cf-connecting-ip` (the proxy is Cloudflare; read once WTR-92 lands). The app keys were copied from the repo's local `.env` and `.env.local`. `DATABASE_PATH` comes from the Dockerfile (`/app/data/swaggerbot.db`). Coolify keeps a preview copy of each variable; preview deployments are off.
 
 ## Steps
 
 - [x] **O1. B2 bucket and key** (2026-09-23). `b2 bucket create --default-server-side-encryption SSE-B2 --lifecycle-rule '{"daysFromHidingToDeleting":1,…}' swaggerbot-litestream allPrivate`, then `b2 key create --bucket swaggerbot-litestream swaggerbot-litestream listBuckets,listFiles,readFiles,writeFiles,deleteFiles`. The key went straight into Coolify without being printed.
 - [x] **O2. Coolify app** (2026-09-23): project, app, volume and env vars as above, through the Coolify API. It is **not deployed**: there is no Dockerfile until WTR-89 merges.
-- [ ] **O3. DNS.** At Namecheap: `A @ → 217.216.90.110`. Coolify's Traefik takes 80/443 on that server directly (ufw allows both) and gets a Let's Encrypt certificate once the name resolves. There's no Cloudflare tunnel for this domain.
-- [ ] **O4. First deploy**, after WTR-89: `coolify deploy uuid z1hr4xe7sa8ni5s5zbryey6y --context 8gnc`. Check `https://swaggerbot.dev/api/health`, and that the Litestream generation appears in the bucket (`b2 ls b2://swaggerbot-litestream/swaggerbot/`). Issue a key for the load check with `scripts/keys.ts` inside the container, after WTR-90.
+- [x] **O3. DNS** (Wes, 2026-09-23). The domain is on Cloudflare, proxied to the origin `217.216.90.110`, where Coolify's Traefik takes 80/443 (ufw allows both). There's no tunnel.
+- [x] **O4. First deploy** (2026-09-23, `f832ba6`). Deploy with `POST /api/v1/deploy?uuid=z1hr4xe7sa8ni5s5zbryey6y`; the GET form is gone. The first attempt was rolled back by Coolify's curl-based health check (see Application above). Once that was off, `https://swaggerbot.dev/api/health` answered 200, Docker reports the container healthy, `.ltx` files appear under `b2://swaggerbot-litestream/swaggerbot/`, and a live Lookup of Stripe resolved (7.5 s Discovery; 0.44 s from the Index, end to end through Cloudflare).
+  - **Before the image was merged**, it was built on the server from the PR branch and a restore was tried against real B2 under a throwaway path `verify-49`. A row written in one container came back in a fresh container on an empty volume. The path was deleted afterwards. That is a smoke test, not O5.
+  - **Still to do after WTR-90:** issue a key for the load check with `scripts/keys.ts` inside the container.
+  - **Until WTR-92 merges, Discovery is open to anyone** who finds the URL, and it spends the Jev and search keys.
 - [ ] **O5. Restore rehearsal.** Restore the replica into a scratch path, compare row counts and a Lookup against the live database, then restore into a fresh volume and boot the app from it.
 - [ ] **O6. Load check**, after WTR-93: `scripts/loadcheck.ts https://swaggerbot.dev`. The numbers go in `docs/slices/slice-3-result.md`.
 
 ## Gotchas
 
+- Coolify's application health check runs `curl`/`wget` **inside** the container. An image without them is rolled back as unhealthy, even when its own Docker `HEALTHCHECK` passes.
+- A deploy log can't be read with a token lacking `read:sensitive`. Read it on the server instead: `docker exec coolify php artisan tinker` → `ApplicationDeploymentQueue::where('deployment_uuid', …)->first()->logs`.
+- Env values come back redacted without `read:sensitive`. To use them on the server, have tinker write them to a root-only file and shred it afterwards; they never need to leave the box.
 - Cloudflare in front of `coolify.8gnc.com` rejects Python's default `urllib` User-Agent with **error 1010**. Send a normal User-Agent (curl's works) when scripting the API.
 - The Coolify API rejects a project description containing `:` (422). It allows only letters, digits, spaces and `- _ . , ! ? ( ) ' " + = * / @ &`.
 - The `coolify` CLI's `app get --format json` printed nothing here. Use the REST API (`/api/v1/applications/<uuid>`) to read an app back.

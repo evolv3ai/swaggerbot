@@ -39,6 +39,26 @@ Filed 2026-09-22 as WTR-88..93 (Backlog, `swaggerbot` only), with Linear "blocke
 
 **#7 is not filed yet.** Once #1 merges, run `pnpm bench --json --concurrency 1` live and see where the seconds go. Then file one issue for each change the numbers justify (running steps concurrently, tighter budgets, skipping a step once an earlier one has settled). Each must keep False Resolution < 2%.
 
+### Where Discovery's time goes (measured 2026-09-23, WTR-88's branch)
+
+`pnpm bench --json --concurrency 1`, fresh Index, 40 entries: **p50 19.4 s, p90 46.3 s, max 59.9 s.** False Resolution was 1/21 (Box's `box-openapi-v2025.0.json`, the intermittent miss known since Slice 2 round 3; WTR-88 only adds timers). Long-tail coverage was 90.9%.
+
+Seconds summed over the run, by step: known paths 431 s (22 Lookups, mean 19.6 s), Developer Portal crawl 197 s (14, mean 14.1 s), Developer Portal search 99 s (26, mean 3.8 s), GitHub code search 69 s (10, mean 6.9 s). Everything else together is under 55 s. Judge calls average 0.2–0.3 s.
+
+- **The known-path probe takes 15–25 s even when it finds the Spec.** It probes the 11 host prefixes in parallel, but each host walks all 15 paths at the fetcher's 1 s per-host spacing (about 16 s), and it doesn't stop on a hit. WTR-42 chose that deliberately: an old copy on `docs.` may answer before the current Spec on another host. Neon took 14.8 s, Loops 16.8 s and Val Town 16.3 s. Replicate, Cloudflare and Supabase hit the 25 s cap with the Spec already found. Of the 14 Resolved answers that reached this stage, the probe settled 8, the crawl 4 and GitHub code search 2.
+- **The Spec sources run one after another.** Known paths, then the crawl, then GitHub, each only if nothing is settled yet. So NoSpec answers pay for all three: Render 56 s, Codeberg 54 s, Zoho 46 s, Dropbox 43 s, Reddit 40 s.
+- **Developer Portal search spends 1–7 s before any of that.** So to meet p90 < 15 s, the Spec step has roughly 8–10 s for most names.
+
+### Speed-up options (for Wes to choose; each must keep False Resolution < 2%)
+
+- **7a. Stop the probe early, breadth-first.** Try the likeliest paths (`/openapi.json`, `/openapi.yaml`, `/swagger.json`) on every host first. Once any host yields a Spec, give the other hosts a short grace period (for example 3 s) to finish those likeliest paths, then stop. That keeps the "stale copy on `docs.`" guard for the common paths, and should bring the 8 probe wins from 15–25 s down to about 3–6 s.
+- **7b. Run the three Spec sources at the same time**, then weigh their hits in today's order (known paths, then crawl, then GitHub), so the precedence and precision rules don't change. The wall time becomes the slowest of the three instead of their sum.
+- **7c. A deadline for the whole Spec step** (for example 9 s), answering from what has been found by then. This is what bounds NoSpec answers. It costs coverage wherever a Spec is only found late: Mux's crawl took 16 s, and Fly.io's 20 s.
+- **7d. Less politeness spacing for known-path probes only** (for example 250 ms instead of 1 s). The PRD asks for a rate limit per host, not a number. This is the bluntest lever.
+
+7a and 7b don't trade anything away. 7c is the only one that bounds the worst case, and it's the one that costs coverage. A rough estimate: 7a and 7b together bring p50 under 10 s but leave the p90 around 20–25 s, because of the NoSpec names. Reaching p90 < 15 s very likely needs 7c too.
+
+
 ## Operator steps (not factory issues)
 
 These are done by hand with Wes's OK, following `docs/deploy.md`, which is written as they're done:

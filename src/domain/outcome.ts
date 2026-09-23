@@ -8,6 +8,13 @@ import { Provenance } from "./provenance";
  */
 const diagnostics = z.array(z.string().min(1)).optional();
 
+/**
+ * Diagnostic: how long each step of the Lookup took, in milliseconds,
+ * rounded, by step name. Present only when the Lookup is traced
+ * (`LOOKUP_TRACE=1`); a Caller must not rely on it.
+ */
+const timings = z.record(z.string(), z.number().int().nonnegative()).optional();
+
 export const Resolved = z.object({
   outcome: z.literal("Resolved"),
   api: Api,
@@ -20,6 +27,7 @@ export const Resolved = z.object({
   validityIssues: z.array(z.never()),
   verifiedAt: Timestamp,
   diagnostics,
+  timings,
 });
 
 export const Ambiguous = z.object({
@@ -35,6 +43,7 @@ export const Ambiguous = z.object({
     )
     .min(2),
   diagnostics,
+  timings,
 });
 
 export const Unconfirmed = z.object({
@@ -46,6 +55,7 @@ export const Unconfirmed = z.object({
   reasons: z.array(z.string().min(1)).min(1),
   verifiedAt: Timestamp,
   diagnostics,
+  timings,
 });
 
 export const NoSpec = z.object({
@@ -54,12 +64,14 @@ export const NoSpec = z.object({
   vendor: Vendor,
   communityAvailable: z.boolean(),
   diagnostics,
+  timings,
 });
 
 export const Unknown = z.object({
   outcome: z.literal("Unknown"),
   name: z.string(),
   diagnostics,
+  timings,
 });
 
 export const Outcome = z.discriminatedUnion("outcome", [

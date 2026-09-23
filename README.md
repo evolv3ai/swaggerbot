@@ -17,13 +17,39 @@ The Index database lives at `DATABASE_PATH` (default `./data/swaggerbot.db`); it
 
 ```sh
 pnpm dev     # dev server; GET /api/health returns {"ok":true}
-pnpm build   # production build into dist/
+pnpm build   # production build into .output/
 ```
+
+## Running in production
+
+`pnpm build` produces a Node server in `.output/` (TanStack Start on [Nitro](https://nitro.build)); `pnpm start` runs it. It listens on `PORT` (default 3000) and opens the Index at start-up, applying migrations from `./drizzle`, so start it from the repository root (or anywhere with `drizzle/` beside `.output/`).
+
+```sh
+pnpm build && pnpm start
+```
+
+In production it runs as one container ([ADR 0002](docs/adr/0002-single-instance-tanstack-start-with-sqlite.md), [`docs/deploy.md`](docs/deploy.md)):
+
+```sh
+docker build -t swaggerbot .
+docker run -p 3000:3000 -v swaggerbot-data:/app/data --env-file .env swaggerbot
+```
+
+The image keeps the Index at `DATABASE_PATH=/app/data/swaggerbot.db` on the `/app/data` volume and checks `GET /api/health`. [Litestream](https://litestream.io) replicates the Index continuously to Backblaze B2 through its S3-compatible API (`docker/litestream.yml`), configured by these env vars:
+
+| Variable | Meaning |
+|---|---|
+| `LITESTREAM_BUCKET` | The B2 bucket. Without it, replication is off: the container says so in one line and runs the app alone. |
+| `LITESTREAM_PATH` | The replica's path in the bucket (default `swaggerbot`). |
+| `LITESTREAM_ENDPOINT` | B2's S3 endpoint, `s3.<region>.backblazeb2.com`. |
+| `LITESTREAM_ACCESS_KEY_ID` / `LITESTREAM_SECRET_ACCESS_KEY` | A B2 application key restricted to the bucket. |
+
+With `LITESTREAM_BUCKET` set, the entrypoint (`docker/entrypoint.sh`) first restores the Index from the replica when the volume has no database yet, then runs the app under `litestream replicate`, which stops when the app stops. The app's own keys (`TYPESAFE_API_KEY` and the rest in `.env.example`) are passed the same way.
 
 ## Benchmark
 
 ```sh
-pnpm bench [--only-reviewed] [--json] [--search brave|tavily]
+pnpm bench [--only-reviewed] [--json] [--search brave|tavily] [--concurrency <n>]
 ```
 
 Runs every Benchmark entry through the live Lookup and prints the False Resolution rate, long-tail coverage and Outcome accuracy; it exits 1 when the False Resolution rate reaches the 2% gate. It needs the same keys as a Lookup (`TYPESAFE_API_KEY`, plus a search key for portal finding).
@@ -34,6 +60,8 @@ A run uses a throwaway Index by default: a fresh, empty database in a temporary 
 - `--keep-index` keeps the temporary Index and prints its path.
 
 They can't be used together. The report names the Index it used (`indexPath` and `indexFresh` in `--json`).
+
+Under the header a latency line gives the p50, p90 and max time per answer, e.g. `Latency (Discovery): p50 9.8 s · p90 31.2 s · max 57.5 s (n=40)` (`latency` in `--json`, in ms). With a fresh Index every answer is a Discovery; with `--index`, some came from the Index, and the line says so. `--concurrency <n>` runs n Lookups at once (default 4); `--concurrency 1` measures latency without Lookups competing for the fetcher's per-host spacing. The run traces each Lookup (`LOOKUP_TRACE=1`), so in `--json` every answer's Outcome carries `timings`: milliseconds per Lookup step (`APIs.guru`, `Judge whichApi`, `Developer Portal search`, `known paths`, `Developer Portal crawl`, `GitHub code search`, `Spec fetch` and so on), a step that ran more than once adding up.
 
 ## API keys
 
