@@ -21,7 +21,8 @@ import { createVerifier, type Verifier } from "./verify";
  * step's trace to `diagnostics` and each step's time as `timings`; Stale
  * answers are those verified more than `FRESHNESS_DAYS` ago (default 7);
  * the Spec step's parallel Sources stop after `SPEC_STEP_BUDGET_MS`
- * (default 9000, `Infinity` for none).
+ * (default 9000, `Infinity` for none); download URLs are given under
+ * `PUBLIC_BASE_URL`, or as paths without it.
  * Used by `pnpm bench` and the scripts: it queues the Verifications of Stale
  * answers but starts no worker to run them, and builds no Spec's forms
  * (see `createApp`).
@@ -98,6 +99,7 @@ function buildAppLookup(env: NodeJS.ProcessEnv) {
     trace: env.LOOKUP_TRACE === "1",
     freshnessDays,
     specStepBudgetMs: specStepBudgetMsOf(env),
+    publicBaseUrl: env.PUBLIC_BASE_URL?.trim() || undefined,
   });
   return { lookup, db, fetcher, freshnessDays };
 }

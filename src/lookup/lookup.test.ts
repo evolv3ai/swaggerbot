@@ -14,6 +14,7 @@ import { type KnownPathHit, probeKnownPaths } from "~/fetch/known-paths";
 import { sniffSpec } from "~/fetch/sniff";
 import { openDb } from "~/index-store/db";
 import { verifications } from "~/index-store/schema";
+import { createSpecForms } from "~/index-store/spec-forms";
 import { FakeJudge, type FakeJudgeScript } from "~/judge/fake";
 import { JudgeError, yesNo } from "~/judge/judge";
 import { type ApiCandidate, createApisGuru } from "~/sources/apis-guru";
@@ -31,6 +32,7 @@ import type {
 } from "~/sources/github";
 import { FakeWebSearch } from "~/sources/web-search/fake";
 import { SearchError, type WebSearch } from "~/sources/web-search/web-search";
+import type { SpecForms } from "~/spec-forms/build";
 import { apisGuruList } from "./__fixtures__/apis-guru";
 import {
   createLookup,
@@ -198,6 +200,42 @@ async function ask(
 }
 
 const yes = yesNo(0.95);
+
+/**
+ * Stores built forms for `specId` in the test's Index, with these Validity
+ * Issues and finding count, as the background worker would.
+ */
+function saveBuilt(
+  specId: string,
+  validityIssues: SpecForms["validityIssues"] = [],
+  validityFindingCount = validityIssues.reduce((n, i) => n + i.count, 0),
+) {
+  createSpecForms(openDb(join(dir, "index.db"))).saveBuilt(
+    specId,
+    {
+      normalized: new TextEncoder().encode('{"openapi":"3.1.1"}'),
+      normalizedSpecVersion: "3.1.1",
+      validityIssues,
+      validityFindingCount,
+      normalizedFindingCount: 0,
+      outline: {
+        title: null,
+        apiVersion: null,
+        servers: [],
+        securitySchemes: [],
+        tags: [],
+        operations: [],
+      },
+    },
+    NOW,
+  );
+}
+
+/** The download URLs of Spec `id`, under `base`. */
+const downloads = (id: string, base = "") => ({
+  published: `${base}/api/specs/${id}/published`,
+  normalized: `${base}/api/specs/${id}/normalized`,
+});
 
 describe("lookup", () => {
   it("answers Resolved from an Official APIs.guru origin", async () => {
@@ -867,11 +905,27 @@ describe("lookup", () => {
     expect(outcome.reasons.join("\n")).toMatch(/0\.55/);
     expect(outcome.reasons.join("\n")).toMatch(/known paths on docsy\.test/);
     expect(outcome.reasons).not.toContain("only a third-party copy found");
+    // Its forms aren't built yet.
+    expect(outcome.spec).toMatchObject({
+      downloads: downloads(outcome.spec.id),
+      normalized: "pending",
+    });
+    expect(outcome.validityIssues).toEqual([]);
+    expect(outcome.validityIssueCount).toBe(0);
 
     // An Unconfirmed Spec is stored but never answered Resolved from the Index.
     const calls = judge.calls.length;
-    expect((await ask(lookup, "docsy")).outcome).toBe("Unconfirmed");
+    const issues = [{ message: "Bad thing", path: "/info", count: 2 }];
+    saveBuilt(outcome.spec.id, issues);
+    const again = await ask(lookup, "docsy");
+    expect(again).toMatchObject({
+      outcome: "Unconfirmed",
+      spec: { id: outcome.spec.id, normalized: "ready" },
+      validityIssues: issues,
+      validityIssueCount: 2,
+    });
     expect(judge.calls.length).toBeGreaterThan(calls);
+    expect(lookup.currentFromIndex("docsy.test/docsy-api")).toBeNull();
   });
 
   it("answers Unconfirmed when only the APIs.guru mirror describes the API", async () => {
@@ -2778,6 +2832,7 @@ describe("lookup with GitHub code search", () => {
       outcome: "NoSpec",
       communityAvailable: true,
     });
+    expect(lookup.currentFromIndex("nospec.test/nospec-api")).toBeNull();
   });
 
   it("keeps a third party's copy of an Endorsed Spec a Mirror", async () => {
@@ -3295,6 +3350,8 @@ describe("lookup with several API Versions", () => {
     pathCounts?: Record<string, number>,
     /** Where each Version is served; `path` by default. */
     pathOf: (version: string) => string = path,
+    /** Any other dependency, e.g. `publicBaseUrl`. */
+    extra: Partial<LookupDeps> = {},
   ) {
     const versions = pathCounts ? Object.keys(pathCounts) : VERSIONS;
     for (const v of versions)
@@ -3335,9 +3392,33 @@ describe("lookup with several API Versions", () => {
       now: () => new Date(NOW),
       probe: probe ?? (async () => []),
       crawl: fakeCrawl().crawl,
+      ...extra,
     });
     return { judge, lookup };
   }
+
+  /** What `currentFromIndex` should give for a Resolved answer. */
+  const currentOf = (outcome: Outcome) => {
+    if (outcome.outcome !== "Resolved") throw new Error(outcome.outcome);
+    const {
+      api,
+      vendor,
+      currentSpec,
+      alternateSpecs,
+      provenance,
+      sources,
+      verifiedAt,
+    } = outcome;
+    return {
+      api,
+      vendor,
+      currentSpec,
+      alternateSpecs,
+      provenance,
+      sources,
+      verifiedAt,
+    };
+  };
 
   const versionsOf = (outcome: Outcome) =>
     outcome.outcome === "Resolved"
@@ -3402,6 +3483,104 @@ describe("lookup with several API Versions", () => {
     const second = await ask(lookup, "boxy");
     expect(second).toEqual(first);
     expect(second.diagnostics).toBeUndefined();
+    expect(server.requests).toHaveLength(requests);
+    expect(judge.calls).toHaveLength(calls);
+
+    // `currentFromIndex` passes over the partial Spec by the same rule.
+    expect(lookup.currentFromIndex(API_ID)).toEqual(currentOf(second));
+    expect(server.requests).toHaveLength(requests);
+    expect(judge.calls).toHaveLength(calls);
+  });
+
+  it("carries each Spec's download URLs and forms status, and the Current Spec's Validity Issues", async () => {
+    const { lookup } = setupVersions();
+
+    const first = await ask(lookup, "boxy");
+    if (first.outcome !== "Resolved") throw new Error("unreachable");
+    const specs = [first.currentSpec, ...first.alternateSpecs];
+    expect(specs).toHaveLength(3);
+    for (const s of specs)
+      expect(s).toMatchObject({
+        downloads: downloads(s.id),
+        normalized: "pending",
+      });
+    expect(first.validityIssues).toEqual([]);
+    expect(first.validityIssueCount).toBe(0);
+
+    // 60 groups of findings, 1 to 60 each, stored smallest first.
+    const issues = Array.from({ length: 60 }, (_, i) => ({
+      message: `finding ${i + 1}`,
+      path: `/paths/${i}`,
+      count: i + 1,
+    }));
+    saveBuilt(first.currentSpec.id, issues, 1830);
+    const [alternate] = first.alternateSpecs;
+    if (!alternate) throw new Error("unreachable");
+    saveBuilt(alternate.id);
+
+    for (const second of [
+      await ask(lookup, "boxy"),
+      Outcome.parse(lookup.fromIndex({ name: "boxy" })),
+    ]) {
+      if (second.outcome !== "Resolved") throw new Error("unreachable");
+      expect(second.currentSpec).toMatchObject({
+        id: first.currentSpec.id,
+        normalized: "ready",
+      });
+      expect(second.alternateSpecs.map((s) => s.normalized)).toEqual([
+        "ready",
+        "pending",
+      ]);
+      expect(second.validityIssues).toHaveLength(50);
+      expect(second.validityIssues.map((i) => i.count)).toEqual(
+        Array.from({ length: 50 }, (_, i) => 60 - i),
+      );
+      expect(second.validityIssueCount).toBe(1830);
+    }
+  });
+
+  it("gives absolute download URLs under `publicBaseUrl`", async () => {
+    const base = "https://swaggerbot.dev";
+    const { lookup } = setupVersions(undefined, undefined, undefined, {
+      publicBaseUrl: base,
+    });
+
+    for (const outcome of [
+      await ask(lookup, "boxy"),
+      await ask(lookup, "boxy"),
+    ]) {
+      if (outcome.outcome !== "Resolved") throw new Error("unreachable");
+      for (const s of [outcome.currentSpec, ...outcome.alternateSpecs])
+        expect(s.downloads).toEqual(downloads(s.id, base));
+    }
+    const current = lookup.currentFromIndex(API_ID);
+    expect(current?.currentSpec.downloads.published).toMatch(
+      /^https:\/\/swaggerbot\.dev\/api\/specs\//,
+    );
+  });
+
+  it("gives `currentFromIndex` the Current Spec and Alternates a Lookup answers, and null for an unknown API", async () => {
+    const { lookup, judge } = setupVersions();
+    const first = await ask(lookup, "boxy");
+    if (first.outcome !== "Resolved") throw new Error("unreachable");
+    saveBuilt(first.currentSpec.id);
+    const requests = server.requests.length;
+    const calls = judge.calls.length;
+
+    const indexed = lookup.fromIndex({ name: "boxy" });
+    const current = lookup.currentFromIndex(API_ID);
+
+    expect(current).toEqual(currentOf(Outcome.parse(indexed)));
+    expect(current).toMatchObject({
+      currentSpec: { apiVersion: "2026.0", normalized: "ready" },
+    });
+    // The Preview is left out, as from a default Lookup.
+    expect(current?.alternateSpecs.map((s) => s.apiVersion)).toEqual([
+      "2025.0",
+      "2024.0",
+    ]);
+    expect(lookup.currentFromIndex("boxy.test/no-such-api")).toBeNull();
+    expect(lookup.currentFromIndex("nobody.test/nothing")).toBeNull();
     expect(server.requests).toHaveLength(requests);
     expect(judge.calls).toHaveLength(calls);
   });
@@ -3663,6 +3842,13 @@ describe("lookup with a deprecated Spec", () => {
       const second = await ask(lookup, "novvy");
       expect(currentUrl(second)).toBe(OPENAPI);
       expect(second.diagnostics).toBeUndefined();
+      if (second.outcome !== "Resolved") throw new Error("unreachable");
+      // `currentFromIndex` passes over the deprecated Spec by the same rule.
+      expect(lookup.currentFromIndex(API_ID)).toMatchObject({
+        currentSpec: second.currentSpec,
+        alternateSpecs: second.alternateSpecs,
+        sources: [{ url: OPENAPI }],
+      });
       expect(probes.count).toBe(1);
     },
   );

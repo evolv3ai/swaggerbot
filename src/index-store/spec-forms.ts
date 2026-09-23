@@ -22,6 +22,13 @@ export type StoredForms = {
   outline?: SpecOutline;
 };
 
+/** A Spec's forms status and every group of its Validity Issues (`getValidity`). */
+export type SpecValidity = {
+  status: StoredForms["status"];
+  validityIssues: ValidityIssue[];
+  validityFindingCount: number;
+};
+
 /** What a build of a Spec's forms reads. */
 export type FormsBuildInput = {
   bytes: Uint8Array;
@@ -187,6 +194,42 @@ export function createSpecForms(db: Db) {
         outline: row.outline
           ? SpecOutline.parse(JSON.parse(row.outline))
           : undefined,
+      };
+    },
+
+    /**
+     * `specId`'s forms status and Validity Issues, as an Outcome gives them:
+     * only the small columns, never the Normalized Form or the Spec Outline.
+     * A Spec that isn't `ready` has none.
+     */
+    getValidity(specId: string): SpecValidity {
+      const row = db
+        .select({
+          status: specForms.status,
+          validityIssues: specForms.validityIssues,
+          validityFindingCount: specForms.validityFindingCount,
+        })
+        .from(specForms)
+        .where(eq(specForms.specId, specId))
+        .get();
+      if (!row || row.status === "building")
+        return {
+          status: "pending",
+          validityIssues: [],
+          validityFindingCount: 0,
+        };
+      if (row.status === "failed")
+        return {
+          status: "failed",
+          validityIssues: [],
+          validityFindingCount: 0,
+        };
+      return {
+        status: "ready",
+        validityIssues: ValidityIssues.parse(
+          JSON.parse(row.validityIssues ?? "[]"),
+        ),
+        validityFindingCount: row.validityFindingCount ?? 0,
       };
     },
 

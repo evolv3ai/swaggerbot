@@ -16,7 +16,19 @@ const spec = {
   supersededAt: null,
   format: "json",
   byteLength: 1024,
+  downloads: {
+    published: `https://swaggerbot.dev/api/specs/${"0".repeat(64)}/published`,
+    normalized: `https://swaggerbot.dev/api/specs/${"0".repeat(64)}/normalized`,
+  },
+  normalized: "ready",
 };
+const validityIssues = [
+  {
+    message: "Property allowReserved is not expected to be here",
+    path: "/paths/~1zones/get/parameters/0",
+    count: 3,
+  },
+];
 const verifiedAt = "2026-09-22T10:00:00.000Z";
 const source = {
   id: 1,
@@ -36,7 +48,8 @@ const variants = {
     alternateSpecs: [],
     provenance: "Official",
     sources: [source],
-    validityIssues: [],
+    validityIssues,
+    validityIssueCount: 3,
     verifiedAt,
   },
   Ambiguous: {
@@ -58,6 +71,8 @@ const variants = {
     spec,
     sources: [source],
     reasons: ["looks like a test fixture"],
+    validityIssues: [],
+    validityIssueCount: 0,
     verifiedAt,
   },
   NoSpec: { outcome: "NoSpec", api, vendor, communityAvailable: false },
@@ -90,6 +105,35 @@ describe("Outcome", () => {
       { ...variants.Resolved, verifiedAt: "yesterday" },
     ],
     ["Unconfirmed without reasons", { ...variants.Unconfirmed, reasons: [] }],
+    [
+      "Resolved with a Spec without downloads",
+      {
+        ...variants.Resolved,
+        currentSpec: { ...spec, downloads: undefined },
+      },
+    ],
+    [
+      "Resolved with an unknown Normalized Form status",
+      {
+        ...variants.Resolved,
+        currentSpec: { ...spec, normalized: "building" },
+      },
+    ],
+    [
+      "Resolved with more than 50 Validity Issues",
+      {
+        ...variants.Resolved,
+        validityIssues: Array.from({ length: 51 }, (_, i) => ({
+          message: `finding ${i}`,
+          path: "/",
+          count: 1,
+        })),
+      },
+    ],
+    [
+      "Unconfirmed without validityIssueCount",
+      { ...variants.Unconfirmed, validityIssueCount: undefined },
+    ],
     ["NoSpec without communityAvailable", { outcome: "NoSpec", api, vendor }],
     [
       "Ambiguous with a probability above 1",
