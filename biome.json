@@ -12,7 +12,8 @@
       "!docs",
       "!.claude",
       "!.weawr",
-      "!*.md"
+      "!*.md",
+      "!*.svg"
     ]
   },
   "formatter": {
