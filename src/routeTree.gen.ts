@@ -14,6 +14,7 @@ import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as ApiLookupRouteImport } from './routes/api/lookup'
 import { Route as ApiSpecsSpecIdNormalizedRouteImport } from './routes/api/specs/$specId/normalized'
 import { Route as ApiSpecsSpecIdPublishedRouteImport } from './routes/api/specs/$specId/published'
+import { Route as ApiVendorsVendorApisRouteImport } from './routes/api/vendors/$vendor/apis'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -41,6 +42,11 @@ const ApiSpecsSpecIdPublishedRoute = ApiSpecsSpecIdPublishedRouteImport.update({
   path: '/api/specs/$specId/published',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiVendorsVendorApisRoute = ApiVendorsVendorApisRouteImport.update({
+  id: '/api/vendors/$vendor/apis',
+  path: '/api/vendors/$vendor/apis',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -48,6 +54,7 @@ export interface FileRoutesByFullPath {
   '/api/lookup': typeof ApiLookupRoute
   '/api/specs/$specId/normalized': typeof ApiSpecsSpecIdNormalizedRoute
   '/api/specs/$specId/published': typeof ApiSpecsSpecIdPublishedRoute
+  '/api/vendors/$vendor/apis': typeof ApiVendorsVendorApisRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -55,6 +62,7 @@ export interface FileRoutesByTo {
   '/api/lookup': typeof ApiLookupRoute
   '/api/specs/$specId/normalized': typeof ApiSpecsSpecIdNormalizedRoute
   '/api/specs/$specId/published': typeof ApiSpecsSpecIdPublishedRoute
+  '/api/vendors/$vendor/apis': typeof ApiVendorsVendorApisRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -63,6 +71,7 @@ export interface FileRoutesById {
   '/api/lookup': typeof ApiLookupRoute
   '/api/specs/$specId/normalized': typeof ApiSpecsSpecIdNormalizedRoute
   '/api/specs/$specId/published': typeof ApiSpecsSpecIdPublishedRoute
+  '/api/vendors/$vendor/apis': typeof ApiVendorsVendorApisRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -72,6 +81,7 @@ export interface FileRouteTypes {
     | '/api/lookup'
     | '/api/specs/$specId/normalized'
     | '/api/specs/$specId/published'
+    | '/api/vendors/$vendor/apis'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -79,6 +89,7 @@ export interface FileRouteTypes {
     | '/api/lookup'
     | '/api/specs/$specId/normalized'
     | '/api/specs/$specId/published'
+    | '/api/vendors/$vendor/apis'
   id:
     | '__root__'
     | '/'
@@ -86,6 +97,7 @@ export interface FileRouteTypes {
     | '/api/lookup'
     | '/api/specs/$specId/normalized'
     | '/api/specs/$specId/published'
+    | '/api/vendors/$vendor/apis'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -94,6 +106,7 @@ export interface RootRouteChildren {
   ApiLookupRoute: typeof ApiLookupRoute
   ApiSpecsSpecIdNormalizedRoute: typeof ApiSpecsSpecIdNormalizedRoute
   ApiSpecsSpecIdPublishedRoute: typeof ApiSpecsSpecIdPublishedRoute
+  ApiVendorsVendorApisRoute: typeof ApiVendorsVendorApisRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -133,6 +146,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiSpecsSpecIdPublishedRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/vendors/$vendor/apis': {
+      id: '/api/vendors/$vendor/apis'
+      path: '/api/vendors/$vendor/apis'
+      fullPath: '/api/vendors/$vendor/apis'
+      preLoaderRoute: typeof ApiVendorsVendorApisRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -142,6 +162,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiLookupRoute: ApiLookupRoute,
   ApiSpecsSpecIdNormalizedRoute: ApiSpecsSpecIdNormalizedRoute,
   ApiSpecsSpecIdPublishedRoute: ApiSpecsSpecIdPublishedRoute,
+  ApiVendorsVendorApisRoute: ApiVendorsVendorApisRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

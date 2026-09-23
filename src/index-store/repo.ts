@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import {
   Api,
   type Source,
@@ -254,6 +254,37 @@ export function createRepo(db: Db) {
         .innerJoin(apis, eq(apis.id, apiNames.apiId))
         .where(eq(apiNames.nameNormalized, normalizeName(name)))
         .get();
+    },
+
+    getVendor(vendorId: string): Vendor | undefined {
+      return db
+        .select(vendorColumns)
+        .from(vendors)
+        .where(eq(vendors.id, vendorId))
+        .get();
+    },
+
+    /**
+     * The Vendors named exactly `name`, ignoring case (ASCII letters only, as
+     * SQLite's `lower`), by id.
+     */
+    findVendorsByName(name: string): Vendor[] {
+      return db
+        .select(vendorColumns)
+        .from(vendors)
+        .where(sql`lower(${vendors.name}) = lower(${name.trim()})`)
+        .orderBy(asc(vendors.id))
+        .all();
+    },
+
+    /** The Vendor's APIs in the Index, by name ignoring case, then id. */
+    listApisOfVendor(vendorId: string): Api[] {
+      return db
+        .select(apiColumns)
+        .from(apis)
+        .where(eq(apis.vendorId, vendorId))
+        .orderBy(asc(sql`lower(${apis.name})`), asc(apis.id))
+        .all();
     },
 
     getApiWithSpecs(apiId: string): ApiWithSpecs | undefined {
