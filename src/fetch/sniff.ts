@@ -11,6 +11,15 @@ export type SniffResult = {
   extract: SpecExtract;
   /** For `apiVersionOf`; kept out of `extract`, which the Judge sees. */
   versionInfo: VersionInfo;
+  /** The whole Spec's outline, where `extract` keeps only a sample. */
+  outline: SpecOutline;
+};
+
+export type SpecOutline = {
+  /** Each path's first segment, once: `/transfer/intent/create` → `transfer`. */
+  firstSegments: string[];
+  /** Every tag name, as `extract.tags` lists them. */
+  tags: string[];
 };
 
 type Obj = Record<string, unknown>;
@@ -55,6 +64,7 @@ export function sniffSpec(
     format: parsed.format,
     extract: extractFrom(doc),
     versionInfo: versionInfoFrom(doc),
+    outline: outlineFrom(doc),
   };
 }
 
@@ -123,6 +133,16 @@ function extractFrom(doc: Obj): SpecExtract {
     samplePaths: pathKeys.slice(0, SPEC_EXTRACT_LIMITS.samplePaths),
     pathCount: pathKeys.length,
   };
+}
+
+function outlineFrom(doc: Obj): SpecOutline {
+  const paths = isObj(doc.paths) ? doc.paths : {};
+  const segments = new Set<string>();
+  for (const path of Object.keys(paths)) {
+    const first = path.split("/").find(Boolean);
+    if (first) segments.add(first);
+  }
+  return { firstSegments: [...segments], tags: tagNames(doc, paths) };
 }
 
 function serverHosts(doc: Obj): string[] {
