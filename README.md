@@ -94,6 +94,14 @@ pnpm tsx scripts/keys.ts list                            # id, owner, quota, cre
 pnpm tsx scripts/keys.ts revoke <id>
 ```
 
+In production the image has no `scripts/` or `tsx`. `pnpm build` bundles the same CLI into `.output/cli/keys.mjs`, which the image carries, so run it in the container, against the Index on its volume:
+
+```sh
+docker exec <container> node .output/cli/keys.mjs create "<owner>" [--quota N]
+docker exec <container> node .output/cli/keys.mjs list
+docker exec <container> node .output/cli/keys.mjs revoke <id>
+```
+
 Only the secret's sha256 is stored, so `create` is the one time it is shown: hand it to its owner then. The id (`key_…`) is safe to show and is what `list` and `revoke` use. A key without `--quota` gets the default, 100 a day, or `DAILY_QUOTA` when that is set; a key's own quota wins over both. A revoked key stays in the list but is no longer accepted.
 
 ## Crawling etiquette
