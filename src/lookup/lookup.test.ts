@@ -3315,6 +3315,7 @@ describe("lookup of an indexed name as it ages", () => {
     expect(payco.queued()).toEqual([
       {
         nameNormalized: "payco",
+        name: "PayCo API",
         requestedAt: later,
         startedAt: null,
         finishedAt: null,
