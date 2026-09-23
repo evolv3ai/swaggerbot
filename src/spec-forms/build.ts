@@ -82,7 +82,10 @@ export type SpecFormsInput = {
 };
 
 export type SpecForms = {
-  /** The Normalized Form, as minified JSON. */
+  /**
+   * The Normalized Form, as minified JSON: bundled, upgraded to OpenAPI 3.1,
+   * with each operation written as a `$ref` replaced by a copy of its target.
+   */
   normalized: Uint8Array;
   /** The Normalized Form's `openapi` field. */
   normalizedSpecVersion: string;
@@ -127,8 +130,8 @@ const OBJECT_REFERENCE_FALSE_POSITIVE =
   "Can't resolve reference: [object Object]";
 
 /**
- * Builds a Spec's Normalized Form (bundled, upgraded to OpenAPI 3.1, as
- * minified JSON), its Validity Issues and its Spec Outline from the Published
+ * Builds a Spec's Normalized Form (bundled, upgraded to OpenAPI 3.1, with each
+ * operation written as a `$ref` inlined, as minified JSON), its Validity Issues and its Spec Outline from the Published
  * Form (ADR 0004).
  */
 export async function buildSpecForms(
@@ -173,8 +176,10 @@ export async function buildSpecForms(
   const normalized: Obj = upgraded;
   await step("upgrade");
 
-  // 5. Strip the Swagger 2 keys the upgrader leaves behind, and the
-  // query-only keys on other parameters.
+  // 5. Inline each operation written as an internal `$ref` (bundling turns an
+  // operation in another file into one), then strip the Swagger 2 keys the
+  // upgrader leaves behind, and the query-only keys on other parameters.
+  inlineOperationRefs(normalized);
   stripSwagger2Leftovers(normalized);
   stripQueryOnlyParameterKeys(normalized);
   await step("strip");
@@ -386,6 +391,45 @@ function groupFindings(findings: readonly Finding[]): ValidityIssue[] {
     else groups.set(message, { message, path, count: 1 });
   }
   return [...groups.values()];
+}
+
+/**
+ * Replaces each operation that is an internal `$ref` with a copy of its target,
+ * following a chain of such references; keys written beside a `$ref` override
+ * its target's. OpenAPI allows a `$ref` for a Path Item but not an Operation,
+ * yet DigitalOcean's Spec writes every operation as one. The target stays in
+ * place; a reference that can't be resolved, or that is part of a cycle, stays
+ * as it is.
+ */
+function inlineOperationRefs(doc: Obj): void {
+  if (!isObj(doc.paths)) return;
+  for (const value of Object.values(doc.paths)) {
+    const item = resolveLocal(doc, value);
+    if (!isObj(item)) continue;
+    for (const [method, operation] of Object.entries(item)) {
+      if (!HTTP_METHODS.has(method)) continue;
+      const inlined = inlinedOperation(doc, operation);
+      if (inlined) item[method] = inlined;
+    }
+  }
+}
+
+/** A copy of what `operation`'s chain of internal `$ref`s leads to, if any. */
+function inlinedOperation(doc: Obj, operation: unknown): Obj | undefined {
+  const chain: Obj[] = [];
+  let node = operation;
+  while (isObj(node) && typeof node.$ref === "string") {
+    if (chain.includes(node)) return undefined;
+    chain.push(node);
+    const target = resolveLocal(doc, node);
+    if (target === node) return undefined;
+    node = target;
+  }
+  if (chain.length === 0 || !isObj(node)) return undefined;
+  const inlined = structuredClone(node);
+  for (const { $ref: _, ...beside } of chain.reverse())
+    Object.assign(inlined, structuredClone(beside));
+  return inlined;
 }
 
 function stripSwagger2Leftovers(doc: Obj): void {

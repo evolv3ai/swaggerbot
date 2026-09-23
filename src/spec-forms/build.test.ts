@@ -265,6 +265,138 @@ describe("buildSpecForms", () => {
     expect(forms.validityIssues).toEqual([]);
   });
 
+  it("inlines an operation written as a $ref to a same-origin file", async () => {
+    // DigitalOcean's Spec writes every operation this way; OpenAPI allows a
+    // `$ref` for a Path Item, not for an Operation.
+    const spec = [
+      "openapi: 3.0.0",
+      "info: { title: Clicks, version: '2.0' }",
+      "paths:",
+      "  /v2/1-clicks:",
+      "    get:",
+      "      $ref: resources/1-clicks/oneClicks_list.yml",
+      "      security: [{ bearer_auth: [read] }]",
+      "components:",
+      "  securitySchemes:",
+      "    bearer_auth: { type: http, scheme: bearer }",
+    ].join("\n");
+    const operation = [
+      "operationId: oneClicks_list",
+      "summary: List 1-Click Applications",
+      "tags: [1-Click Applications]",
+      "security: [{ bearer_auth: [] }]",
+      "responses:",
+      "  '200':",
+      "    description: The 1-Click Applications",
+      "    content:",
+      "      application/json:",
+      "        schema: { type: string, nullable: true }",
+    ].join("\n");
+    const fetchRef = vi.fn(async (_url: string) =>
+      new TextEncoder().encode(operation),
+    );
+    const forms = await buildSpecForms({
+      bytes: new TextEncoder().encode(spec),
+      format: "yaml",
+      sourceUrl: SOURCE,
+      fetchRef,
+    });
+
+    expect(fetchRef).toHaveBeenCalledWith(
+      "https://api.example.com/specs/resources/1-clicks/oneClicks_list.yml",
+    );
+    const op = at(parsed(forms.normalized), "paths", "/v2/1-clicks", "get");
+    expect(op).not.toHaveProperty("$ref");
+    expect(op).toMatchObject({
+      operationId: "oneClicks_list",
+      responses: { "200": { description: "The 1-Click Applications" } },
+      // The key written beside the `$ref` overrides the target's.
+      security: [{ bearer_auth: ["read"] }],
+    });
+    expect(forms.normalizedFindingCount).toBe(0);
+    expect(forms.outline.operations).toEqual([
+      {
+        method: "get",
+        path: "/v2/1-clicks",
+        operationId: "oneClicks_list",
+        summary: "List 1-Click Applications",
+        tags: ["1-Click Applications"],
+      },
+    ]);
+    expect(forms.validityIssues).not.toEqual([]);
+  });
+
+  it("inlines an operation written as an internal $ref", async () => {
+    const spec = {
+      openapi: "3.1.0",
+      info: { title: "Ops", version: "1" },
+      paths: {
+        "/a": { get: { $ref: "#/x-ops/getA" } },
+        "/b": { $ref: "#/x-paths/b" },
+      },
+      "x-paths": { b: { post: { $ref: "#/x-ops/postB" } } },
+      "x-ops": {
+        getA: {
+          operationId: "getA",
+          summary: "Get A",
+          tags: ["a"],
+          responses: { "200": { description: "A" } },
+        },
+        // A chain of references.
+        postB: { $ref: "#/x-ops/postBTarget" },
+        postBTarget: {
+          operationId: "postB",
+          tags: ["b"],
+          responses: { "201": { description: "B" } },
+        },
+      },
+    };
+    const forms = await buildSpecForms({
+      bytes: new TextEncoder().encode(JSON.stringify(spec)),
+      format: "json",
+      sourceUrl: SOURCE,
+    });
+    const doc = parsed(forms.normalized);
+
+    expect(at(doc, "paths", "/a", "get")).toEqual(spec["x-ops"].getA);
+    expect(at(doc, "x-paths", "b", "post")).toEqual(spec["x-ops"].postBTarget);
+    // The target stays in place.
+    expect(at(doc, "x-ops", "getA")).toEqual(spec["x-ops"].getA);
+    expect(forms.normalizedFindingCount).toBe(0);
+    expect(forms.outline.operations).toEqual([
+      {
+        method: "get",
+        path: "/a",
+        operationId: "getA",
+        summary: "Get A",
+        tags: ["a"],
+      },
+      { method: "post", path: "/b", operationId: "postB", tags: ["b"] },
+    ]);
+    // As published, an operation that is a `$ref` is invalid.
+    expect(forms.validityIssues).not.toEqual([]);
+  });
+
+  it("leaves a cycle of operation references as a $ref", async () => {
+    const spec = {
+      openapi: "3.1.0",
+      info: { title: "Cycle", version: "1" },
+      paths: {
+        "/a": { get: { $ref: "#/x-ops/a" } },
+        "/b": { get: { $ref: "#/x-ops/missing" } },
+      },
+      "x-ops": { a: { $ref: "#/x-ops/b" }, b: { $ref: "#/x-ops/a" } },
+    };
+    const forms = await buildSpecForms({
+      bytes: new TextEncoder().encode(JSON.stringify(spec)),
+      format: "json",
+      sourceUrl: SOURCE,
+    });
+    const doc = parsed(forms.normalized);
+    expect(at(doc, "paths", "/a", "get")).toEqual({ $ref: "#/x-ops/a" });
+    expect(at(doc, "paths", "/b", "get")).toEqual({ $ref: "#/x-ops/missing" });
+  });
+
   it("outlines the 3.0 Spec's tags, operations and security schemes", async () => {
     const { outline } = await build("openapi30.yaml");
     expect(SpecOutline.parse(outline)).toEqual(outline);
