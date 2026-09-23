@@ -35,8 +35,32 @@ The operator runbook for the live service ([Slice 3](slices/slice-3-backlog.md),
   5. Everything was removed afterwards: containers, the volume and the env files.
 
   **To restore for real:** stop the app in Coolify, then either delete the volume's `swaggerbot.db*` (the entrypoint restores when the database is missing and a replica exists), or restore into a new volume as in step 2 and mount it at `/app/data`. Then start the app, which replicates again.
-  **Gotcha:** the app needs its API keys (`TYPESAFE_API_KEY` and the rest) even to serve Index answers, because `createApp` builds the Judge on the first request. Booted without them, every Lookup returns 500.
+  **Gotcha:** the app needs its API keys (`TYPESAFE_API_KEY` and the rest) even to serve Index answers, because `createApp` builds the Judge. Since WTR-119 it is built at start-up. Booted without them, the server logs "The background Verification and forms workers didn't start", `/api/health` still answers, and every Lookup returns 500.
 - [x] **O6. Load check** (2026-09-23, image `b7c880b`): `set -a; . ./.env.local; set +a; pnpm tsx scripts/loadcheck.ts https://swaggerbot.dev --json` (the key comes from `LOADCHECK_KEY`). **Index p90 80 ms; Discovery p90 14.2 s, and 12.3 s on a second run.** Both pass. Details are in [`slices/slice-3-result.md`](slices/slice-3-result.md). A full run uses one quota unit per Benchmark entry (40).
+
+## Slice 4: Spec forms in production
+
+The deploys of 2026-09-23:
+- **`22aed14`** (wave 2 + WTR-107/116/117) at 15:36 CDT, deployment `lrcy75ypyd84ft2sqm1aqq98`.
+- **`30d7ebf`** (WTR-106, wave 4, WTR-111, WTR-119) at 18:47, deployment `bvdnafz14ryqve337pzadg28`. The Coolify build took 49 s.
+
+`PUBLIC_BASE_URL` is confirmed live: an Index answer's `downloads` are `https://swaggerbot.dev/api/specs/<id>/published|normalized`.
+
+**Workers start at boot (WTR-119).** Before it, the app, and with it the forms and Verification workers, was built on the first valid Lookup or download. `/api/health` doesn't count. After the `22aed14` deploy, nothing ran for 2 h 20 min: 0 of 27 Specs had a `spec_forms` row, and Litestream saw no write. One open `GET /api/specs/<id>/published` at 17:55 started it. Checked on the `30d7ebf` image in a throwaway container on the server, with no port published: a copy of the Index (taken with `better-sqlite3`'s `.backup()` inside the live container, so the WAL is included) with one `spec_forms` row deleted was rebuilt about 2 s after start-up, with no request. To check a deploy by hand: `docker logs <container>` must not show "workers didn't start".
+
+**O1, the backfill** (image `22aed14`, 17:55–18:45 CDT, sampled every ~20 s):
+- **27/27 ready, 0 failed, every one on its first attempt.** 26 Specs took 0.0–6.9 s each: Cloudflare 26.0 MB in 6.9 s, Stripe 6.4 MB in 5.7 s, Infisical 13.5 MB in 5.2 s, GitHub 13.0 MB in 2.7 s.
+- **DigitalOcean took 2,938 s (49 min)**, fetching its 2,976 `$ref`d files inside the 75 min budget. Nothing else was built while it ran: the worker builds one Spec at a time, and the other 20 Specs finished in the minute after it.
+- **Memory:** the container peaked at **514 MiB** sampled (of 2 GiB), right after DigitalOcean finished, as the queued large Specs started. It was 466–470 MiB in the first minutes, after the six Specs built before DigitalOcean, and dropped to 165–190 MiB from 18:00 while DigitalOcean was fetching. The idle baseline before the backfill was 52 MiB.
+- **Index latency during the backfill** (`scripts/loadcheck.ts https://swaggerbot.dev --only index`, 17:57, while DigitalOcean was fetching): **p50 63 ms, p90 80 ms, max 207 ms, 0 errors, PASS (< 200 ms).** The 21 skipped 401s are Benchmark names the Index doesn't hold, by design. This run didn't overlap a CPU-heavy build (those take seconds), so it bounds the cost of reference fetching, not of parsing.
+- **Findings:** DigitalOcean's Normalized Form has 697 findings. It writes every operation as a `$ref`, which `bundle` leaves as `{ "$ref": "#/x-ext/…" }` stubs, so its Outline and `get_operation` show stubs. Fixed by WTR-120 (Slice 4 #13). After that deploys, delete DigitalOcean's `spec_forms` row so it is rebuilt (~50 min). Supabase has 15 Validity Issues as published. Box (2 Specs) and Replicate have 1 normalized finding each.
+
+**O4, part 1: `formscheck`** (18:48, `30d7ebf`, `LOADCHECK_KEY` set): **PASS.**
+- Outline p90 150 ms (target < 500 ms), operation p90 347 ms (target < 2 s).
+- Downloads: Cloudflare 26.0 MB published in 487 ms, 12.9 MB normalized in 309 ms.
+- The outlines have 1,221 operations (GitHub), 594 (Stripe) and 3,576 (Cloudflare).
+- Every sampled Stripe operation comes back `truncated` at about 1 MB.
+- `GitHub` isn't a name the Index remembers, so the Lookup ran Discovery (9.1 s) and found a new GitHub Spec. The worker built it in about 5.6 s while formscheck waited on a 409.
 
 ## Gotchas
 
