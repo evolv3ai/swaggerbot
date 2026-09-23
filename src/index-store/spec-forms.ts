@@ -53,9 +53,11 @@ function isPermanent(error: unknown): boolean {
 export function createSpecForms(db: Db) {
   return {
     /**
-     * The oldest Spec whose forms are pending: it has no row, or one that is
+     * The next Spec whose forms are pending: it has no row, or one that is
      * neither `ready` nor `failed` (a retry, or a build a stopped process
-     * left `building`). `undefined` when there is none.
+     * left `building`). Fewest failed attempts first (no row counts as 0),
+     * then oldest, so a Spec being retried never holds up one not yet tried.
+     * `undefined` when there is none.
      */
     nextToBuild(): string | undefined {
       return db
@@ -68,7 +70,11 @@ export function createSpecForms(db: Db) {
             notInArray(specForms.status, ["ready", "failed"]),
           ),
         )
-        .orderBy(asc(specs.createdAt), asc(sql`${specs}.rowid`))
+        .orderBy(
+          asc(sql`coalesce(${specForms.attempts}, 0)`),
+          asc(specs.createdAt),
+          asc(sql`${specs}.rowid`),
+        )
         .get()?.id;
     },
 

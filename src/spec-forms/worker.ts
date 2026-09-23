@@ -9,10 +9,11 @@ export const FORMS_POLL_MS = 5_000;
 
 /**
  * The time all the external references of one Spec may take to fetch,
- * together, from the first. Room for DigitalOcean's 697 files on one host at
- * the fetcher's one request per second (about 12 min).
+ * together, from the first. Room for DigitalOcean's: its `$ref` closure is
+ * 2,976 files on one host, which at the fetcher's one request per second
+ * per host takes about 53 min.
  */
-export const FORMS_REF_BUDGET_MS = 20 * 60_000;
+export const FORMS_REF_BUDGET_MS = 75 * 60_000;
 
 export type FormsWorker = {
   /**
