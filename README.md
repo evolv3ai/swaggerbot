@@ -63,6 +63,18 @@ They can't be used together. The report names the Index it used (`indexPath` and
 
 Under the header a latency line gives the p50, p90 and max time per answer, e.g. `Latency (Discovery): p50 9.8 s · p90 31.2 s · max 57.5 s (n=40)` (`latency` in `--json`, in ms). With a fresh Index every answer is a Discovery; with `--index`, some came from the Index, and the line says so. `--concurrency <n>` runs n Lookups at once (default 4); `--concurrency 1` measures latency without Lookups competing for the fetcher's per-host spacing. The run traces each Lookup (`LOOKUP_TRACE=1`), so in `--json` every answer's Outcome carries `timings`: milliseconds per Lookup step (`APIs.guru`, `Judge whichApi`, `Developer Portal search`, `known paths`, `Developer Portal crawl`, `GitHub code search`, `Spec fetch` and so on), a step that ran more than once adding up.
 
+## API keys
+
+Discovery and `fresh` Lookups need an API key, each with a daily quota counted per UTC day. The operator issues keys by hand, in the Index at `DATABASE_PATH`:
+
+```sh
+pnpm tsx scripts/keys.ts create "<owner>" [--quota N]   # prints the key's id and secret
+pnpm tsx scripts/keys.ts list                            # id, owner, quota, created, revoked, today's usage
+pnpm tsx scripts/keys.ts revoke <id>
+```
+
+Only the secret's sha256 is stored, so `create` is the one time it is shown: hand it to its owner then. The id (`key_…`) is safe to show and is what `list` and `revoke` use. A key without `--quota` gets the default, 100 a day, or `DAILY_QUOTA` when that is set; a key's own quota wins over both. A revoked key stays in the list but is no longer accepted.
+
 ## Crawling etiquette
 
 The fetcher (`src/fetch/fetcher.ts`) sends an honest User-Agent, spaces requests per host and respects `robots.txt`. The one exception is [ADR 0003](docs/adr/0003-robots-txt-exception-for-vendor-linked-specs.md): a single Spec document linked from an allowed Vendor page is fetched once even when its own host's `robots.txt` disallows it (`fetchUrl(url, { ignoreRobots: true })`), and never crawled on from; the result's `robotsDisallowed` records that it happened. The same holds for a Spec at a known path on the Vendor's own API host when that host's `robots.txt` disallows its whole site (`Disallow: /`, as an app host like `api.val.town` does): the known-path probe retries that one path once with `ignoreRobots`, but only for the Vendor's own domain and never when `robots.txt` merely lists disallowed paths (Codeberg's `/swagger.*.json`) or could not be fetched. Either way the Lookup adds a diagnostic naming the URL.
