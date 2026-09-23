@@ -52,6 +52,7 @@ Filed 2026-09-23 as WTR-104..111 (Backlog, `swaggerbot` only), with Linear "bloc
 | 7 | WTR-110 | `list_vendor_apis`: `GET /api/vendors/{vendor}/apis` | 3, 4 | 4 |
 | 8 | WTR-111 | `scripts/formscheck.ts`: the acceptance check against a deployed URL | 5, 6, 7 | 5 |
 | 9 | WTR-112 | The Normalized Form drops `allowReserved` from parameters that aren't `query` (added 2026-09-23 after WTR-104: Cloudflare's 3 normalized findings) | 1 | 2 |
+| 10 | WTR-116 | The forms worker gives external references a budget that fits, and aborted fetches release their host slot (added 2026-09-23 after WTR-105's backfill rehearsal: DigitalOcean's 697 `$ref`d files; **gates the wave 2 deploy**) | 2 | 3 |
 
 #3 and #4 touch different files (`lookup.ts` and `outcome.ts`; routes and `src/server/`), so they run together. #5, #6 and #7 each add a route file, and TanStack's generated `src/routeTree.gen.ts` changes with each. That's a mechanical conflict, so wave 4 is merged one PR at a time, regenerating the route tree (`pnpm build`) on each rebase.
 
@@ -358,4 +359,41 @@ Name the rule beside `SWAGGER2_LEFTOVER_KEYS` (e.g. `QUERY_ONLY_PARAMETER_KEYS =
 ## Done when
 - `src/spec-forms/build.test.ts`: a 3.0 fixture with `allowReserved: true` on an inline `path` parameter, on a `header` parameter in `components.parameters`, and on a `query` parameter. The Normalized Form has no `allowReserved` on the first two, keeps it on the `query` one, and has `normalizedFindingCount` 0. The Published Form's Validity Issues are `[]`.
 - Manual check in the PR description: `pnpm tsx scripts/forms-bench.ts` on Cloudflare's Spec (`https://raw.githubusercontent.com/cloudflare/api-schemas/main/openapi.json`). Expected: `normalized findings 0` (it was 3), and the same path and operation counts as before (2,254 paths, 3,594 operations).
+- `pnpm check` and `pnpm build` green.
+
+---
+
+## 10. swaggerbot: the forms worker gives external references a budget that fits, and aborted fetches release their host slot
+
+## Problem
+WTR-105's forms worker fetches a Spec's same-origin external `$ref`s through the app's fetcher, within one budget of `FORMS_REF_BUDGET_MS = 30_000` per Spec. A backfill rehearsal on a copy of the Index (2026-09-23) showed two defects with DigitalOcean's Spec (`https://raw.githubusercontent.com/digitalocean/openapi/main/specification/DigitalOcean-public.v2.yaml`), which `$ref`s **697** separate files on the same host:
+
+1. **The budget can't fit it, and the result is saved as `ready`.** The fetcher allows one request per second per host, so 697 files take about 12 minutes. `@scalar/json-magic` fetches them one at a time (measured: at most one in flight). After 30 s the rest fail, 699 references stay unresolved, and the validator's 695 `must have required property 'responses'` findings are stored as DigitalOcean's Validity Issues. They are our artefact, not the Vendor's. The Normalized Form is saved `ready` with 697 findings and most operations missing.
+2. **Aborted fetches still reserve host slots.** `waitTurn` in `src/fetch/fetcher.ts` calls `nextSlot.set(host, at + minIntervalMs)` before it sleeps on the signal, so a request whose signal is already aborted pushes the host's next slot forward and then throws. Measured: after 20 aborted calls at a 200 ms interval, the next real fetch to that host waited 4.2 s. In production, the ~670 fetches that fail once the budget runs out would push `raw.githubusercontent.com`'s next slot about 11 minutes ahead. **Every Lookup whose Discovery fetches from GitHub would stall for that long**, up to three times (once per attempt). This must be fixed before WTR-105 is deployed.
+
+Decided (Wes, 2026-09-23): give reference fetching a budget that fits, and don't save a build as `ready` when the budget ran out.
+
+## Change
+**Fetcher** (`src/fetch/fetcher.ts`, `waitTurn`): a request whose signal is already aborted throws before it reserves a slot (`signal?.throwIfAborted()` at the top of each loop iteration). A request aborted **while** it waits for its slot hands the slot back if nothing reserved a later one: when `nextSlot.get(host)` still equals the value it set, restore the value it replaced. Behaviour for requests that aren't aborted is unchanged.
+
+**Worker** (`src/spec-forms/worker.ts`):
+- `FORMS_REF_BUDGET_MS = 20 * 60_000` (20 min). Update its comment. The budget is still one `AbortSignal` per Spec, started on the first reference fetch.
+- Reference fetches pass `background: true` to `fetchUrl`, so they never take a slot ahead of a Lookup (the fetcher already supports this).
+- `createFormsWorker` takes an optional `refBudgetMs` (default `FORMS_REF_BUDGET_MS`), so tests can use a short one.
+- **When the budget ran out during a build** (the budget signal is aborted once `buildSpecForms` returns), the worker calls `saveFailure(specId, "external references not all fetched within <n> min", at)` instead of `saveBuilt`. That counts as an attempt, so after `MAX_FORMS_ATTEMPTS` the Spec is `failed`. A reference that fails for another reason (404, other origin, robots) is still an ordinary Validity Issue, and the build is saved as before.
+
+A build of a Spec like DigitalOcean's holds up the other builds for as long as it runs. That's accepted: builds are one at a time by design (ADR 0004), and each Spec is built once.
+
+`README.md`: update the sentence on the background build (the 20 min reference budget).
+
+## Done when
+- `src/fetch/fetcher.test.ts` (local `node:http` server on port 0, `allowPrivate`, `minIntervalMs: 200`):
+  - 20 calls with an already-aborted signal, then a real fetch: the real fetch waits under 250 ms.
+  - A request aborted while it waits behind another returns its slot: the next request isn't delayed by it.
+  - Existing spacing behaviour is unchanged (the current tests pass as they are).
+- `src/spec-forms/worker.test.ts`:
+  - With `refBudgetMs` short and a local server that answers slowly, a Spec with several same-origin `$ref`s ends as a failure attempt (`attempts` 1, not `ready`, and still next to build), and after `MAX_FORMS_ATTEMPTS` it is `failed`.
+  - A Spec whose same-origin `$ref` answers 404 is still saved `ready`, with the unresolved reference as a Validity Issue.
+  - Reference fetches are made with `background: true` (check through an injected fetcher).
+- Manual check in the PR description: build DigitalOcean's Spec through the worker with the real fetcher (`sourceUrl` above; a throwaway script over a temp Index holding just that Spec is fine). Report the build time, the number of references fetched, `validityFindingCount` and `normalizedFindingCount`. Expected: all references fetched in about 12 minutes, and both counts small. Report what they are; don't tune for them.
 - `pnpm check` and `pnpm build` green.
