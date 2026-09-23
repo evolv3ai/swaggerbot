@@ -7,7 +7,7 @@ export default defineConfig({
   resolve: { tsconfigPaths: true },
   plugins: [
     tanstackStart({ router: { routeFileIgnorePattern: "\\.test\\.ts$" } }),
-    // Opens the Index at start-up; see src/server/open-index.ts.
+    // Opens the Index and starts the workers at start-up; see src/server/open-index.ts.
     nitro({ plugins: ["./src/server/open-index.ts"] }),
     viteReact(),
   ],

@@ -6,6 +6,7 @@ import { createApisGuru } from "~/sources/apis-guru";
 import { crawlForSpecs } from "~/sources/crawl";
 import { createGitHubCodeSearch, createGitHubRepos } from "~/sources/github";
 import { createWebSearch } from "~/sources/web-search";
+import { publicBaseUrlOf } from "~/spec-forms/outcome";
 import { createFormsWorker, type FormsWorker } from "~/spec-forms/worker";
 import { createLookup, type IndexedLookup, type Lookup } from "./lookup";
 import { DEFAULT_FRESHNESS_DAYS, SPEC_STEP_BUDGET_MS } from "./thresholds";
@@ -36,8 +37,8 @@ export function createAppLookup(env: NodeJS.ProcessEnv = process.env): Lookup {
  * in the same Index, the background Verification worker over the same
  * Lookup and Index, and the worker that builds each Spec's forms over the
  * same Index and fetcher (ADR 0004), both started; and the Index itself,
- * which the download routes read. Built once per server by `getApp` in
- * `src/server/app-instance.ts`.
+ * which the download routes read. Built once per server, when it starts,
+ * by `getApp` in `src/server/app-instance.ts`.
  */
 export function createApp(env: NodeJS.ProcessEnv = process.env): {
   db: Db;
@@ -102,7 +103,7 @@ function buildAppLookup(env: NodeJS.ProcessEnv) {
     trace: env.LOOKUP_TRACE === "1",
     freshnessDays,
     specStepBudgetMs: specStepBudgetMsOf(env),
-    publicBaseUrl: env.PUBLIC_BASE_URL?.trim() || undefined,
+    publicBaseUrl: publicBaseUrlOf(env),
   });
   return { lookup, db, fetcher, freshnessDays };
 }

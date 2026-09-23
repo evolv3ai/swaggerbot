@@ -32,6 +32,12 @@ export type SpecValidity = {
   validityFindingCount: number;
 };
 
+/** A Spec's Spec Outline, or why there is none yet (`getOutline`). */
+export type StoredOutline =
+  | { status: "ready"; outline: SpecOutline }
+  | { status: "pending" }
+  | { status: "failed"; error: string };
+
 /** What a build of a Spec's forms reads. */
 export type FormsBuildInput = {
   bytes: Uint8Array;
@@ -241,6 +247,32 @@ export function createSpecForms(db: Db) {
           JSON.parse(row.validityIssues ?? "[]"),
         ),
         validityFindingCount: row.validityFindingCount ?? 0,
+      };
+    },
+
+    /**
+     * `specId`'s Spec Outline once its forms are `ready`, else its status
+     * (and why it failed): only the `outline` column, never the Normalized
+     * Form.
+     */
+    getOutline(specId: string): StoredOutline {
+      const row = db
+        .select({
+          status: specForms.status,
+          outline: specForms.outline,
+          lastError: specForms.lastError,
+        })
+        .from(specForms)
+        .where(eq(specForms.specId, specId))
+        .get();
+      if (!row || row.status === "building") return { status: "pending" };
+      if (row.status === "failed")
+        return { status: "failed", error: row.lastError ?? "unknown error" };
+      if (!row.outline)
+        return { status: "failed", error: "no Spec Outline was stored" };
+      return {
+        status: "ready",
+        outline: SpecOutline.parse(JSON.parse(row.outline)),
       };
     },
 
