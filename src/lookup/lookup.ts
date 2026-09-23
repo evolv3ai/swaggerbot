@@ -368,6 +368,11 @@ export function createLookup(deps: LookupDeps): Lookup {
    * known: the Current Spec with its Alternates, leaving out Preview Versions
    * and Superseded Specs; or, with `apiVersion`, that API Version's Spec,
    * whatever it is. `null` sends the Lookup on to Discovery.
+   *
+   * The Current Spec is picked by `currentAndFull`, as in Discovery, from the
+   * path count, deprecation and origin rank stored with each Spec; ties go to
+   * the best Provenance, then the earliest origin URL, then the newest Spec.
+   * A Spec stored before these were kept ranks by API Version alone.
    */
   function answerFromIndex(
     name: string,
@@ -400,7 +405,21 @@ export function createLookup(deps: LookupDeps): Lookup {
         others.map((s) => s.spec),
       );
     }
-    const picked = currentAndAlternates(live, versionOf);
+    const tier = (s: (typeof pool)[number]) =>
+      tierRank(
+        bestProvenance(s.sources.map((src) => src.provenance)) ?? "Community",
+      );
+    const byOrigin = (s: (typeof pool)[number]) =>
+      s.originRank ?? Number.MAX_SAFE_INTEGER;
+    const ranked = [...live].sort(
+      (a, b) => tier(a) - tier(b) || byOrigin(a) - byOrigin(b),
+    );
+    const picked = currentAndFull(ranked, (s) => ({
+      apiVersion: s.spec.apiVersion,
+      isPreview: s.spec.isPreview,
+      pathCount: s.pathCount,
+      deprecated: s.deprecated,
+    }));
     if (!picked) return null;
     return resolved(
       stored.api,
@@ -936,7 +955,7 @@ export function createLookup(deps: LookupDeps): Lookup {
             b.probability - a.probability,
         ),
       );
-      const stored = store(name, choice, pool, candidates, true);
+      const stored = store(name, choice, pool, candidates, true, originRank);
       const storedOf = (c: SpecCandidate) =>
         stored[pool.indexOf(c)] as StoredSpec;
 
@@ -950,7 +969,7 @@ export function createLookup(deps: LookupDeps): Lookup {
             otherVersions(chosen, pool, (c) => c).map((c) => storedOf(c).spec),
           );
       } else {
-        const picked = currentAndFull(pool);
+        const picked = currentAndFull(pool, rankingOf);
         if (picked)
           return resolved(
             choice.api,
@@ -974,7 +993,14 @@ export function createLookup(deps: LookupDeps): Lookup {
         best(allowed.filter((c) => c.provenance === "Endorsed")) ??
         best(allowed);
       if (pick) {
-        const [unconfirmed] = store(name, choice, [pick], candidates, false);
+        const [unconfirmed] = store(
+          name,
+          choice,
+          [pick],
+          candidates,
+          false,
+          originRank,
+        );
         if (!unconfirmed) throw new Error("store returned no Spec");
         const reasons: string[] = [];
         if (pick.provenance === "Community")
@@ -1022,8 +1048,9 @@ export function createLookup(deps: LookupDeps): Lookup {
 
   /**
    * Stores the Vendor, API, each Spec with its API Version, and every Source
-   * it was found at, and remembers the name; returns the Specs as stored, in
-   * order. Only Specs that could answer Resolved are marked confirmed.
+   * it was found at, with what `currentAndFull` ranks it by, and remembers
+   * the name; returns the Specs as stored, in order. Only Specs that could
+   * answer Resolved are marked confirmed.
    */
   function store(
     name: string,
@@ -1031,6 +1058,8 @@ export function createLookup(deps: LookupDeps): Lookup {
     picks: SpecCandidate[],
     all: SpecCandidate[],
     confirm: boolean,
+    /** Each Spec's earliest origin URL, as its place in `choice.originUrls`. */
+    originRank: Map<string, number>,
   ): StoredSpec[] {
     if (picks.length === 0) return [];
     const at = now().toISOString();
@@ -1042,6 +1071,9 @@ export function createLookup(deps: LookupDeps): Lookup {
         apiVersion: pick.apiVersion,
         isPreview: pick.isPreview,
         format: pick.sniff.format,
+        pathCount: rankingOf(pick).pathCount,
+        deprecated: rankingOf(pick).deprecated,
+        originRank: originRank.get(pick.specId) ?? null,
       });
       if (confirm) repo.confirmSpec(spec.id, at);
       const sources = [pick, ...all.filter((c) => c !== pick)]
@@ -1099,41 +1131,62 @@ function otherVersions<T>(
   return picked ? [picked.current, ...picked.alternates] : [];
 }
 
+/** What `currentAndFull` ranks a Spec by. */
+type Ranking = ApiVersionOf & {
+  /** null when unknown: never partial, and never the largest. */
+  pathCount: number | null;
+  deprecated: boolean;
+};
+
+/** A fetched Spec's `Ranking`; `store` keeps it in the Index. */
+function rankingOf(c: SpecCandidate): Ranking {
+  return {
+    apiVersion: c.apiVersion,
+    isPreview: c.isPreview,
+    pathCount: c.sniff.extract.pathCount,
+    deprecated: isDeprecated(c),
+  };
+}
+
 /**
  * `currentAndAlternates`, except for two kinds of Spec not taken as Current;
- * either may still be an Alternate.
+ * either may still be an Alternate. The one rule for the Current Spec, from
+ * Discovery (`answer`) and from the Index (`answerFromIndex`): `pool` comes in
+ * order of preference for ties, and `of` reads what each Spec is ranked by.
  *
  * - Partial: under `PARTIAL_SPEC_RATIO` of the pool's largest path count, a
  *   versioned add-on file (Box's `openapi-v2026.0.json`) beside the full
- *   Spec. A Spec with no paths is ranked as before.
+ *   Spec. A Spec with no paths, or an unknown path count, is ranked as before.
  * - Deprecated: its Vendor says so in its title or description (Novu's
  *   `api-json`, "DEPRECATED: Novu API. Use /openapi.{json,yaml} instead.").
  *   When every Spec is deprecated, they are ranked as before.
  */
-function currentAndFull(
-  pool: SpecCandidate[],
-): { current: SpecCandidate; alternates: SpecCandidate[] } | null {
-  const paths = (c: SpecCandidate) => c.sniff.extract.pathCount;
+function currentAndFull<T>(
+  pool: T[],
+  of: (spec: T) => Ranking,
+): { current: T; alternates: T[] } | null {
+  const paths = (x: T) => of(x).pathCount ?? 0;
   const most = Math.max(0, ...pool.map(paths));
-  const partial = (c: SpecCandidate) =>
-    paths(c) > 0 && paths(c) < PARTIAL_SPEC_RATIO * most;
-  const eligible = pool.every(isDeprecated)
+  const partial = (x: T) =>
+    paths(x) > 0 && paths(x) < PARTIAL_SPEC_RATIO * most;
+  const deprecated = (x: T) => of(x).deprecated;
+  const eligible = pool.every(deprecated)
     ? pool
-    : pool.filter((c) => !isDeprecated(c));
+    : pool.filter((x) => !deprecated(x));
   if (eligible.length === pool.length && !pool.some(partial))
-    return currentAndAlternates(pool, (c) => c);
+    return currentAndAlternates(pool, of);
   const picked =
     currentAndAlternates(
-      eligible.filter((c) => !partial(c)),
-      (c) => c,
+      eligible.filter((x) => !partial(x)),
+      of,
     ) ??
-    currentAndAlternates(eligible, (c) => c) ??
-    currentAndAlternates(pool, (c) => c);
+    currentAndAlternates(eligible, of) ??
+    currentAndAlternates(pool, of);
   if (!picked) return null;
   const others = otherVersions(
     picked.current,
-    pool.filter((c) => c.apiVersion !== null),
-    (c) => c,
+    pool.filter((x) => of(x).apiVersion !== null),
+    of,
   );
   return { current: picked.current, alternates: others };
 }

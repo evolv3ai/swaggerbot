@@ -22,6 +22,13 @@
       "when": 1790109624174,
       "tag": "0002_spec_api_versions",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1790126709912,
+      "tag": "0003_spec_ranking_evidence",
+      "breakpoints": true
     }
   ]
 }

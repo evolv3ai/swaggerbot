@@ -1,8 +1,10 @@
-// Live Lookup for one or more names on a fresh, temporary Index, printing the
-// outcome, Current Spec, Alternates, Sources, Candidates and diagnostics. The
-// operator's check for a PR's "live check" (needs the keys in .env and
-// .env.local). LOOKUP_FULL=1 also prints the whole Outcome.
-// Usage: pnpm tsx scripts/lookup.ts "GitHub REST API" ["Slack Web API" ...]
+// Live Lookup for one or more names, printing the outcome, Current Spec,
+// Alternates, Sources, Candidates and diagnostics. The operator's check for a
+// PR's "live check" (needs the keys in .env and .env.local). Runs on a fresh,
+// temporary Index, or with --index on the Index at <path>, created if missing
+// and never deleted, so a second run is answered from it. LOOKUP_FULL=1 also
+// prints the whole Outcome.
+// Usage: pnpm tsx scripts/lookup.ts [--index <path>] "GitHub REST API" ["Slack Web API" ...]
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -16,16 +18,23 @@ for (const file of [".env", ".env.local"]) {
   }
 }
 
-const names = process.argv.slice(2);
-if (names.length === 0) {
-  console.error('usage: pnpm tsx scripts/lookup.ts "API name" ...');
+const args = process.argv.slice(2);
+let indexPath: string | undefined;
+const at = args.indexOf("--index");
+if (at !== -1) [, indexPath] = args.splice(at, 2);
+const names = args;
+if (names.length === 0 || (at !== -1 && !indexPath)) {
+  console.error(
+    'usage: pnpm tsx scripts/lookup.ts [--index <path>] "API name" ...',
+  );
   process.exit(2);
 }
 
-const dir = await mkdtemp(join(tmpdir(), "swaggerbot-lookup-"));
 const lookup = createAppLookup({
   ...process.env,
-  DATABASE_PATH: join(dir, "index.db"),
+  DATABASE_PATH:
+    indexPath ??
+    join(await mkdtemp(join(tmpdir(), "swaggerbot-lookup-")), "index.db"),
 });
 
 for (const name of names) {

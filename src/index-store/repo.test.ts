@@ -1,8 +1,17 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import {
+  cpSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import Database from "better-sqlite3";
+import { drizzle } from "drizzle-orm/better-sqlite3";
+import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { type Db, openDb } from "./db";
+import { type Db, MIGRATIONS_FOLDER, openDb } from "./db";
 import { createRepo, normalizeName, type Repo, specIdOf } from "./repo";
 import { apis, specs, vendors } from "./schema";
 
@@ -207,6 +216,44 @@ describe("repo", () => {
     expect(stored()?.supersededAt).toBeNull();
   });
 
+  it("stores a Spec's path count, deprecation and origin rank, outside the domain Spec", () => {
+    const spec = repo.putSpec(stripeApi.id, specBytes, {
+      ...specMeta,
+      pathCount: 187,
+      deprecated: true,
+      originRank: 2,
+    });
+
+    expect(spec).not.toHaveProperty("pathCount");
+    expect(repo.getApiWithSpecs(stripeApi.id)?.specs[0]).toMatchObject({
+      spec,
+      pathCount: 187,
+      deprecated: true,
+      originRank: 2,
+    });
+  });
+
+  it("takes the path count, deprecation and origin rank as read now when the same bytes are put again", () => {
+    repo.putSpec(stripeApi.id, specBytes, {
+      ...specMeta,
+      pathCount: 187,
+      deprecated: true,
+      originRank: 2,
+    });
+    repo.putSpec(stripeApi.id, specBytes, {
+      ...specMeta,
+      pathCount: 190,
+      deprecated: false,
+      originRank: 0,
+    });
+
+    expect(repo.getApiWithSpecs(stripeApi.id)?.specs[0]).toMatchObject({
+      pathCount: 190,
+      deprecated: false,
+      originRank: 0,
+    });
+  });
+
   it("finds an API by a remembered name, however it is written", () => {
     repo.rememberName("stripe", stripeApi.id);
 
@@ -216,5 +263,57 @@ describe("repo", () => {
 
   it("returns undefined for an API that is not in the Index", () => {
     expect(repo.getApiWithSpecs("stripe.com/nope")).toBeUndefined();
+  });
+});
+
+describe("migration 0003", () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "swaggerbot-migrate-"));
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("reads a Spec stored before it with no path count, not deprecated and no origin rank", () => {
+    // The migrations up to 0002 only, as a database from before this one.
+    const before = join(dir, "drizzle");
+    cpSync(MIGRATIONS_FOLDER, before, { recursive: true });
+    const journalPath = join(before, "meta", "_journal.json");
+    const journal = JSON.parse(readFileSync(journalPath, "utf8"));
+    journal.entries = journal.entries.filter(
+      (e: { idx: number }) => e.idx <= 2,
+    );
+    writeFileSync(journalPath, JSON.stringify(journal));
+    const path = join(dir, "old.db");
+    const sqlite = new Database(path);
+    migrate(drizzle({ client: sqlite }), { migrationsFolder: before });
+    sqlite
+      .prepare("INSERT INTO vendors (id, name, domain) VALUES (?, ?, ?)")
+      .run(stripe.id, stripe.name, stripe.domain);
+    sqlite
+      .prepare("INSERT INTO apis (id, vendor_id, name) VALUES (?, ?, ?)")
+      .run(stripeApi.id, stripe.id, stripeApi.name);
+    sqlite
+      .prepare(
+        "INSERT INTO specs (id, api_id, spec_version, format, byte_length, published_bytes) VALUES (?, ?, '3.0.0', 'json', 1, x'00')",
+      )
+      .run("f".repeat(64), stripeApi.id);
+    sqlite.close();
+
+    const db = openDb(path);
+    try {
+      expect(createRepo(db).getApiWithSpecs(stripeApi.id)?.specs).toEqual([
+        expect.objectContaining({
+          pathCount: null,
+          deprecated: false,
+          originRank: null,
+        }),
+      ]);
+    } finally {
+      db.$client.close();
+    }
   });
 });

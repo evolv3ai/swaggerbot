@@ -17,13 +17,35 @@ export type SpecMeta = {
   /** Default false. */
   isPreview?: boolean;
   format: SpecFormat;
+  /** How many paths it has; default null, unknown. */
+  pathCount?: number | null;
+  /** Its Vendor marks it deprecated. Default false. */
+  deprecated?: boolean;
+  /** Its place among the Choice's origin URLs; default null, not found at one. */
+  originRank?: number | null;
+};
+
+/**
+ * What the Current Spec rules read of a stored Spec, beside its API Version.
+ * Kept out of the domain Spec, and so out of the Outcome.
+ */
+export type SpecRanking = {
+  /** null for a Spec stored before path counts were kept. */
+  pathCount: number | null;
+  deprecated: boolean;
+  /** null when it was not found at an origin URL, or stored before this was kept. */
+  originRank: number | null;
 };
 
 export type ApiWithSpecs = {
   api: Api;
   vendor: Vendor;
   /** Oldest first. `confirmedAt` is null for a Spec that is only Unconfirmed. */
-  specs: { spec: Spec; sources: Source[]; confirmedAt: string | null }[];
+  specs: ({
+    spec: Spec;
+    sources: Source[];
+    confirmedAt: string | null;
+  } & SpecRanking)[];
 };
 
 /**
@@ -106,14 +128,18 @@ export function createRepo(db: Db) {
 
     /**
      * Stores a Spec's Published Form under its sha256. Storing the same bytes
-     * again keeps the stored Spec, takes its API Version and Preview flag as
-     * read now, and clears `supersededAt`: it was just found being served.
+     * again keeps the stored Spec, takes its API Version, Preview flag, path
+     * count, deprecation and origin rank as read now, and clears
+     * `supersededAt`: it was just found being served.
      */
     putSpec(apiId: string, bytes: Uint8Array, meta: SpecMeta): Spec {
       const id = specIdOf(bytes);
       const version = {
         apiVersion: meta.apiVersion,
         isPreview: meta.isPreview ?? false,
+        pathCount: meta.pathCount ?? null,
+        deprecated: meta.deprecated ?? false,
+        originRank: meta.originRank ?? null,
       };
       db.insert(specs)
         .values({
@@ -220,17 +246,23 @@ export function createRepo(db: Db) {
         .get();
       if (!row) return undefined;
       const apiSpecs = db
-        .select({ spec: specColumns, confirmedAt: specs.confirmedAt })
+        .select({
+          spec: specColumns,
+          confirmedAt: specs.confirmedAt,
+          pathCount: specs.pathCount,
+          deprecated: specs.deprecated,
+          originRank: specs.originRank,
+        })
         .from(specs)
         .where(eq(specs.apiId, apiId))
         .orderBy(asc(specs.createdAt), asc(specs.id))
         .all();
       return {
         ...row,
-        specs: apiSpecs.map(({ spec, confirmedAt }) => ({
+        specs: apiSpecs.map(({ spec, ...rest }) => ({
           spec,
           sources: sourcesOf(spec.id),
-          confirmedAt,
+          ...rest,
         })),
       };
     },

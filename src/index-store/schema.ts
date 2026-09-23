@@ -61,6 +61,17 @@ export const specs = sqliteTable(
      * but never returned by default.
      */
     supersededAt: text("superseded_at"),
+    /** How many paths it has; null for a Spec stored before this was kept. */
+    pathCount: integer("path_count"),
+    /** Its Vendor marks it deprecated at the start of its title or description. */
+    deprecated: integer("deprecated", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    /**
+     * Its place among the Choice's origin URLs when it was found at one;
+     * null otherwise. Among Specs of one API Version, the earliest is Current.
+     */
+    originRank: integer("origin_rank"),
     createdAt: text("created_at").notNull().default(now),
   },
   (t) => [index("specs_api_id_idx").on(t.apiId)],
