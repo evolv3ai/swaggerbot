@@ -302,6 +302,14 @@ export function createLookup(deps: LookupDeps): Lookup {
    * search domain. When the page can't be fetched, the site's origin is tried;
    * when that fails too, the Candidate keeps its search domain, with a
    * diagnostic.
+   *
+   * Then, when the Candidates are on more than one domain, each domain's apex
+   * (`https://<domain>/`) is fetched once: when it ends on another Candidate's
+   * domain, that domain's Candidates move there too. `api-docs.neon.tech`
+   * stays put, but `neon.tech` redirects to `neon.com`, so both are one
+   * Vendor; `neoncrm.com` redirects to `neonone.com`, which no Candidate has,
+   * so it stays a Vendor of its own. An apex that can't be fetched moves
+   * nothing, silently.
    */
   async function followPortals(
     portals: PortalCandidate[],
@@ -339,12 +347,27 @@ export function createLookup(deps: LookupDeps): Lookup {
       }
       return domain;
     };
-    return Promise.all(
+    const settled = await Promise.all(
       portals.map(async (p) => {
         const domain = await finalDomain(p);
         return domain && domain !== p.domain ? { ...p, domain } : p;
       }),
     );
+    const domains = new Set(settled.map((p) => p.domain));
+    if (domains.size < 2) return settled;
+    const apexDomains = new Map(
+      await Promise.all(
+        [...domains].map(
+          async (d) => [d, await settle(`https://${d}/`, d)] as const,
+        ),
+      ),
+    );
+    return settled.map((p) => {
+      const apex = apexDomains.get(p.domain);
+      return apex && apex !== p.domain && domains.has(apex)
+        ? { ...p, domain: apex }
+        : p;
+    });
   }
 
   /**
@@ -1069,10 +1092,15 @@ function otherVersions<T>(
 }
 
 /**
- * `currentAndAlternates`, except that a Spec with under `PARTIAL_SPEC_RATIO`
- * of the pool's largest path count is not taken as Current: a versioned
- * add-on file (Box's `openapi-v2026.0.json`) beside the full Spec. It may
- * still be an Alternate. A Spec with no paths is ranked as before.
+ * `currentAndAlternates`, except for two kinds of Spec not taken as Current;
+ * either may still be an Alternate.
+ *
+ * - Partial: under `PARTIAL_SPEC_RATIO` of the pool's largest path count, a
+ *   versioned add-on file (Box's `openapi-v2026.0.json`) beside the full
+ *   Spec. A Spec with no paths is ranked as before.
+ * - Deprecated: its Vendor says so in its title or description (Novu's
+ *   `api-json`, "DEPRECATED: Novu API. Use /openapi.{json,yaml} instead.").
+ *   When every Spec is deprecated, they are ranked as before.
  */
 function currentAndFull(
   pool: SpecCandidate[],
@@ -1081,17 +1109,38 @@ function currentAndFull(
   const most = Math.max(0, ...pool.map(paths));
   const partial = (c: SpecCandidate) =>
     paths(c) > 0 && paths(c) < PARTIAL_SPEC_RATIO * most;
-  const full = currentAndAlternates(
-    pool.filter((c) => !partial(c)),
-    (c) => c,
-  );
-  if (!full || !pool.some(partial)) return currentAndAlternates(pool, (c) => c);
+  const eligible = pool.every(isDeprecated)
+    ? pool
+    : pool.filter((c) => !isDeprecated(c));
+  if (eligible.length === pool.length && !pool.some(partial))
+    return currentAndAlternates(pool, (c) => c);
+  const picked =
+    currentAndAlternates(
+      eligible.filter((c) => !partial(c)),
+      (c) => c,
+    ) ??
+    currentAndAlternates(eligible, (c) => c) ??
+    currentAndAlternates(pool, (c) => c);
+  if (!picked) return null;
   const others = otherVersions(
-    full.current,
+    picked.current,
     pool.filter((c) => c.apiVersion !== null),
     (c) => c,
   );
-  return { current: full.current, alternates: others };
+  return { current: picked.current, alternates: others };
+}
+
+/** How far into a Spec's title or description a deprecation notice counts. */
+const DEPRECATION_NOTICE_CHARS = 80;
+
+/** The Vendor marks the Spec deprecated at the start of its title or description. */
+function isDeprecated(c: SpecCandidate): boolean {
+  const { title, description } = c.sniff.extract;
+  return [title, description].some(
+    (text) =>
+      text !== null &&
+      /\bdeprecated\b/i.test(text.slice(0, DEPRECATION_NOTICE_CHARS)),
+  );
 }
 
 /** The first candidate for each Spec id. */
