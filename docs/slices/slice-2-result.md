@@ -1,8 +1,10 @@
 ---
-status: gate MET on two runs (FR 0/22 and 0/21, runs 6 and 7); coverage 100% and 90.9%; after round 3, WTR-85, WTR-86 and the token rename
+status: ACCEPTED by Wes 2026-09-22 (gate met on two runs, FR 0/22 and 0/21; coverage 100% and 90.9%)
 ---
 
 # Slice 2 result
+
+**Accepted by Wes, 2026-09-22.** Slice 3 (Live service, `docs/PRD.md`) may start.
 
 All thirteen planned issues are merged, plus WTR-54 and WTR-55 (filed mid-slice), WTR-57..62
 after the label review, in round 3 **WTR-56, 64, 65, 79, 80, 81 and 84**, then **WTR-85**
