@@ -543,6 +543,13 @@ export function createLookup(deps: LookupDeps): Lookup {
      * no Spec (not one, or a 404/410). For marking Specs Superseded.
      */
     const served = new Map<string, string | null>();
+    /**
+     * Each Spec's earliest origin URL, as its place in `choice.originUrls`:
+     * among Specs of one API Version, the earliest is Current.
+     */
+    const originRank = new Map<string, number>();
+    /** The origin URL being fetched, as its place in `choice.originUrls`. */
+    let originIndex: number | undefined;
 
     async function consider(
       url: string,
@@ -557,6 +564,8 @@ export function createLookup(deps: LookupDeps): Lookup {
       if (candidates.some((c) => c.url === url)) return;
       const specId = specIdOf(bytes);
       served.set(url, specId);
+      if (originIndex !== undefined && !originRank.has(specId))
+        originRank.set(specId, originIndex);
       // The same bytes from another Source are the same Spec: judge it once.
       const known = candidates.find((c) => c.specId === specId);
       let probability = known?.probability;
@@ -854,10 +863,12 @@ export function createLookup(deps: LookupDeps): Lookup {
      */
     const goOn = (url: string) => !settled() || urlNamesApiVersion(url);
 
-    for (const url of choice.originUrls) {
+    for (const [i, url] of choice.originUrls.entries()) {
       if (!goOn(url)) continue;
+      originIndex = i;
       await fetchOrigin(url);
     }
+    originIndex = undefined;
     if (!settled()) {
       let hits: KnownPathHit[] = [];
       try {
@@ -908,7 +919,11 @@ export function createLookup(deps: LookupDeps): Lookup {
 
     function answer(): Outcome {
       // Every Spec that could answer Resolved, one candidate each, in order
-      // of preference: Official, then Endorsed, then likeliest.
+      // of preference: Official, then Endorsed, then earliest origin URL (the
+      // Judge's probabilities for near-identical Specs vary between calls),
+      // then likeliest.
+      const byOrigin = (c: SpecCandidate) =>
+        originRank.get(c.specId) ?? choice.originUrls.length;
       const describes = candidates.filter((c) => c.probability >= t.describes);
       let pool = describes.filter((c) => isVendorBacked(c.provenance));
       if (pool.length === 0 && allowCommunity)
@@ -917,6 +932,7 @@ export function createLookup(deps: LookupDeps): Lookup {
         [...pool].sort(
           (a, b) =>
             tierRank(a.provenance) - tierRank(b.provenance) ||
+            byOrigin(a) - byOrigin(b) ||
             b.probability - a.probability,
         ),
       );
@@ -1253,7 +1269,10 @@ function isUmbrellaLabel(query: string, label: string): boolean {
  * deployment variants and versions of one API as separate entries (twenty
  * "GitHub v3 REST API"s), which `whichApi` could only call Ambiguous. A
  * group's choice is its entry without a `:` suffix in the key, else its
- * first, with the group's origin URLs. Different titles are never merged.
+ * first. Its origin URLs are its own, then those of the group that sit in
+ * the same directory as one of its own: GitHub's `api.github.com/` files, not
+ * `ghec/` or `ghes-3.8/`, other deployments' Specs of the same version.
+ * Different titles are never merged.
  */
 function mergeGuruChoices(candidates: ApiCandidate[]): ApiChoice[] {
   const groups = new Map<string, ApiCandidate[]>();
@@ -1266,12 +1285,26 @@ function mergeGuruChoices(candidates: ApiCandidate[]): ApiChoice[] {
   return [...groups.values()].map((group) => {
     const representative =
       group.find((c) => !c.key.includes(":")) ?? (group[0] as ApiCandidate);
-    const originUrls = [...new Set(group.flatMap((c) => c.originUrls))];
+    const dirs = new Set(representative.originUrls.map(originDirectory));
+    const originUrls = [
+      ...new Set([
+        ...representative.originUrls,
+        ...group
+          .flatMap((c) => c.originUrls)
+          .filter((url) => dirs.has(originDirectory(url))),
+      ]),
+    ];
     return {
       ...fromApisGuru(representative),
       originUrls: originUrls.slice(0, MAX_MERGED_ORIGIN_URLS),
     };
   });
+}
+
+/** A URL up to and including its path's last `/`. */
+function originDirectory(url: string): string {
+  const path = url.split(/[?#]/)[0] ?? url;
+  return path.slice(0, path.lastIndexOf("/") + 1);
 }
 
 function fromApisGuru(c: ApiCandidate): ApiChoice {
