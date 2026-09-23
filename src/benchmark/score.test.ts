@@ -23,6 +23,11 @@ function resolvedTo(name: string, apiId: string, urls: string[]): Outcome {
       supersededAt: null,
       format: "json",
       byteLength: 1,
+      downloads: {
+        published: `/api/specs/${specId}/published`,
+        normalized: `/api/specs/${specId}/normalized`,
+      },
+      normalized: "pending",
     },
     alternateSpecs: [],
     provenance: "Official",
@@ -35,6 +40,7 @@ function resolvedTo(name: string, apiId: string, urls: string[]): Outcome {
       lastVerifiedAt: at,
     })),
     validityIssues: [],
+    validityIssueCount: 0,
     verifiedAt: at,
   };
 }

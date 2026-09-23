@@ -77,6 +77,13 @@ Every answer says when its Spec was last verified (`verifiedAt`). An answer from
 
 Each Spec's Normalized Form (bundled and converted to OpenAPI 3.1), its Validity Issues and its Spec Outline are built in the background and stored in the Index (`spec_forms`, [ADR 0004](docs/adr/0004-normalized-form-built-in-background-with-scalar.md)): the server builds one Spec at a time, oldest first (a Spec being retried after a failed attempt goes behind every Spec not yet tried), so a Lookup never waits for a build, and a Spec stored before the table existed is built the same way. External `$ref`s on the Spec's own origin are fetched through the polite fetcher, behind any Lookup's requests to the same host, within 75 min per Spec; a build whose references don't all arrive in that time counts as a failed attempt rather than being saved. A build is retried up to three times, then given up (`failed`). A Published Form over `MAX_FORMS_BYTES` (in bytes, default 32 MB) is never built, to keep a build's memory within the container; a value that is not a positive integer is ignored with a warning.
 
+A Resolved or Unconfirmed Outcome gives each of its Specs (`currentSpec` and each of `alternateSpecs`, or `spec`) with two more fields:
+
+- `downloads`: `{ "published", "normalized" }`, the URLs of its Published Form and Normalized Form, `${PUBLIC_BASE_URL}/api/specs/{specId}/published` and `…/normalized`. Set `PUBLIC_BASE_URL` to the public origin with no trailing slash (`https://swaggerbot.dev`); without it the URLs are paths starting with `/api/`.
+- `normalized`: whether its Normalized Form is `ready`, still `pending` (the background build hasn't reached it) or `failed`.
+
+Beside them, the Outcome carries the Validity Issues of the Spec it answers with (the Current Spec, or the Unconfirmed Spec): `validityIssues`, at most 50 groups `{ message, path, count }` with the largest `count` first, and `validityIssueCount`, the total count of findings. Both are empty (`[]`, 0) while the Spec's forms are pending.
+
 ## Access
 
 `POST /api/lookup` takes `{ "name", "apiVersion"?, "allowCommunity"?, "fresh"? }`.

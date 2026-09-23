@@ -12,7 +12,7 @@ import {
   type Vendor,
   vendorIdFromDomain,
 } from "~/domain/catalog";
-import type { Outcome } from "~/domain/outcome";
+import type { BareOutcome, Outcome, SpecAnswer } from "~/domain/outcome";
 import {
   bestProvenance,
   PROVENANCE_TIERS,
@@ -27,6 +27,7 @@ import {
 import { type SniffResult, sniffSpec } from "~/fetch/sniff";
 import type { Db } from "~/index-store/db";
 import { createRepo, normalizeName, specIdOf } from "~/index-store/repo";
+import { createSpecForms } from "~/index-store/spec-forms";
 import {
   type ApiRef,
   type Judge,
@@ -52,6 +53,7 @@ import {
 } from "~/sources/github";
 import { findPortalCandidates, type PortalCandidate } from "~/sources/portal";
 import type { WebSearch } from "~/sources/web-search";
+import { specAnswer, withSpecForms } from "~/spec-forms/outcome";
 import { crawledNamesCovered } from "./coverage";
 import {
   DEFAULT_FRESHNESS_DAYS,
@@ -107,6 +109,25 @@ export type IndexedLookup = Lookup & {
    * background Verification, as in the Lookup.
    */
   fromIndex(request: LookupRequest): Outcome | null;
+  /**
+   * The Current Spec of the API `apiId`, with its Alternates, from the Index
+   * alone, by the rule a default Lookup answers with: Community Specs left
+   * out, and no Preview Version. `null` when the Index holds no such API, or
+   * no confirmed Official, Endorsed or Mirror Spec of it. Runs no Discovery
+   * and queues no Verification.
+   */
+  currentFromIndex(apiId: string): CurrentFromIndex | null;
+};
+
+/** The Current Spec of an API from the Index (`currentFromIndex`). */
+export type CurrentFromIndex = {
+  api: Api;
+  vendor: Vendor;
+  currentSpec: SpecAnswer;
+  alternateSpecs: SpecAnswer[];
+  provenance: Provenance;
+  sources: Source[];
+  verifiedAt: string;
 };
 
 export type LookupDeps = {
@@ -171,6 +192,12 @@ export type LookupDeps = {
    * `Infinity` is none.
    */
   specStepBudgetMs?: number;
+  /**
+   * The origin download URLs are given under (`PUBLIC_BASE_URL`, no
+   * trailing slash, e.g. `https://swaggerbot.dev`). Absent, they are paths
+   * starting with `/api/`.
+   */
+  publicBaseUrl?: string;
 };
 
 /**
@@ -326,6 +353,8 @@ function copyLog(log: SourceLog): SourceLog {
 export function createLookup(deps: LookupDeps): IndexedLookup {
   const { judge, fetcher, webSearch, apisGuru, github, githubSearch } = deps;
   const repo = createRepo(deps.db);
+  const forms = createSpecForms(deps.db);
+  const baseUrl = deps.publicBaseUrl;
   const t: Thresholds = { ...DEFAULT_THRESHOLDS, ...deps.thresholds };
   const now = deps.now ?? (() => new Date());
   const freshnessDays = deps.freshnessDays ?? DEFAULT_FRESHNESS_DAYS;
@@ -349,8 +378,8 @@ export function createLookup(deps: LookupDeps): IndexedLookup {
   ) => {
     const diagnostics: string[] = [];
     const { timed, timings } = stepTimer();
-    const finish = (outcome: Outcome): Outcome => ({
-      ...outcome,
+    const finish = (outcome: BareOutcome): Outcome => ({
+      ...withSpecForms(outcome, forms, baseUrl),
       ...(diagnostics.length > 0 ? { diagnostics } : {}),
       ...(deps.trace ? { timings: timings() } : {}),
     });
@@ -450,8 +479,29 @@ export function createLookup(deps: LookupDeps): IndexedLookup {
     fromIndex(request: LookupRequest): Outcome | null {
       const diagnostics: string[] = [];
       const indexed = fromIndexWith(request, diagnostics);
-      if (!indexed || diagnostics.length === 0) return indexed;
-      return { ...indexed, diagnostics };
+      if (!indexed) return null;
+      const outcome = withSpecForms(indexed, forms, baseUrl);
+      return diagnostics.length === 0 ? outcome : { ...outcome, diagnostics };
+    },
+
+    currentFromIndex(apiId: string): CurrentFromIndex | null {
+      const stored = repo.getApiWithSpecs(apiId);
+      if (!stored) return null;
+      // As a default Lookup answers: no Community Spec.
+      const current = currentOf(stored, false);
+      if (!current) return null;
+      const { api, vendor, currentSpec, alternateSpecs } = current;
+      return {
+        api,
+        vendor,
+        currentSpec: specAnswer(currentSpec, forms, baseUrl),
+        alternateSpecs: alternateSpecs.map((s) =>
+          specAnswer(s, forms, baseUrl),
+        ),
+        provenance: current.provenance,
+        sources: current.sources,
+        verifiedAt: current.verifiedAt,
+      };
     },
   });
 
@@ -462,7 +512,7 @@ export function createLookup(deps: LookupDeps): IndexedLookup {
   function fromIndexWith(
     { name, apiVersion, allowCommunity = false, fresh = false }: LookupRequest,
     diagnostics: string[],
-  ): Outcome | null {
+  ): BareOutcome | null {
     if (fresh) return null;
     const indexed = answerFromIndex(name, allowCommunity, apiVersion);
     if (indexed && isStale(indexed)) queueVerification(name, diagnostics);
@@ -546,24 +596,39 @@ export function createLookup(deps: LookupDeps): IndexedLookup {
   /**
    * Resolved from the confirmed Specs with an Official or Endorsed Source (or
    * Community ones, when allowed and there are no others), if the name is
-   * known: the Current Spec with its Alternates, leaving out Preview Versions
-   * and Superseded Specs; or, with `apiVersion`, that API Version's Spec,
-   * whatever it is. `null` sends the Lookup on to Discovery.
-   *
-   * The Current Spec is picked by `currentAndFull`, as in Discovery, from the
-   * path count, deprecation and origin rank stored with each Spec; ties go to
-   * the best Provenance, then the earliest origin URL, then the newest Spec.
-   * A Spec stored before these were kept ranks by API Version alone.
+   * known: the Current Spec with its Alternates (`currentOf`); or, with
+   * `apiVersion`, that API Version's Spec, whatever it is. `null` sends the
+   * Lookup on to Discovery.
    */
   function answerFromIndex(
     name: string,
     allowCommunity: boolean,
     apiVersion: string | undefined,
-  ): Outcome | null {
+  ): BareOutcome | null {
     const api = repo.findApiByName(name);
     if (!api) return null;
     const stored = repo.getApiWithSpecs(api.id);
     if (!stored) return null;
+    if (apiVersion === undefined) return currentOf(stored, allowCommunity);
+
+    const { pool, live } = poolOf(stored, allowCommunity);
+    const chosen = pool.find((s) => s.spec.apiVersion === apiVersion);
+    if (!chosen) return null;
+    const others = otherVersions(chosen, live, (s) => s.spec);
+    return resolved(
+      stored.api,
+      stored.vendor,
+      chosen,
+      others.map((s) => s.spec),
+    );
+  }
+
+  /**
+   * The confirmed Specs of a stored API that may answer, newest first: those
+   * with an Official or Endorsed Source, or, when allowed and there are none,
+   * Community ones; and of those, the ones not Superseded (`live`).
+   */
+  function poolOf(stored: StoredApi, allowCommunity: boolean) {
     // An Unconfirmed Spec never answers Resolved; newest first, for ties.
     const confirmed = stored.specs.filter((s) => s.confirmedAt !== null);
     confirmed.reverse();
@@ -572,25 +637,30 @@ export function createLookup(deps: LookupDeps): IndexedLookup {
     let pool = at(isVendorBacked);
     if (pool.length === 0 && allowCommunity)
       pool = at((p) => p === "Community");
-    const live = pool.filter((s) => s.spec.supersededAt === null);
-    const versionOf = (s: (typeof pool)[number]) => s.spec;
+    return { pool, live: pool.filter((s) => s.spec.supersededAt === null) };
+  }
 
-    if (apiVersion !== undefined) {
-      const chosen = pool.find((s) => s.spec.apiVersion === apiVersion);
-      if (!chosen) return null;
-      const others = otherVersions(chosen, live, versionOf);
-      return resolved(
-        stored.api,
-        stored.vendor,
-        chosen,
-        others.map((s) => s.spec),
-      );
-    }
-    const tier = (s: (typeof pool)[number]) =>
+  /**
+   * Resolved with a stored API's Current Spec and its Alternates, leaving
+   * out Preview Versions and Superseded Specs; `null` when no Spec may
+   * answer. The one rule for the Current Spec from the Index, for a default
+   * Lookup (`answerFromIndex`) and for `currentFromIndex`.
+   *
+   * The Current Spec is picked by `currentAndFull`, as in Discovery, from the
+   * path count, deprecation and origin rank stored with each Spec; ties go to
+   * the best Provenance, then the earliest origin URL, then the newest Spec.
+   * A Spec stored before these were kept ranks by API Version alone.
+   */
+  function currentOf(
+    stored: StoredApi,
+    allowCommunity: boolean,
+  ): BareResolved | null {
+    const { live } = poolOf(stored, allowCommunity);
+    const tier = (s: StoredApiSpec) =>
       tierRank(
         bestProvenance(s.sources.map((src) => src.provenance)) ?? "Community",
       );
-    const byOrigin = (s: (typeof pool)[number]) =>
+    const byOrigin = (s: StoredApiSpec) =>
       s.originRank ?? Number.MAX_SAFE_INTEGER;
     const ranked = [...live].sort(
       (a, b) => tier(a) - tier(b) || byOrigin(a) - byOrigin(b),
@@ -611,7 +681,7 @@ export function createLookup(deps: LookupDeps): IndexedLookup {
   }
 
   /** Verified longer ago than the freshness window, or never. */
-  function isStale(outcome: Outcome): boolean {
+  function isStale(outcome: BareOutcome): boolean {
     if (!("verifiedAt" in outcome)) return false;
     const verifiedAt = Date.parse(outcome.verifiedAt);
     return (
@@ -769,8 +839,8 @@ export function createLookup(deps: LookupDeps): IndexedLookup {
     request: { allowCommunity: boolean; apiVersion: string | undefined },
     diagnostics: string[],
     timed: Timed,
-  ): Promise<Outcome> {
-    const ambiguous: Outcome = {
+  ): Promise<BareOutcome> {
+    const ambiguous: BareOutcome = {
       outcome: "Ambiguous",
       candidates: crawledApis,
     };
@@ -815,7 +885,7 @@ export function createLookup(deps: LookupDeps): IndexedLookup {
     },
     diagnostics: string[],
     timed: Timed,
-  ): Promise<{ outcome: Outcome; current?: SpecCandidate }> {
+  ): Promise<{ outcome: BareOutcome; current?: SpecCandidate }> {
     const ref = apiRef(choice);
     const candidates: SpecCandidate[] = [];
     const checked: string[] = [];
@@ -1534,7 +1604,7 @@ export function createLookup(deps: LookupDeps): IndexedLookup {
           );
     }
 
-    function answer(): Outcome {
+    function answer(): BareOutcome {
       // Every Spec that could answer Resolved, one candidate each, in order
       // of preference: Official, then Endorsed, then earliest origin URL (the
       // Judge's probabilities for near-identical Specs vary between calls),
@@ -1720,6 +1790,14 @@ export function createLookup(deps: LookupDeps): IndexedLookup {
 
 type StoredSpec = { spec: Spec; sources: Source[] };
 
+/** An API as the Index stores it, with its Vendor and Specs. */
+type StoredApi = NonNullable<
+  ReturnType<ReturnType<typeof createRepo>["getApiWithSpecs"]>
+>;
+type StoredApiSpec = StoredApi["specs"][number];
+
+type BareResolved = Extract<BareOutcome, { outcome: "Resolved" }>;
+
 /**
  * The other live, non-Preview API Versions beside a Spec the Caller chose by
  * its API Version: the Current Spec and Alternates of the rest, less any of
@@ -1834,7 +1912,7 @@ function resolved(
   vendor: Vendor,
   stored: StoredSpec,
   alternateSpecs: Spec[] = [],
-): Outcome {
+): BareResolved {
   const provenance =
     bestProvenance(stored.sources.map((s) => s.provenance)) ?? "Official";
   const verifiedAt =
@@ -1851,7 +1929,6 @@ function resolved(
     alternateSpecs,
     provenance,
     sources: stored.sources,
-    validityIssues: [],
     verifiedAt,
   };
 }

@@ -23,7 +23,14 @@ function fakeLookup() {
   const fromIndex = vi.fn((request: LookupRequest) =>
     request.name === INDEXED && !request.fresh ? indexedOutcome : null,
   );
-  return { lookup: Object.assign(run, { fromIndex }) as IndexedLookup, run };
+  const currentFromIndex = vi.fn(() => null);
+  return {
+    lookup: Object.assign(run, {
+      fromIndex,
+      currentFromIndex,
+    }) as IndexedLookup,
+    run,
+  };
 }
 
 describe("handleLookupRequest", () => {
