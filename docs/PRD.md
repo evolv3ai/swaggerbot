@@ -101,7 +101,7 @@ All Spec content is untrusted: rendered with sanitisation, under a strict Conten
 
 ## Stack
 
-One TanStack Start app (Router, Query, Table) running as a single instance on Coolify. SQLite through Drizzle in WAL mode, replicated to R2 with Litestream (ADR 0002). Jev through the TypeSafe JS SDK, behind a narrow judgment interface. TypeScript throughout.
+One TanStack Start app (Router, Query, Table) running as a single instance on Coolify. SQLite through Drizzle in WAL mode, replicated to Backblaze B2 with Litestream (ADR 0002). Jev through the TypeSafe JS SDK, behind a narrow judgment interface. TypeScript throughout.
 
 Explicitly **not** in v1: LangGraph, TanStack AI, OpenRouter, Perplexity, Browserbase/Stagehand, MongoDB, Express, AI-written summaries, user accounts, billing.
 
@@ -125,10 +125,10 @@ Each slice is usable end to end and demonstrable. Later slices don't start until
 - **Accept when:** False Resolution is still < 2% and long-tail coverage is ≥ 60%.
 
 ### Slice 3 — Live service
-- Deployed on Coolify, with Litestream to R2 and **a rehearsed restore**.
+- Deployed on Coolify, with Litestream to Backblaze B2 and **a rehearsed restore**.
 - Answers served from the Index; background Verification of Stale entries; `fresh: true`.
 - API keys, quotas and per-IP rate limits.
-- **Accept when:** answers from the Index hit p90 < 200 ms and Discovery hits p90 < 15 s in production, and a restore from R2 has been done.
+- **Accept when:** answers from the Index hit p90 < 200 ms and Discovery hits p90 < 15 s in production, and a restore from B2 has been done.
 
 ### Slice 4 — Spec forms and navigation
 - The Normalized Form, including Swagger 2 → OpenAPI conversion and bundling.
