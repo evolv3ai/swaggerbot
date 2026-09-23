@@ -119,6 +119,12 @@ export type LookupDeps = {
    * GitHub. Absent (no `GITHUB_TOKEN`), the step is skipped.
    */
   githubSearch?: GitHubCodeSearch;
+  /**
+   * Adds to `diagnostics` what the Spec step checked and each Spec it found,
+   * with its API Version, path count and Judge probability, for diagnosing
+   * a Lookup afterwards (`LOOKUP_TRACE=1`). Off by default.
+   */
+  trace?: boolean;
 };
 
 /**
@@ -1059,9 +1065,27 @@ export function createLookup(deps: LookupDeps): Lookup {
         c.provenance = "Community";
 
     let current: SpecCandidate | undefined;
+    let pool: SpecCandidate[] = [];
     const outcome = answer();
     supersedeUnserved(choice.api.id, served);
+    // Unconfirmed already gives what was checked in its reasons.
+    if (deps.trace && outcome.outcome !== "Unconfirmed") traceSpecs();
     return { outcome, ...(current ? { current } : {}) };
+
+    /** What was checked, then each Spec found: the pool's first, in order. */
+    function traceSpecs(): void {
+      if (checked.length > 0)
+        diagnostics.push(`checked: ${checked.join("; ")}`);
+      const rest = candidates.filter((c) => !pool.includes(c));
+      for (const [label, list] of [
+        ["pool", pool],
+        ["not in pool", rest],
+      ] as const)
+        for (const c of list)
+          diagnostics.push(
+            `${label}: ${c.url} (API Version ${c.apiVersion ?? "none"}${c.isPreview ? ", Preview" : ""}, ${c.sniff.extract.pathCount} paths, Judge ${c.probability.toFixed(2)}, ${c.provenance})`,
+          );
+    }
 
     function answer(): Outcome {
       // Every Spec that could answer Resolved, one candidate each, in order
@@ -1071,7 +1095,7 @@ export function createLookup(deps: LookupDeps): Lookup {
       const byOrigin = (c: SpecCandidate) =>
         originRank.get(c.specId) ?? choice.originUrls.length;
       const describes = candidates.filter((c) => c.probability >= t.describes);
-      let pool = describes.filter((c) => isVendorBacked(c.provenance));
+      pool = describes.filter((c) => isVendorBacked(c.provenance));
       if (pool.length === 0 && allowCommunity)
         pool = describes.filter((c) => c.provenance === "Community");
       pool = uniqueSpecs(

@@ -7,6 +7,17 @@ export type BenchmarkAnswer = {
   outcome: Outcome;
   /** Set when the Lookup threw; `outcome` is then Unknown. */
   error?: string;
+  /** How long the Lookup took, in milliseconds. */
+  ms?: number;
+};
+
+/** One entry's answer in full, for diagnosing a failure after the run. */
+export type BenchmarkEntryAnswer = {
+  name: string;
+  expected: OutcomeKind;
+  /** The Outcome the Lookup returned, `diagnostics` included. */
+  outcome: Outcome;
+  ms?: number;
 };
 
 export type BenchmarkFailure = {
@@ -37,6 +48,8 @@ export type BenchmarkReport = {
   groups: Record<BenchmarkGroup, GroupCounts>;
   failures: BenchmarkFailure[];
   errors: { name: string; message: string }[];
+  /** Every entry's answer, in entry order. */
+  answers: BenchmarkEntryAnswer[];
   /** The Index the run used; set by `pnpm bench`, not by `score`. */
   indexPath?: string;
   /** Whether that Index started empty (a fresh temporary one) rather than given with `--index`. */
@@ -108,6 +121,7 @@ export function score(
   const groups = emptyGroups();
   const failures: BenchmarkFailure[] = [];
   const errors: BenchmarkReport["errors"] = [];
+  const answers: BenchmarkEntryAnswer[] = [];
   let resolved = 0;
   let falseResolutions = 0;
   let correctOutcomes = 0;
@@ -124,6 +138,12 @@ export function score(
     const group = groups[entry.group];
     group.entries++;
     if (answer.error) errors.push({ name: entry.name, message: answer.error });
+    answers.push({
+      name: entry.name,
+      expected: entry.expected,
+      outcome: answer.outcome,
+      ...(answer.ms !== undefined ? { ms: answer.ms } : {}),
+    });
 
     let why: string | null = null;
     if (answer.outcome.outcome === "Resolved") {
@@ -165,5 +185,6 @@ export function score(
     groups,
     failures,
     errors,
+    answers,
   };
 }
