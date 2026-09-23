@@ -1,0 +1,16 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "Sloppy", "version": "1.0.0" },
+  "paths": {
+    "/a": {
+      "get": {
+        "responses": { "200": { "description": "A", "allowReserved": true } }
+      }
+    },
+    "/b": {
+      "get": {
+        "responses": { "200": { "description": "B", "allowReserved": true } }
+      }
+    }
+  }
+}
