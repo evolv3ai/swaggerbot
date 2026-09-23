@@ -13,6 +13,7 @@ import { createFetcher, FetchError, type Fetcher } from "~/fetch/fetcher";
 import { type KnownPathHit, probeKnownPaths } from "~/fetch/known-paths";
 import { sniffSpec } from "~/fetch/sniff";
 import { openDb } from "~/index-store/db";
+import { verifications } from "~/index-store/schema";
 import { FakeJudge, type FakeJudgeScript } from "~/judge/fake";
 import { JudgeError, yesNo } from "~/judge/judge";
 import { type ApiCandidate, createApisGuru } from "~/sources/apis-guru";
@@ -3224,5 +3225,134 @@ describe("provenanceOf", () => {
     expect(
       provenanceOf("https://stripe.com.evil.test/openapi.json", stripe, false),
     ).toBe("Mirror");
+  });
+});
+
+describe("lookup of an indexed name as it ages", () => {
+  const DAY = 24 * 60 * 60 * 1000;
+
+  /**
+   * PayCo, resolved once at `NOW` and so in the Index; `clock` sets the time
+   * of later Lookups, and `guruCalls` counts the APIs.guru searches.
+   */
+  async function indexedPayco() {
+    server.send(
+      "developer.payco.test",
+      "/openapi.json",
+      spec("PayCo API"),
+      "application/json",
+    );
+    let clock = new Date(NOW);
+    let guruCalls = 0;
+    const guru = createApisGuru({
+      fetchJson: async () => apisGuruList(server.origin),
+      cachePath: join(dir, "apis-guru-list.json"),
+    });
+    const { lookup } = setup(
+      {
+        whichApi: {
+          payco: {
+            probabilities: { "payco.test/payco-api": 0.9, none: 0.1 },
+            confidence: 0.9,
+          },
+        },
+        specDescribesApi: { "PayCo API": yes },
+      },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        now: () => clock,
+        freshnessDays: 7,
+        apisGuru: {
+          ...guru,
+          findCandidates: (name) => {
+            guruCalls++;
+            return guru.findCandidates(name);
+          },
+        },
+      },
+    );
+    const first = await ask(lookup, "payco");
+    expect(first).toMatchObject({ outcome: "Resolved", verifiedAt: NOW });
+    const db = openDb(join(dir, "index.db"));
+    return {
+      lookup,
+      first,
+      at: (ms: number) => {
+        clock = new Date(Date.parse(NOW) + ms);
+        return clock.toISOString();
+      },
+      guruCalls: () => guruCalls,
+      queued: () => db.select().from(verifications).all(),
+    };
+  }
+
+  it("answers from the Index and queues nothing within the freshness window", async () => {
+    const payco = await indexedPayco();
+    payco.at(7 * DAY - 1);
+    const calls = payco.guruCalls();
+
+    const outcome = await ask(payco.lookup, "payco");
+
+    expect(outcome).toEqual(payco.first);
+    expect(payco.guruCalls()).toBe(calls);
+    expect(payco.queued()).toEqual([]);
+  });
+
+  it("answers a Stale entry from the Index and queues its Verification", async () => {
+    const payco = await indexedPayco();
+    const later = payco.at(7 * DAY + 1);
+    const calls = payco.guruCalls();
+
+    const outcome = await ask(payco.lookup, "PayCo API");
+
+    expect(outcome).toEqual(payco.first);
+    expect(payco.guruCalls()).toBe(calls);
+    expect(payco.queued()).toEqual([
+      {
+        nameNormalized: "payco",
+        requestedAt: later,
+        startedAt: null,
+        finishedAt: null,
+        attempts: 0,
+        lastError: null,
+      },
+    ]);
+  });
+
+  it("runs Discovery with `fresh` and moves verifiedAt", async () => {
+    const payco = await indexedPayco();
+    const later = payco.at(DAY);
+    const calls = payco.guruCalls();
+
+    const outcome = await ask(payco.lookup, "payco", { fresh: true });
+
+    expect(payco.guruCalls()).toBe(calls + 1);
+    expect(outcome).toMatchObject({
+      outcome: "Resolved",
+      api: { id: "payco.test/payco-api" },
+      verifiedAt: later,
+    });
+    // The Index answers with the new Verification too.
+    expect(await ask(payco.lookup, "payco")).toMatchObject({
+      verifiedAt: later,
+    });
+    expect(payco.queued()).toEqual([]);
+  });
+
+  it("runs Discovery with `skipIndex`", async () => {
+    const payco = await indexedPayco();
+    const later = payco.at(8 * DAY);
+    const calls = payco.guruCalls();
+
+    const outcome = await payco.lookup({ name: "payco" }, { skipIndex: true });
+
+    expect(payco.guruCalls()).toBe(calls + 1);
+    expect(outcome).toMatchObject({ verifiedAt: later });
+    expect(payco.queued()).toEqual([]);
   });
 });
