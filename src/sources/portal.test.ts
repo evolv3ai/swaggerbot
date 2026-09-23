@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { registrableDomain } from "./domain";
-import { findPortalCandidates, NON_VENDOR_DOMAINS } from "./portal";
+import {
+  findPortalCandidates,
+  isSharedHostingTenant,
+  NON_VENDOR_DOMAINS,
+} from "./portal";
 import { FakeWebSearch } from "./web-search/fake";
 import type { SearchResult } from "./web-search/web-search";
 
@@ -109,6 +113,41 @@ describe("findPortalCandidates", () => {
     ]);
     const candidates = await findPortalCandidates("stripe", search);
     expect(candidates.map((c) => c.domain)).toEqual(["stripe.com"]);
+  });
+
+  it("drops tenants of shared hosting", async () => {
+    const search = new FakeWebSearch([
+      hit("https://steamwebapi.azurewebsites.net/"),
+      hit("https://someone.github.io/steam-api/"),
+      hit("https://steamcommunity.com/dev"),
+    ]);
+    const candidates = await findPortalCandidates("Steam Web API", search);
+    expect(candidates.map((c) => c.domain)).toEqual(["steamcommunity.com"]);
+  });
+
+  it("matches only tenants of a shared host, not the host or lookalikes", () => {
+    expect(isSharedHostingTenant("https://x.azurewebsites.net/api")).toBe(true);
+    expect(isSharedHostingTenant("https://a.b.github.io/")).toBe(true);
+    expect(isSharedHostingTenant("https://azurewebsites.net/")).toBe(false);
+    expect(isSharedHostingTenant("https://notazurewebsites.net/")).toBe(false);
+    expect(isSharedHostingTenant("https://stripe.com/docs")).toBe(false);
+  });
+
+  it("counts only kept Candidates towards the cap of five", async () => {
+    const search = new FakeWebSearch([
+      hit("https://a.herokuapp.com/"),
+      hit("https://b.vercel.app/"),
+      hit("https://c.netlify.app/"),
+      ...Array.from({ length: 5 }, (_, i) => hit(`https://vendor${i}.com/`)),
+    ]);
+    const candidates = await findPortalCandidates("x", search);
+    expect(candidates.map((c) => c.domain)).toEqual([
+      "vendor0.com",
+      "vendor1.com",
+      "vendor2.com",
+      "vendor3.com",
+      "vendor4.com",
+    ]);
   });
 
   it("exports the exclusion list", () => {
