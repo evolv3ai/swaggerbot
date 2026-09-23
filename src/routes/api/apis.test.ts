@@ -55,7 +55,16 @@ const outline = {
 createSpecForms(db).saveBuilt(
   specId,
   {
-    normalized: new TextEncoder().encode('{"openapi":"3.1.1"}'),
+    normalized: new TextEncoder().encode(
+      JSON.stringify({
+        openapi: "3.1.1",
+        paths: {
+          "/v1/customers": {
+            post: { responses: { "200": { description: "Created" } } },
+          },
+        },
+      }),
+    ),
     normalizedSpecVersion: "3.1.1",
     validityIssues: [],
     validityFindingCount: 0,
@@ -65,12 +74,14 @@ createSpecForms(db).saveBuilt(
   AT,
 );
 
-async function get(splat: string): Promise<Response> {
+async function get(splat: string, query = ""): Promise<Response> {
   const handlers = Route.options.server?.handlers;
   const handler = typeof handlers === "function" ? undefined : handlers?.GET;
   if (typeof handler !== "function") throw new Error("no GET handler");
   const response = await handler({
-    request: new Request(`http://localhost/api/apis/${splat}`),
+    request: new Request(`http://localhost/api/apis/${splat}?${query}`, {
+      headers: { "x-forwarded-for": "10.0.1.1" },
+    }),
     params: { _splat: splat },
   } as never);
   if (!(response instanceof Response)) throw new Error("not a Response");
@@ -95,5 +106,22 @@ describe("GET /api/apis/{apiId}/outline", () => {
     "outline",
   ])("answers 404 for /api/apis/%s", async (splat) => {
     expect((await get(splat)).status).toBe(404);
+  });
+});
+
+describe("GET /api/apis/{apiId}/operation", () => {
+  it("resolves an API id with a slash through the splat", async () => {
+    const response = await get(
+      "stripe.com/stripe-api/operation",
+      "method=POST&path=%2Fv1%2Fcustomers",
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      apiId: "stripe.com/stripe-api",
+      specId,
+      method: "post",
+      path: "/v1/customers",
+      operation: { responses: { "200": { description: "Created" } } },
+    });
   });
 });
