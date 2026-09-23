@@ -84,6 +84,8 @@ A Resolved or Unconfirmed Outcome gives each of its Specs (`currentSpec` and eac
 
 Beside them, the Outcome carries the Validity Issues of the Spec it answers with (the Current Spec, or the Unconfirmed Spec): `validityIssues`, at most 50 groups `{ message, path, count }` with the largest `count` first, and `validityIssueCount`, the total count of findings. Both are empty (`[]`, 0) while the Spec's forms are pending.
 
+`GET /api/apis/{apiId}/operation?method=get&path=/v1/customers/{customer}[&specId=…]` (`get_operation`) returns one operation of the API's Current Spec (or of its Spec `specId`), open to anyone under the per-IP rate limit. `method` is any case; `path` must equal a key of the Normalized Form's `paths`, URL-encoded. The answer is `{ apiId, specId, method, path, operation, circular, securitySchemes, truncated }`: the operation with its Path Item's parameters merged in and its effective `security`, every `$ref` it reaches inlined. A schema that recurs within itself stays `{ "$ref", "x-circular": true }` and is listed once in `circular`. Answers are capped at 1 MB, expanded breadth-first: past the cap, what's left is `{ "$ref", "x-truncated": true }` and `truncated` is `true`. 400 without `method` or `path`, 404 for an unknown API, Spec or operation, 409 (`Retry-After: 10`) while the Spec's forms are pending and 422 when they failed.
+
 ## Access
 
 `POST /api/lookup` takes `{ "name", "apiVersion"?, "allowCommunity"?, "fresh"? }`.
