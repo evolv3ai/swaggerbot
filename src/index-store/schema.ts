@@ -148,3 +148,30 @@ export const verifications = sqliteTable("verifications", {
   attempts: integer("attempts").notNull().default(0),
   lastError: text("last_error"),
 });
+
+/**
+ * A Spec's Normalized Form, Validity Issues and Spec Outline, built in the
+ * background (ADR 0004): at most one row per Spec. A Spec with no row, or a
+ * `building` row a stopped process left behind, is pending.
+ */
+export const specForms = sqliteTable("spec_forms", {
+  specId: text("spec_id")
+    .primaryKey()
+    .references(() => specs.id),
+  status: text("status", { enum: ["building", "ready", "failed"] }).notNull(),
+  /** The Normalized Form, as minified JSON. */
+  normalizedBytes: blob("normalized_bytes", { mode: "buffer" }),
+  normalizedSpecVersion: text("normalized_spec_version"),
+  /** `ValidityIssue[]` as JSON: every group of findings on the Published Form. */
+  validityIssues: text("validity_issues"),
+  validityFindingCount: integer("validity_finding_count"),
+  /** Findings left on the Normalized Form: our defect, not a Validity Issue. */
+  normalizedFindingCount: integer("normalized_finding_count"),
+  /** `SpecOutline` as JSON. */
+  outline: text("outline"),
+  /** Failed builds so far. */
+  attempts: integer("attempts").notNull().default(0),
+  lastError: text("last_error"),
+  startedAt: text("started_at"),
+  builtAt: text("built_at"),
+});

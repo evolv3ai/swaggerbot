@@ -73,6 +73,10 @@ To measure a deployment instead, run `LOADCHECK_KEY=<secret> pnpm tsx scripts/lo
 
 Every answer says when its Spec was last verified (`verifiedAt`). An answer from the Index verified longer ago than the freshness window, `FRESHNESS_DAYS` (default 7), is Stale: it is still returned at once, and a background Verification of the name is queued in the Index (`verifications`) and run by the server, one at a time, as a Discovery that skips the Index. A Lookup with `fresh: true` skips the Index itself and waits for that live Verification instead.
 
+## Spec forms
+
+Each Spec's Normalized Form (bundled and converted to OpenAPI 3.1), its Validity Issues and its Spec Outline are built in the background and stored in the Index (`spec_forms`, [ADR 0004](docs/adr/0004-normalized-form-built-in-background-with-scalar.md)): the server builds one Spec at a time, oldest first, so a Lookup never waits for a build, and a Spec stored before the table existed is built the same way. External `$ref`s on the Spec's own origin are fetched through the polite fetcher, within 30 s per Spec. A build is retried up to three times, then given up (`failed`). A Published Form over `MAX_FORMS_BYTES` (in bytes, default 32 MB) is never built, to keep a build's memory within the container; a value that is not a positive integer is ignored with a warning.
+
 ## Access
 
 `POST /api/lookup` takes `{ "name", "apiVersion"?, "allowCommunity"?, "fresh"? }`.
