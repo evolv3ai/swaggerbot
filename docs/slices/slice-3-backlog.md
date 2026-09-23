@@ -70,6 +70,21 @@ Seconds summed over the run, by step: known paths 431 s (22 Lookups, mean 19.6 s
 - **With 7b**, each of these costs its slowest source, not the sum of all three: roughly 25–30 s for the NoSpec names (the probe's 25 s with no hit, plus about 3–5 s of Developer Portal search). That's still over 15 s.
 - **With 7b and 7c** (a Spec-step deadline of about 9 s), nearly all fall under about 15 s. The late finds are lost: Mux (crawl 16 s) and Fly.io (crawl 12.9 s) would answer NoSpec. That is 2 of 11 long-tail entries, so coverage would be about 82%, still over the 60% gate. Asana stays, because GitHub finds it in about 2 s once it runs in parallel.
 
+**WTR-96, first build (PR #55, 2026-09-23), sent back for rework.** `bench --concurrency 1`, run both ways:
+
+| | p50 | p90 | max | FR | long-tail coverage |
+|---|---|---|---|---|---|
+| after WTR-94 (baseline) | 7.1 s | 45.8 s | 59.6 s | 0/22 | 100% |
+| WTR-96, 9 s deadline | 11.0 s | 15.5 s | 16.3 s | 0/18 | 81.8% |
+| WTR-96, `Infinity` | 18.2 s | 29.7 s | 32.6 s | 0/20 | 81.8% |
+
+What had to change:
+1. Nothing was judged until every source had finished or the deadline passed. Neon's known paths had its Spec at 3.6 s, but the Lookup took 15.5 s (it was 9.8 s after WTR-94).
+2. GitHub's gather waited for the crawl's orgs. It took 14–27 s in parallel, against 2–10 s sequentially, so the deadline cut it off and Box and Asana fell to Unconfirmed.
+3. Mux answered NoSpec even without a deadline: the crawl stopped finding its Spec.
+
+The rework note asks for sources to be judged in precedence order as each finishes (stopping once one settles), for GitHub not to wait on the crawl, and for a fix to Mux's crawl.
+
 7a and 7b don't trade anything away. 7c is the only one that bounds the worst case, and it's the one that costs coverage. A rough estimate: 7a and 7b together bring p50 under 10 s but leave the p90 around 20–25 s, because of the NoSpec names. Reaching p90 < 15 s very likely needs 7c too.
 
 
