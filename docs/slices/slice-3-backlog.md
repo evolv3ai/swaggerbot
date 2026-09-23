@@ -35,6 +35,7 @@ Filed 2026-09-22 as WTR-88..93 (Backlog, `swaggerbot` only), with Linear "blocke
 | 6 | WTR-93 | `scripts/loadcheck.ts`: p90 against a deployed URL | 1, 5 | 4 |
 | 7 | — | Speed up Discovery | 1 | filed after #1's numbers |
 | 7a | WTR-94 | The known-path probe stops soon after its first hit | 1 | 5 |
+| 9 | | Verification uses the Caller's spelling, not the normalised name | 4 | 5 |
 | 8 | WTR-95 | Box: the full Spec sometimes never reaches the pool, and an add-on answers | — | 5 |
 
 #3 and #4 both add a Drizzle migration, so #4 waits for #3 to avoid two `0004_*` files. #4 and #5 both touch the Lookup's entry point (`lookup.ts`, `http.ts`), so they're queued in waves, not together.
@@ -228,6 +229,8 @@ PRD "Access": answers from the Index are open to anyone, with a rate limit per I
    - otherwise `useQuota` for today (UTC). If it's refused, return **429** `{ error: "Daily quota used.", limit, used }` with `Retry-After` set to the seconds until UTC midnight;
    - otherwise run the Lookup and return 200. Add `X-Quota-Limit` and `X-Quota-Remaining` headers.
 
+`useQuota` (WTR-90) trips Biome's React `useHookAtTopLevel` rule when it's called inside a `try` or a branch. Renaming it to `takeQuota` across `src/index-store/keys.ts`, its tests and this handler is allowed and preferred.
+
 Keep the rate limiter and the gate as small pure-ish units with injected clocks (`src/lookup/rate-limit.ts`, and the gate in `http.ts`), so they're testable without a server.
 
 `README.md`: an "Access" section covering what's open, what needs a key, the header, the limits and their env vars, and the status codes.
@@ -317,4 +320,21 @@ So one of the three crawl hits sometimes vanishes between the crawl and the pool
 ## Done when
 - A test reproduces the silent drop with fakes (a crawl result of three Specs where one can't be fetched or judged): the diagnostic appears, and the answer isn't the add-on.
 - In the PR description, as a manual check for the reviewer (who has keys): `LOOKUP_TRACE=1 pnpm tsx scripts/lookup.ts "Box Platform API"` with a fresh `DATABASE_PATH` five times. All five answer Current 2024.0 (`box-openapi.json` or the GitHub `openapi.json`).
+- `pnpm check` and `pnpm build` green.
+
+---
+
+## 9. swaggerbot: Verification uses the Caller's spelling, not the normalised name
+
+## Problem
+WTR-91 keys the `verifications` queue on `name_normalized`, and the worker runs Discovery with that normalised string (`"PayCo API"` → `"payco"`). The Judge (`whichApi`, `specDescribesApi`) and web search then see different input from the Lookup that first resolved the name. On a borderline name, a background Verification could reach a different API or Outcome than the original Lookup. Precision is the release gate, so a Verification must ask exactly what a Caller asked.
+
+## Change
+- The `verifications` table gains a `name` column (text, not null): the spelling from the Lookup that queued it. Generate the migration with `drizzle-kit generate`. Rows from before the column get `name = name_normalized`.
+- `enqueue(name)` stores the Caller's spelling. Re-queueing an existing row updates `name` to the latest spelling.
+- `runOnce` runs the Lookup with `name`, not `name_normalized`. The queue stays keyed on `name_normalized`, so there's still one row per name.
+
+## Done when
+- `src/lookup/verify.test.ts`: enqueueing `"PayCo API"` makes the worker run the Lookup with `"PayCo API"`. A second enqueue with another spelling of the same normalised name updates the stored spelling and doesn't add a row.
+- The migration applies to an Index that already has queued rows.
 - `pnpm check` and `pnpm build` green.
