@@ -314,7 +314,7 @@ describe("createGitHubCodeSearch", () => {
     expect(await search.searchSpecs(null, "Box API")).toBeNull();
     expect(fetchJson).not.toHaveBeenCalled();
     expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn.mock.calls[0]?.[0]).toMatch(/no GITHUB_TOKEN/);
+    expect(warn.mock.calls[0]?.[0]).toMatch(/no GITHUB_SEARCH_TOKEN/);
   });
 
   it("is null on 403 and 429, warning once, and stays null for the rest of the minute", async () => {
@@ -416,7 +416,7 @@ describe("searchSpecRepos", () => {
 
     expect(await search.searchSpecRepos("cloudflare", "Cloudflare")).toBeNull();
     expect(fetchJson).not.toHaveBeenCalled();
-    expect(warn.mock.calls[0]?.[0]).toMatch(/no GITHUB_TOKEN/);
+    expect(warn.mock.calls[0]?.[0]).toMatch(/no GITHUB_SEARCH_TOKEN/);
   });
 
   it("is null on 403 and stays null for the rest of the minute", async () => {

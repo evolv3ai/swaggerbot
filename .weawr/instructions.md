@@ -15,7 +15,7 @@ One TanStack Start app, TypeScript throughout, pnpm, Node 24. Layout (create fol
 - Install: `pnpm install`
 - Before opening the PR, all green: `pnpm check` (Biome lint, `tsc --noEmit`, `vitest run`) and `pnpm build`. Until the scaffold issue lands, there is nothing to run; that issue creates these scripts.
 - Tests are colocated as `src/**/*.test.ts`. No test may call a real external service (TypeSafe, Brave, Tavily, APIs.guru, any website). Fake them: the fake judge, a fake WebSearch, fixtures under `src/**/__fixtures__/`, or a local `node:http` server on port 0.
-- Env vars (never commit values): `TYPESAFE_API_KEY`, `BRAVE_API_KEY`, `TAVILY_API_KEY`, `SEARCH_PROVIDER`, `DATABASE_PATH`, `GITHUB_TOKEN` (repo metadata works without it; GitHub code search does not). Your worktree has no keys and needs none; live smoke scripts are for the reviewer.
+- Env vars (never commit values): `TYPESAFE_API_KEY`, `BRAVE_API_KEY`, `TAVILY_API_KEY`, `SEARCH_PROVIDER`, `DATABASE_PATH`, `GITHUB_SEARCH_TOKEN` (repo metadata works without it; GitHub code search does not). Your worktree has no keys and needs none; live smoke scripts are for the reviewer.
 
 ## Rules
 - One branch per issue; open a PR against `main`; never merge it yourself. Put `Closes WTR-<n>` in the PR description.

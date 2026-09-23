@@ -31,7 +31,7 @@ export type FetchJson = (
 
 export type GitHubReposOptions = {
   fetchJson?: FetchJson;
-  /** `GITHUB_TOKEN`: optional, raises the rate limit from 60 to 5,000 an hour. */
+  /** `GITHUB_SEARCH_TOKEN`: optional, raises the rate limit from 60 to 5,000 an hour. */
   token?: string;
   ttlHours?: number;
   warn?: (message: string) => void;
@@ -177,7 +177,7 @@ export type GitHubCodeSearch = {
 
 export type GitHubCodeSearchOptions = {
   fetchJson?: FetchJson;
-  /** `GITHUB_TOKEN`: required, as GitHub refuses code search unauthenticated. */
+  /** `GITHUB_SEARCH_TOKEN`: required, as GitHub refuses code search unauthenticated. */
   token?: string;
   /** Minimum spacing between code searches. Default 6 s: GitHub allows 10 a minute. */
   minIntervalMs?: number;
@@ -355,7 +355,7 @@ export function createGitHubCodeSearch({
     org: string | null,
   ): Promise<T | typeof NO_SUCH_ORG | null> {
     if (!token) {
-      warnOnce("no GITHUB_TOKEN");
+      warnOnce("no GITHUB_SEARCH_TOKEN");
       return null;
     }
     if (now() < limit.blockedUntil) return null;
