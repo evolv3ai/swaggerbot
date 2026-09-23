@@ -66,7 +66,28 @@ describe("sniffSpec", () => {
         pathCount: 1,
       },
       versionInfo: { version: "1", preview: false },
+      outline: { firstSegments: ["things"], tags: ["things"] },
     });
+  });
+
+  it("outlines every path's first segment and every tag, past the extract's sample", () => {
+    const names = Array.from({ length: 25 }, (_, i) => `area_${i}`);
+    const paths = Object.fromEntries(
+      names.flatMap((n) => [
+        [`/${n}/get`, { post: { tags: [n] } }],
+        [`/${n}/list`, { post: {} }],
+      ]),
+    );
+    const result = sniffSpec(
+      bytes(
+        JSON.stringify({ openapi: "3.0.3", info: { title: "Big" }, paths }),
+      ),
+      null,
+    );
+
+    expect(result?.extract.samplePaths).toHaveLength(20);
+    expect(result?.extract.tags).toHaveLength(20);
+    expect(result?.outline).toEqual({ firstSegments: names, tags: names });
   });
 
   it("reads info.version and info.x-preview for the API Version", () => {

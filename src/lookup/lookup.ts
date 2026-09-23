@@ -51,6 +51,7 @@ import {
 } from "~/sources/github";
 import { findPortalCandidates, type PortalCandidate } from "~/sources/portal";
 import type { WebSearch } from "~/sources/web-search";
+import { crawledNamesCovered } from "./coverage";
 import {
   DEFAULT_THRESHOLDS,
   PARTIAL_SPEC_RATIO,
@@ -198,7 +199,9 @@ type SpecCandidate = ApiVersionOf & {
  *    name the Judge takes for the top (or identified) Candidate's Vendor as a
  *    whole answers Ambiguous over that Vendor's APIs, from APIs.guru or, when
  *    it has fewer than two, the Developer Portal; a Vendor with one API goes
- *    on to that API's Spec;
+ *    on to that API's Spec. For an identified API whose Vendor's APIs came
+ *    from the Developer Portal, its Spec answers instead when Resolved and
+ *    it covers most of their names (a Vendor's product pages, one API);
  * 5. for the identified API, its Spec: APIs.guru origin URLs (a GitHub
  *    one skipped when its repo is archived, read from the default branch
  *    when it names another), then known paths on the Vendor's domain, then
@@ -276,8 +279,21 @@ export function createLookup(deps: LookupDeps): Lookup {
           : undefined;
     if (top) {
       const vendorApis = await vendorCandidates(name, top, diagnostics);
+      if (vendorApis?.crawled && verdict?.kind === "identified")
+        return finish(
+          await vendorOrSpec(
+            name,
+            verdict.choice,
+            vendorApis.candidates,
+            { allowCommunity, apiVersion },
+            diagnostics,
+          ),
+        );
       if (vendorApis)
-        return finish({ outcome: "Ambiguous", candidates: vendorApis });
+        return finish({
+          outcome: "Ambiguous",
+          candidates: vendorApis.candidates,
+        });
     }
 
     if (!verdict || verdict.kind === "unknown")
@@ -286,14 +302,13 @@ export function createLookup(deps: LookupDeps): Lookup {
       return finish({ outcome: "Ambiguous", candidates: verdict.candidates });
 
     // 5. The identified API's Spec.
-    return finish(
-      await findSpec(
-        name,
-        verdict.choice,
-        { allowCommunity, apiVersion },
-        diagnostics,
-      ),
+    const found = await findSpec(
+      name,
+      verdict.choice,
+      { allowCommunity, apiVersion },
+      diagnostics,
     );
+    return finish(found.outcome);
   };
 
   /**
@@ -485,14 +500,14 @@ export function createLookup(deps: LookupDeps): Lookup {
    * When the Judge takes the name for the Vendor as a whole, that Vendor's
    * APIs as equally likely Candidates, if it has at least two: its APIs.guru
    * APIs, and when those are fewer than two, the APIs its Developer Portal
-   * names, crawled from `top`'s portal page or else the Vendor's domain.
-   * Otherwise `null`, and the Lookup keeps its answer.
+   * names, crawled from `top`'s portal page or else the Vendor's domain
+   * (`crawled`). Otherwise `null`, and the Lookup keeps its answer.
    */
   async function vendorCandidates(
     name: string,
     top: ApiChoice,
     diagnostics: string[],
-  ): Promise<AmbiguousCandidate[] | null> {
+  ): Promise<{ candidates: AmbiguousCandidate[]; crawled: boolean } | null> {
     const { vendor } = top;
     let members: ApiChoice[] = [];
     try {
@@ -512,7 +527,8 @@ export function createLookup(deps: LookupDeps): Lookup {
     }
     if (probability < t.vendorName) return null;
 
-    if (members.length < 2) {
+    const crawled = members.length < 2;
+    if (crawled) {
       const startUrl = top.portalUrl ?? `https://${vendor.domain}`;
       let hits: VendorApiHit[] = [];
       try {
@@ -530,18 +546,70 @@ export function createLookup(deps: LookupDeps): Lookup {
     }
     members = members.slice(0, MAX_UMBRELLA_CANDIDATES);
     if (members.length < 2) return null;
-    return members.map((c) => ambiguousCandidate(c, 1 / members.length));
+    return {
+      candidates: members.map((c) => ambiguousCandidate(c, 1 / members.length)),
+      crawled,
+    };
   }
 
+  /**
+   * Step 4 for an identified API when the Vendor API crawl named several:
+   * the crawl can return a Vendor's product pages, which are one API with one
+   * Spec (Plaid's). The identified API's Spec answers when it is Resolved and
+   * covers more than half of the crawled names; otherwise Ambiguous over them.
+   * The name is remembered in the Index only for the Resolved answer.
+   */
+  async function vendorOrSpec(
+    name: string,
+    choice: ApiChoice,
+    crawledApis: AmbiguousCandidate[],
+    request: { allowCommunity: boolean; apiVersion: string | undefined },
+    diagnostics: string[],
+  ): Promise<Outcome> {
+    const ambiguous: Outcome = {
+      outcome: "Ambiguous",
+      candidates: crawledApis,
+    };
+    const found = await findSpec(
+      name,
+      choice,
+      { ...request, remember: false },
+      diagnostics,
+    );
+    if (found.outcome.outcome !== "Resolved" || !found.current)
+      return ambiguous;
+    const { matched, counted, covered } = crawledNamesCovered(
+      crawledApis.map((c) => c.name),
+      found.current.sniff.outline,
+      vendorLabel(choice.vendor),
+    );
+    diagnostics.push(
+      `Vendor API crawl: ${matched} of ${counted} API names are covered by ${found.current.url}`,
+    );
+    if (!covered) return ambiguous;
+    repo.rememberName(name, choice.api.id);
+    return found.outcome;
+  }
+
+  /**
+   * The identified API's Spec, as an Outcome, with the Spec answering it
+   * when Resolved (`current`). With `remember: false`, the name is not
+   * remembered in the Index.
+   */
   async function findSpec(
     name: string,
     choice: ApiChoice,
     {
       allowCommunity,
       apiVersion,
-    }: { allowCommunity: boolean; apiVersion: string | undefined },
+      remember = true,
+    }: {
+      allowCommunity: boolean;
+      apiVersion: string | undefined;
+      remember?: boolean;
+    },
     diagnostics: string[],
-  ): Promise<Outcome> {
+  ): Promise<{ outcome: Outcome; current?: SpecCandidate }> {
     const ref = apiRef(choice);
     const candidates: SpecCandidate[] = [];
     const checked: string[] = [];
@@ -910,9 +978,10 @@ export function createLookup(deps: LookupDeps): Lookup {
       )
         c.provenance = "Community";
 
+    let current: SpecCandidate | undefined;
     const outcome = answer();
     supersedeUnserved(choice.api.id, served);
-    return outcome;
+    return { outcome, ...(current ? { current } : {}) };
 
     function answer(): Outcome {
       // Every Spec that could answer Resolved, one candidate each, in order
@@ -928,12 +997,13 @@ export function createLookup(deps: LookupDeps): Lookup {
             b.probability - a.probability,
         ),
       );
-      const stored = store(name, choice, pool, candidates, true);
+      const stored = store(name, choice, pool, candidates, true, remember);
       const storedOf = (c: SpecCandidate) =>
         stored[pool.indexOf(c)] as StoredSpec;
 
       if (apiVersion !== undefined) {
         const chosen = pool.find((c) => c.apiVersion === apiVersion);
+        current = chosen;
         if (chosen)
           return resolved(
             choice.api,
@@ -943,6 +1013,7 @@ export function createLookup(deps: LookupDeps): Lookup {
           );
       } else {
         const picked = currentAndFull(pool);
+        current = picked?.current;
         if (picked)
           return resolved(
             choice.api,
@@ -966,7 +1037,14 @@ export function createLookup(deps: LookupDeps): Lookup {
         best(allowed.filter((c) => c.provenance === "Endorsed")) ??
         best(allowed);
       if (pick) {
-        const [unconfirmed] = store(name, choice, [pick], candidates, false);
+        const [unconfirmed] = store(
+          name,
+          choice,
+          [pick],
+          candidates,
+          false,
+          remember,
+        );
         if (!unconfirmed) throw new Error("store returned no Spec");
         const reasons: string[] = [];
         if (pick.provenance === "Community")
@@ -1023,6 +1101,7 @@ export function createLookup(deps: LookupDeps): Lookup {
     picks: SpecCandidate[],
     all: SpecCandidate[],
     confirm: boolean,
+    remember: boolean,
   ): StoredSpec[] {
     if (picks.length === 0) return [];
     const at = now().toISOString();
@@ -1041,7 +1120,7 @@ export function createLookup(deps: LookupDeps): Lookup {
         .map((c) => repo.addSource(spec.id, c.url, c.provenance, at));
       return { spec, sources };
     });
-    repo.rememberName(name, choice.api.id);
+    if (remember) repo.rememberName(name, choice.api.id);
     return stored;
   }
 
