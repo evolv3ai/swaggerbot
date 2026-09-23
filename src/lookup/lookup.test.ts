@@ -3355,4 +3355,17 @@ describe("lookup of an indexed name as it ages", () => {
     expect(outcome).toMatchObject({ verifiedAt: later });
     expect(payco.queued()).toEqual([]);
   });
+
+  it("answers `fromIndex` alone, null for an unindexed name or `fresh`", async () => {
+    const payco = await indexedPayco();
+    payco.at(7 * DAY + 1);
+    const calls = payco.guruCalls();
+
+    expect(payco.lookup.fromIndex({ name: "payco" })).toEqual(payco.first);
+    expect(payco.lookup.fromIndex({ name: "payco", fresh: true })).toBeNull();
+    expect(payco.lookup.fromIndex({ name: "no such api" })).toBeNull();
+    expect(payco.guruCalls()).toBe(calls);
+    // Stale, so its Verification is queued, as by the Lookup.
+    expect(payco.queued()).toHaveLength(1);
+  });
 });
