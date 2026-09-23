@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as ApiLookupRouteImport } from './routes/api/lookup'
+import { Route as ApiApisSplatRouteImport } from './routes/api/apis/$'
 import { Route as ApiSpecsSpecIdNormalizedRouteImport } from './routes/api/specs/$specId/normalized'
 import { Route as ApiSpecsSpecIdPublishedRouteImport } from './routes/api/specs/$specId/published'
 
@@ -30,6 +31,11 @@ const ApiLookupRoute = ApiLookupRouteImport.update({
   path: '/api/lookup',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiApisSplatRoute = ApiApisSplatRouteImport.update({
+  id: '/api/apis/$',
+  path: '/api/apis/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiSpecsSpecIdNormalizedRoute =
   ApiSpecsSpecIdNormalizedRouteImport.update({
     id: '/api/specs/$specId/normalized',
@@ -46,6 +52,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api/health': typeof ApiHealthRoute
   '/api/lookup': typeof ApiLookupRoute
+  '/api/apis/$': typeof ApiApisSplatRoute
   '/api/specs/$specId/normalized': typeof ApiSpecsSpecIdNormalizedRoute
   '/api/specs/$specId/published': typeof ApiSpecsSpecIdPublishedRoute
 }
@@ -53,6 +60,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api/health': typeof ApiHealthRoute
   '/api/lookup': typeof ApiLookupRoute
+  '/api/apis/$': typeof ApiApisSplatRoute
   '/api/specs/$specId/normalized': typeof ApiSpecsSpecIdNormalizedRoute
   '/api/specs/$specId/published': typeof ApiSpecsSpecIdPublishedRoute
 }
@@ -61,6 +69,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/api/health': typeof ApiHealthRoute
   '/api/lookup': typeof ApiLookupRoute
+  '/api/apis/$': typeof ApiApisSplatRoute
   '/api/specs/$specId/normalized': typeof ApiSpecsSpecIdNormalizedRoute
   '/api/specs/$specId/published': typeof ApiSpecsSpecIdPublishedRoute
 }
@@ -70,6 +79,7 @@ export interface FileRouteTypes {
     | '/'
     | '/api/health'
     | '/api/lookup'
+    | '/api/apis/$'
     | '/api/specs/$specId/normalized'
     | '/api/specs/$specId/published'
   fileRoutesByTo: FileRoutesByTo
@@ -77,6 +87,7 @@ export interface FileRouteTypes {
     | '/'
     | '/api/health'
     | '/api/lookup'
+    | '/api/apis/$'
     | '/api/specs/$specId/normalized'
     | '/api/specs/$specId/published'
   id:
@@ -84,6 +95,7 @@ export interface FileRouteTypes {
     | '/'
     | '/api/health'
     | '/api/lookup'
+    | '/api/apis/$'
     | '/api/specs/$specId/normalized'
     | '/api/specs/$specId/published'
   fileRoutesById: FileRoutesById
@@ -92,6 +104,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApiHealthRoute: typeof ApiHealthRoute
   ApiLookupRoute: typeof ApiLookupRoute
+  ApiApisSplatRoute: typeof ApiApisSplatRoute
   ApiSpecsSpecIdNormalizedRoute: typeof ApiSpecsSpecIdNormalizedRoute
   ApiSpecsSpecIdPublishedRoute: typeof ApiSpecsSpecIdPublishedRoute
 }
@@ -119,6 +132,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiLookupRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/apis/$': {
+      id: '/api/apis/$'
+      path: '/api/apis/$'
+      fullPath: '/api/apis/$'
+      preLoaderRoute: typeof ApiApisSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/specs/$specId/normalized': {
       id: '/api/specs/$specId/normalized'
       path: '/api/specs/$specId/normalized'
@@ -140,6 +160,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiHealthRoute: ApiHealthRoute,
   ApiLookupRoute: ApiLookupRoute,
+  ApiApisSplatRoute: ApiApisSplatRoute,
   ApiSpecsSpecIdNormalizedRoute: ApiSpecsSpecIdNormalizedRoute,
   ApiSpecsSpecIdPublishedRoute: ApiSpecsSpecIdPublishedRoute,
 }

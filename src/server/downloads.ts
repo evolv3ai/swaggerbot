@@ -1,6 +1,7 @@
 import type { Db } from "~/index-store/db";
 import { createRepo } from "~/index-store/repo";
 import { createSpecForms } from "~/index-store/spec-forms";
+import { PENDING_RETRY_AFTER_SECONDS } from "~/spec-forms/http";
 
 /** A Spec id: the lowercase hex sha256 of its Published Form. */
 const SPEC_ID = /^[0-9a-f]{64}$/;
@@ -9,9 +10,6 @@ const CONTENT_TYPES = {
   json: "application/json",
   yaml: "application/yaml",
 } as const;
-
-/** How long a client may wait before asking again for a pending Normalized Form. */
-const PENDING_RETRY_AFTER_SECONDS = 10;
 
 /**
  * `GET /api/specs/{specId}/published`: the Published Form, byte for byte.
