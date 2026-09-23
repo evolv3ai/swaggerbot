@@ -55,6 +55,7 @@ Filed 2026-09-23 as WTR-104..111 (Backlog, `swaggerbot` only), with Linear "bloc
 | 10 | WTR-116 | The forms worker gives external references a budget that fits, and aborted fetches release their host slot (added 2026-09-23 after WTR-105's backfill rehearsal: DigitalOcean's 697 `$ref`d files; **gates the wave 2 deploy**) | 2 | 3 |
 | 11 | WTR-117 | The forms worker has a reference budget DigitalOcean fits (75 min; its `$ref` closure is 2,976 files, measured by WTR-116), and retries go to the back of the queue. **Gates the wave 2 deploy** | 10 | 3 |
 | 12 | WTR-119 | The server starts the Verification and forms workers when it boots (added 2026-09-23 after the wave 2 deploy: no worker ran until a request came) | 2 | 3 |
+| 13 | WTR-120 | The Normalized Form inlines operations written as a `$ref` (added 2026-09-23 after O1: DigitalOcean's 695 operations were `$ref` stubs in the Normalized Form, the Outline and `get_operation`) | 1 | 5 |
 
 #3 and #4 touch different files (`lookup.ts` and `outcome.ts`; routes and `src/server/`), so they run together. #5, #6 and #7 each add a route file, and TanStack's generated `src/routeTree.gen.ts` changes with each. That's a mechanical conflict, so wave 4 is merged one PR at a time, regenerating the route tree (`pnpm build`) on each rebase.
 
@@ -434,3 +435,26 @@ Decided (Wes gave standing approval to proceed, 2026-09-23): a budget that fits 
 - A test of the exported function: it calls the getter once, and when the getter throws it logs and doesn't throw.
 - `pnpm check` and `pnpm build` green.
 - The operator checks it live after the deploy: with no request sent, `spec_forms` changes (or the container logs show the worker running) within a minute of start-up.
+
+## 13. swaggerbot: the Normalized Form inlines operations written as a `$ref`
+
+## Problem
+Found in production after the O1 backfill (2026-09-23): DigitalOcean's Spec writes each operation as a reference to a separate file (`/v2/1-clicks: get: $ref: "resources/1-clicks/oneClicks_list.yml"`). OpenAPI allows a `$ref` for a Path Item, not for an Operation. The backfill fetched all 2,976 files in 49 min, and `bundle` resolved every one, but it leaves each operation as a stub, `{ "$ref": "#/x-ext/<hash>" }`. As a result:
+- the Normalized Form has **697 findings** (695 × `must have required property 'responses'`, 2 × `type must be string`), which are ours by #1's definition;
+- the Spec Outline lists 695 operations with no `operationId`, `summary` or tags;
+- `GET /api/apis/digitalocean.com/digitalocean-api/operation?method=get&path=/v2/1-clicks` returns `operation: { "$ref": "#/x-ext/ae2ea8b", "security": […] }`, with nothing inlined.
+
+The Published Form's Validity Issues are right to report these (an operation that is a `$ref` is invalid as published) and stay as they are.
+
+## Change
+`src/spec-forms/build.ts`, in step 5 (on the Normalized copy, after the upgrade): for every Path Item in `paths` (resolving a Path Item that is itself an internal `$ref`), and for every HTTP method key (`get put post delete options head patch trace`), replace an operation that is an internal `$ref` (`#/…`) with a copy of its target (following a chain of such references, with a guard against a cycle). Keys written beside the `$ref` override the target's. Leave the target in place (other references may point into it). An operation `$ref` that can't be resolved stays as it is. Use the existing `resolveLocal` if it fits. Mention it in the step's comment and in `SpecForms`' doc as one of the things normalization does.
+
+Then Scalar's validation (step 6) and the Outline (step 7) see real operations, and `get_operation` expands them like any other.
+
+Existing forms are **not** rebuilt by this change. Rebuilding stored forms after a builder change is a separate decision. The operator will delete DigitalOcean's `spec_forms` row after the deploy so the worker rebuilds it (about 50 min).
+
+## Done when
+- `src/spec-forms/build.test.ts`: a fixture whose operation is a `$ref` to a same-origin file (through `fetchRef`), and one whose operation is an internal `$ref` to `#/x-ops/…`. Each comes out with the operation inlined (`responses`, `operationId` present), `normalizedFindingCount` 0, and the operation's `operationId`/`summary`/tags in the Outline. The Published Form's Validity Issues still report the operation `$ref`.
+- A cycle of operation references doesn't hang, and leaves the `$ref`.
+- The manual check in the PR: `scripts/forms-bench.ts` on DigitalOcean's Spec is out of reach (50 min of fetching). Instead, take a local copy of the Spec and a handful of its referenced files, and show the counts before and after.
+- `pnpm check` and `pnpm build` green.
