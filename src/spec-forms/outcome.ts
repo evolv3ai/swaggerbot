@@ -11,6 +11,11 @@ import type { SpecFormsRepo, SpecValidity } from "~/index-store/spec-forms";
 /** What `withSpecForms` reads of the stored forms: the small columns only. */
 export type OutcomeForms = Pick<SpecFormsRepo, "getValidity">;
 
+/** `PUBLIC_BASE_URL`, the origin download URLs are given under; unset, none. */
+export function publicBaseUrlOf(env: NodeJS.ProcessEnv): string | undefined {
+  return env.PUBLIC_BASE_URL?.trim() || undefined;
+}
+
 /**
  * The download URL of a Spec's `form`: `GET /api/specs/{specId}/published`
  * or `…/normalized`, under `baseUrl` (`PUBLIC_BASE_URL`, e.g.
