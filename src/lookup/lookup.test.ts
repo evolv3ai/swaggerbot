@@ -1805,6 +1805,88 @@ describe("lookup with the Developer Portal crawl", () => {
     );
   });
 
+  describe("with a full Spec and its per-version add-ons (Box)", () => {
+    /** A crawl hit for API Version `version` with `paths` paths. */
+    const versionHit = (file: string, version: string, paths: number) => {
+      const bytes = new TextEncoder().encode(
+        JSON.stringify({
+          openapi: "3.0.3",
+          info: { title: "NoSpec API", version },
+          paths: Object.fromEntries(
+            Array.from({ length: paths }, (_, i) => [
+              `/files/${i}`,
+              { get: { tags: ["files"] } },
+            ]),
+          ),
+        }),
+      );
+      const sniff = sniffSpec(bytes, "application/json");
+      if (!sniff) throw new Error("fixture is not a Spec");
+      return {
+        ...crawlHit(`https://developer.nospec.test/${file}`),
+        bytes,
+        sniff,
+      };
+    };
+    const full = versionHit("nospec-openapi.json", "2024.0", 187);
+    // The Judge's link scores put the add-ons first on some crawls.
+    const hits = [
+      versionHit("nospec-openapi-v2025.0.json", "2025.0", 24),
+      versionHit("nospec-openapi-v2026.0.json", "2026.0", 5),
+      full,
+    ];
+
+    it("considers the full Spec after an add-on has settled it, and answers it as Current", async () => {
+      const { lookup } = setup(
+        script,
+        undefined,
+        undefined,
+        fakeCrawl({ hits }),
+        undefined,
+        undefined,
+        undefined,
+        { trace: true },
+      );
+
+      const outcome = await ask(lookup, "nospec");
+
+      expect(outcome).toMatchObject({
+        outcome: "Resolved",
+        currentSpec: { apiVersion: "2024.0" },
+        sources: [{ url: full.url }],
+      });
+      expect(outcome.diagnostics).toContain(
+        `pool: ${full.url} (API Version 2024.0, 187 paths, Judge 0.95, Official)`,
+      );
+    });
+
+    it("says why a crawl hit the Judge could not weigh is not in the pool", async () => {
+      const judge = new FakeJudge(script);
+      const specDescribesApi = judge.specDescribesApi.bind(judge);
+      judge.specDescribesApi = async (api, extract) => {
+        if (extract.pathCount === 187)
+          throw new JudgeError("http", "TypeSafe answered HTTP 503");
+        return specDescribesApi(api, extract);
+      };
+      const { lookup } = setup(
+        script,
+        undefined,
+        undefined,
+        fakeCrawl({ hits }),
+        undefined,
+        undefined,
+        undefined,
+        { judge },
+      );
+
+      const outcome = await ask(lookup, "nospec");
+
+      expect(outcome.diagnostics).toContain(
+        `Judge specDescribesApi (${full.url}): TypeSafe answered HTTP 503`,
+      );
+    });
+  });
+
   it("keeps the previous answer when the crawl throws", async () => {
     server.send(
       "developer.nospec.test",

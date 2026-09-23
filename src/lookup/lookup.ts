@@ -812,8 +812,9 @@ export function createLookup(deps: LookupDeps): Lookup {
     }
 
     /**
-     * Crawls the Developer Portal, then probes known paths on the other
-     * domains it links to, stopping once settled. Hits on the portal's domain
+     * Crawls the Developer Portal and considers every Spec it found, then
+     * probes known paths on the other domains it links to, stopping once
+     * settled. Hits on the portal's domain
      * come first; those off it were reached by a link from the Vendor's pages,
      * so are Endorsed.
      */
@@ -839,8 +840,11 @@ export function createLookup(deps: LookupDeps): Lookup {
         ...result.hits.filter((hit) => !hit.offHost),
         ...result.hits.filter((hit) => hit.offHost),
       ];
+      // Every hit is considered, as on known paths: it is fetched already,
+      // and the Judge's link scores, which set the order, vary between calls.
+      // Skipped once settled, a full Spec after its per-version add-on never
+      // reached the pool (WTR-95).
       for (const hit of hits) {
-        if (!goOn(hit.url)) continue;
         if (hit.robotsDisallowed) diagnostics.push(robotsDiagnostic(hit.url));
         await consider(
           hit.url,
