@@ -30,6 +30,13 @@ export type CrawlResult = {
    * Lookup probes known paths on them (`docs.machines.dev` from `fly.io`).
    */
   offHostHosts: string[];
+  /**
+   * The GitHub orgs the crawled pages link to (`github.com/<org>[/…]`),
+   * lowercased, most-linked first, then first seen; at most 5. The Lookup
+   * searches those whose website is the Vendor's (`renderinc` from
+   * `render.com`).
+   */
+  githubOrgs: string[];
 };
 
 export type CrawlOptions = {
@@ -54,6 +61,40 @@ const MAX_LINKS_PER_PAGE = 60;
 const MAX_TEXT = 200;
 const MAX_CONTEXT = 300;
 const MAX_OFF_HOST_HOSTS = 3;
+const MAX_GITHUB_ORGS = 5;
+/** `github.com` paths that are GitHub's own pages, not an org's. */
+const GITHUB_OWN_PATHS = new Set([
+  "about",
+  "apps",
+  "collections",
+  "contact",
+  "customer-stories",
+  "enterprise",
+  "events",
+  "explore",
+  "features",
+  "join",
+  "login",
+  "logout",
+  "marketplace",
+  "new",
+  "notifications",
+  "orgs",
+  "pricing",
+  "readme",
+  "search",
+  "security",
+  "settings",
+  "signup",
+  "site",
+  "solutions",
+  "sponsors",
+  "team",
+  "topics",
+  "trending",
+]);
+/** A GitHub login: alphanumerics and single hyphens, at most 39 characters. */
+const GITHUB_LOGIN = /^[a-z0-9](?:[a-z0-9]|-(?=[a-z0-9])){0,38}$/;
 /** Spec URLs taken from one page's scripts at most (WTR-59). */
 const MAX_EMBEDDED_SPECS = 10;
 const EMBEDDED_CONTEXT = "Named in the page's embedded configuration";
@@ -118,6 +159,8 @@ export async function crawlForSpecs(opts: CrawlOptions): Promise<CrawlResult> {
 
   const hits: CrawlHit[] = [];
   const offHostHosts: string[] = [];
+  /** Links per GitHub org, in first-seen order. */
+  const githubLinks = new Map<string, number>();
   const seen = new Set<string>([normalize(opts.startUrl)]);
   const origin: Page = { url: opts.startUrl, depth: 0, from: opts.startUrl };
   const queue: Page[] = [];
@@ -200,6 +243,8 @@ export async function crawlForSpecs(opts: CrawlOptions): Promise<CrawlResult> {
     }
 
     const text = new TextDecoder().decode(res.bytes);
+    for (const org of githubOrgsLinked(text, res.finalUrl))
+      githubLinks.set(org, (githubLinks.get(org) ?? 0) + 1);
     const links = withEmbeddedSpecs(
       extractLinks(text, res.finalUrl),
       extractEmbeddedSpecUrls(text, res.finalUrl),
@@ -268,7 +313,38 @@ export async function crawlForSpecs(opts: CrawlOptions): Promise<CrawlResult> {
       }
     }
   }
-  return { hits, offHostHosts };
+  // A stable sort: ties stay in first-seen order.
+  const githubOrgs = [...githubLinks]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, MAX_GITHUB_ORGS)
+    .map(([org]) => org);
+  return { hits, offHostHosts, githubOrgs };
+}
+
+/**
+ * The GitHub org of each `<a href>` on a page that points to
+ * `github.com/<org>[/…]`, lowercased, one per link, in document order;
+ * GitHub's own pages (`/features`, `/pricing`, …) are left out.
+ */
+export function githubOrgsLinked(html: string, baseUrl: string): string[] {
+  const orgs: string[] = [];
+  let base: URL;
+  try {
+    base = new URL(baseUrl);
+  } catch {
+    return orgs;
+  }
+  for (const match of html.matchAll(ANCHOR)) {
+    const href = attribute(match[1] ?? "", "href");
+    const url = href === null ? null : resolveLink(href, base);
+    if (!url) continue;
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    if (host !== "github.com" && host !== "www.github.com") continue;
+    const org = parsed.pathname.split("/")[1]?.toLowerCase() ?? "";
+    if (GITHUB_LOGIN.test(org) && !GITHUB_OWN_PATHS.has(org)) orgs.push(org);
+  }
+  return orgs;
 }
 
 /** One of a Vendor's APIs, as a link on its Developer Portal names it. */
@@ -475,6 +551,7 @@ function normalize(url: string): string {
 const TAG =
   /<!--[\s\S]*?-->|<(script|style|noscript|template)\b[^>]*>[\s\S]*?<\/\1\s*>|<(\/?)([a-zA-Z][a-zA-Z0-9]*)\b((?:[^>"']|"[^"]*"|'[^']*')*)>/g;
 const HEADING = /^h[1-6]$/;
+const ANCHOR = /<a\b((?:[^>"']|"[^"]*"|'[^']*')*)>/gi;
 
 /**
  * The `<a href>` links of an HTML page as `SpecLink`s, in document order:

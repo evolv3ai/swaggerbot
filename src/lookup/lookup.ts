@@ -134,6 +134,9 @@ const GITHUB_SEARCH_SKIPPED =
 const GITHUB_REPO_SEARCH_SKIPPED =
   "GitHub repo search: skipped (no GITHUB_TOKEN, rate-limited or failed)";
 
+/** The GitHub search step searches at most this many orgs verified by their website. */
+const MAX_VERIFIED_ORGS = 3;
+
 /** The GitHub search step lists the trees of at most this many repos. */
 const MAX_REPO_TREES_LISTED = 3;
 
@@ -201,7 +204,7 @@ type SpecCandidate = ApiVersionOf & {
  *    one skipped when its repo is archived, read from the default branch
  *    when it names another), then known paths on the Vendor's domain, then
  *    a shallow crawl of the Developer Portal and known paths on the other
- *    domains it links to, then GitHub code search in the Vendor's org or
+ *    domains it links to, then GitHub code search in the Vendor's orgs or
  *    else across GitHub, then the APIs.guru mirror.
  *
  * A Judge, search or fetch error skips that step and is reported in
@@ -550,6 +553,10 @@ export function createLookup(deps: LookupDeps): Lookup {
     const originRank = new Map<string, number>();
     /** The origin URL being fetched, as its place in `choice.originUrls`. */
     let originIndex: number | undefined;
+    /** The GitHub orgs the crawl found the Vendor's pages linking to. */
+    let crawledGitHubOrgs: string[] = [];
+    /** The GitHub orgs whose profile website is the Vendor's: its own, for Provenance. */
+    const vendorOrgs = new Set<string>();
 
     async function consider(
       url: string,
@@ -613,7 +620,13 @@ export function createLookup(deps: LookupDeps): Lookup {
         served.set(url, specIdOf(res.bytes));
         const provenance = mirror
           ? "Mirror"
-          : provenanceOf(res.finalUrl, choice.vendor, false, githubOrg);
+          : provenanceOf(
+              res.finalUrl,
+              choice.vendor,
+              false,
+              githubOrg,
+              vendorOrgs,
+            );
         await consider(
           res.finalUrl,
           res.bytes,
@@ -676,12 +689,13 @@ export function createLookup(deps: LookupDeps): Lookup {
     async function crawlStep() {
       const deadline = Date.now() + CRAWL_STEP_BUDGET_MS;
       const startUrl = choice.portalUrl ?? `https://${choice.vendor.domain}`;
-      let result: CrawlResult = { hits: [], offHostHosts: [] };
+      let result: CrawlResult = { hits: [], offHostHosts: [], githubOrgs: [] };
       try {
         result = await crawl({ startUrl, api: ref });
       } catch (error) {
         diagnostics.push(`crawl: ${message(error)}`);
       }
+      crawledGitHubOrgs = result.githubOrgs;
       checked.push(`crawl from ${startUrl} (${result.hits.length} found)`);
       const hits = [
         ...result.hits.filter((hit) => !hit.offHost),
@@ -730,10 +744,37 @@ export function createLookup(deps: LookupDeps): Lookup {
     }
 
     /**
-     * Searches GitHub for Spec files in the Vendor's org (its id's first
-     * label), or across GitHub by the API's name when the org has none. The
-     * trees of the org's Spec repos (those with hits, or found by repo search)
-     * add the files code search can't index. The Judge ranks the hits as links first; those likely enough are fetched
+     * The GitHub orgs to search: those the crawl found linked whose profile
+     * website is on the Vendor's registrable domain, in the crawl's order, at
+     * most 3, each then counting as the Vendor's for Provenance; else the
+     * Vendor id's first label, as APIs.guru names no org.
+     */
+    async function orgsToSearch(): Promise<string[]> {
+      const vendorDomain =
+        registrableDomain(choice.vendor.domain) ?? choice.vendor.domain;
+      for (const org of crawledGitHubOrgs) {
+        if (!github || vendorOrgs.size >= MAX_VERIFIED_ORGS) break;
+        let website: string | null;
+        try {
+          website = await github.orgWebsite(org);
+        } catch (error) {
+          diagnostics.push(`GitHub org ${org}: ${message(error)}`);
+          continue;
+        }
+        if (website !== null && websiteDomain(website) === vendorDomain)
+          vendorOrgs.add(org);
+      }
+      return vendorOrgs.size > 0
+        ? [...vendorOrgs]
+        : [vendorLabel(choice.vendor)];
+    }
+
+    /**
+     * Searches GitHub for Spec files in the Vendor's orgs (`orgsToSearch`),
+     * or across GitHub by the API's name when they have none. The trees of
+     * each org's Spec repos (those with hits, or found by repo search) add the
+     * files code search can't index. An org GitHub says doesn't exist gets a
+     * diagnostic of its own, not a failed search's. The Judge ranks the hits as links first; those likely enough are fetched
      * as origins, so archived repos are skipped and `HEAD` becomes the
      * default branch. Stops once settled.
      */
@@ -785,30 +826,39 @@ export function createLookup(deps: LookupDeps): Lookup {
         return files;
       };
 
-      const org = vendorLabel(choice.vendor);
-      let hits = await searchSpecs(org);
-      if (hits === null) return;
-      checked.push(`GitHub code search in org ${org} (${hits.length} hits)`);
-      // Code search leaves out files it can't index (over its size limit),
-      // so the trees of the org's Spec repos are listed as well.
-      const repos = (await reposToList(org, hits)).slice(
-        0,
-        MAX_REPO_TREES_LISTED,
-      );
-      const seen = new Set(hits.map((h) => h.url));
-      for (const fullName of repos) {
-        for (const file of await specsInRepo(fullName)) {
-          if (seen.has(file.url)) continue;
-          seen.add(file.url);
-          hits.push(file);
+      let hits: SpecHit[] = [];
+      const seen = new Set<string>();
+      const add = (found: SpecHit[]) => {
+        for (const hit of found) {
+          if (seen.has(hit.url)) continue;
+          seen.add(hit.url);
+          hits.push(hit);
         }
+      };
+      for (const org of await orgsToSearch()) {
+        const orgHits = await searchSpecs(org);
+        if (orgHits === null) return;
+        checked.push(
+          `GitHub code search in org ${org} (${orgHits.length} hits)`,
+        );
+        add(orgHits);
+        // Code search leaves out files it can't index (over its size limit),
+        // so the trees of the org's Spec repos are listed as well.
+        const repos = (await reposToList(org, orgHits)).slice(
+          0,
+          MAX_REPO_TREES_LISTED,
+        );
+        for (const fullName of repos) add(await specsInRepo(fullName));
+        if (search.missingOrgs().includes(org.toLowerCase()))
+          diagnostics.push(`GitHub org ${org}: no such org (HTTP 422)`);
       }
       if (hits.length === 0) {
-        hits = await searchSpecs(null);
-        if (hits === null) return;
+        const global = await searchSpecs(null);
+        if (global === null) return;
         checked.push(
-          `GitHub code search for "${choice.api.name}" (${hits.length} hits)`,
+          `GitHub code search for "${choice.api.name}" (${global.length} hits)`,
         );
+        hits = global;
       }
       if (hits.length === 0) return;
 
@@ -1207,20 +1257,23 @@ function best(candidates: SpecCandidate[]): SpecCandidate | undefined {
  * it was reached by a link from a page on the Vendor's domain; else Mirror.
  * `findSpec` makes a Mirror Community when no Official or Endorsed Source has
  * its bytes. `currentOrg` replaces the org in a GitHub URL whose repo has
- * moved since.
+ * moved since. The Vendor's GitHub org is the first label of its id, or one
+ * of `vendorOrgs` (lowercased), those whose profile website is the Vendor's.
  */
 export function provenanceOf(
   url: string,
   vendor: Vendor,
   linkedFromVendor: boolean,
   currentOrg?: string,
+  vendorOrgs: ReadonlySet<string> = new Set(),
 ): Provenance {
   const domain = registrableDomain(url);
   const vendorDomain = registrableDomain(vendor.domain) ?? vendor.domain;
   if (domain !== null && domain === vendorDomain) return "Official";
   let org = githubOrg(url);
   if (org !== null && currentOrg) org = currentOrg.toLowerCase();
-  if (org !== null && org === vendorLabel(vendor)) return "Official";
+  if (org !== null && (org === vendorLabel(vendor) || vendorOrgs.has(org)))
+    return "Official";
   return linkedFromVendor ? "Endorsed" : "Mirror";
 }
 
@@ -1253,6 +1306,16 @@ function githubOrg(url: string): string | null {
  */
 function vendorLabel(vendor: Vendor): string {
   return vendor.id.split(".")[0] ?? vendor.id;
+}
+
+/**
+ * The registrable domain of a GitHub profile's website, written with or
+ * without its scheme (`slack.com`, `https://www.render.com/`).
+ */
+function websiteDomain(website: string): string | null {
+  return registrableDomain(
+    /^[a-z][a-z0-9+.-]*:\/\//i.test(website) ? website : `https://${website}`,
+  );
 }
 
 /** `google` names `google` and `googleapis`/`googleapi`. */

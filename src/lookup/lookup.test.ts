@@ -69,7 +69,7 @@ function fakeCrawl(result: Partial<CrawlResult> | Error = {}): {
     async crawl({ startUrl }) {
       starts.push(startUrl);
       if (result instanceof Error) throw result;
-      return { hits: [], offHostHosts: [], ...result };
+      return { hits: [], offHostHosts: [], githubOrgs: [], ...result };
     },
   };
 }
@@ -1570,6 +1570,9 @@ describe("lookup with a GitHub origin", () => {
         calls.push(`${owner}/${repo}`);
         return info;
       },
+      async orgWebsite() {
+        return null;
+      },
     };
     return { github, calls };
   }
@@ -1714,13 +1717,15 @@ describe("lookup with GitHub code search", () => {
   /**
    * A fake GitHubCodeSearch answering `org` for an org search and `global`
    * for a search across GitHub, `repos` for a repo search and `trees[repo]`
-   * for a repo's tree, recording each `[org, name]` and each repo listed.
+   * for a repo's tree, and `missing` as the orgs GitHub said don't exist,
+   * recording each `[org, name]` and each repo listed.
    */
   function fakeSearch(
     org: SpecHit[] | null,
     global: SpecHit[] | null = [],
     repos: string[] | null = [],
     trees: Record<string, SpecHit[] | null> = {},
+    missing: string[] = [],
   ) {
     const calls: [string | null, string][] = [];
     const listed: string[] = [];
@@ -1735,6 +1740,9 @@ describe("lookup with GitHub code search", () => {
       async specsInRepo(fullName) {
         listed.push(fullName);
         return fullName in trees ? (trees[fullName] ?? null) : [];
+      },
+      missingOrgs() {
+        return missing;
       },
     };
     return { search, calls, listed };
@@ -1937,6 +1945,9 @@ describe("lookup with GitHub code search", () => {
           defaultBranch: "main",
           archived: repo === "old-specs",
         };
+      },
+      async orgWebsite() {
+        return null;
       },
     };
     const { search } = fakeSearch([archived, live]);
@@ -2174,6 +2185,109 @@ describe("lookup with GitHub code search", () => {
 
     expect(await ask(lookup, "nospec")).toMatchObject({ outcome: "Resolved" });
     expect(calls).toEqual([]);
+  });
+
+  describe("in the orgs the Vendor's pages link to", () => {
+    /** A fake GitHubRepos whose orgs have the given profile websites. */
+    function fakeOrgs(websites: Record<string, string>) {
+      const asked: string[] = [];
+      const github: GitHubRepos = {
+        async repoInfo(owner, repo) {
+          return {
+            fullName: `${owner}/${repo}`,
+            defaultBranch: "HEAD",
+            archived: false,
+          };
+        },
+        async orgWebsite(org) {
+          asked.push(org);
+          return websites[org] ?? null;
+        },
+      };
+      return { github, asked };
+    }
+
+    it("searches a linked org whose website is the Vendor's, not the id's first label", async () => {
+      const { github, asked } = fakeOrgs({
+        "nospec-examples": "https://examples.elsewhere.test",
+        nospecinc: "nospec.test",
+      });
+      const { search, calls } = fakeSearch([]);
+      const { lookup } = setup(
+        script,
+        undefined,
+        github,
+        fakeCrawl({ githubOrgs: ["nospec-examples", "nospecinc"] }),
+        search,
+      );
+
+      await ask(lookup, "nospec");
+
+      expect(asked).toEqual(["nospec-examples", "nospecinc"]);
+      expect(calls).toEqual([
+        ["nospecinc", "NoSpec API"],
+        [null, "NoSpec API"],
+      ]);
+    });
+
+    it("searches the id's first label when no linked org's website is the Vendor's", async () => {
+      const { github } = fakeOrgs({ someone: "https://someone.test" });
+      const { search, calls } = fakeSearch([]);
+      const { lookup } = setup(
+        script,
+        undefined,
+        github,
+        fakeCrawl({ githubOrgs: ["someone", "nobody"] }),
+        search,
+      );
+
+      await ask(lookup, "nospec");
+
+      expect(calls[0]).toEqual(["nospec", "NoSpec API"]);
+    });
+
+    it("reports an org GitHub says doesn't exist, not a skipped search, and searches across GitHub", async () => {
+      const { search, calls } = fakeSearch([], [], [], {}, ["nospec"]);
+      const { lookup } = setup(script, undefined, undefined, undefined, search);
+
+      const outcome = await ask(lookup, "nospec");
+
+      expect(outcome.diagnostics).toContain(
+        "GitHub org nospec: no such org (HTTP 422)",
+      );
+      expect(outcome.diagnostics ?? []).not.toContain(
+        "GitHub repo search: skipped (no GITHUB_TOKEN, rate-limited or failed)",
+      );
+      expect(calls).toEqual([
+        ["nospec", "NoSpec API"],
+        [null, "NoSpec API"],
+      ]);
+    });
+
+    it("counts a Spec in the verified org as Official", async () => {
+      const found = hit("nospecinc/openapi");
+      server.send(
+        RAW,
+        "/nospecinc/openapi/HEAD/openapi.json",
+        spec("NoSpec API"),
+        "application/json",
+      );
+      const { github } = fakeOrgs({ nospecinc: "https://www.nospec.test/" });
+      const { search } = fakeSearch([found]);
+      const { lookup } = setup(
+        script,
+        undefined,
+        github,
+        fakeCrawl({ githubOrgs: ["nospecinc"] }),
+        search,
+      );
+
+      expect(await ask(lookup, "nospec")).toMatchObject({
+        outcome: "Resolved",
+        provenance: "Official",
+        sources: [{ url: found.url, provenance: "Official" }],
+      });
+    });
   });
 });
 
