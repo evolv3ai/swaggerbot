@@ -155,7 +155,7 @@ export function createKeys(db: Db) {
      * that day. The check and the increment are one upsert, so two concurrent
      * uses can't both take the last one.
      */
-    useQuota(keyId: string, day: string, limit: number): QuotaUse {
+    takeQuota(keyId: string, day: string, limit: number): QuotaUse {
       const counted =
         limit > 0
           ? db
