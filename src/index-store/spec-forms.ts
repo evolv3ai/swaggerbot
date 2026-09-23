@@ -11,10 +11,13 @@ export const MAX_FORMS_ATTEMPTS = 3;
 
 /**
  * A Spec's forms as a Caller may see them, without the Normalized Form's
- * bytes (`getNormalizedBytes`). Only a `ready` Spec has the other fields.
+ * bytes (`getNormalizedBytes`). Only a `failed` Spec has `error`, and only
+ * a `ready` one the other fields.
  */
 export type StoredForms = {
   status: "ready" | "pending" | "failed";
+  /** Why the last build failed. */
+  error?: string;
   normalizedSpecVersion?: string;
   validityIssues?: ValidityIssue[];
   validityFindingCount?: number;
@@ -170,12 +173,14 @@ export function createSpecForms(db: Db) {
           validityFindingCount: specForms.validityFindingCount,
           normalizedFindingCount: specForms.normalizedFindingCount,
           outline: specForms.outline,
+          lastError: specForms.lastError,
         })
         .from(specForms)
         .where(eq(specForms.specId, specId))
         .get();
       if (!row || row.status === "building") return { status: "pending" };
-      if (row.status === "failed") return { status: "failed" };
+      if (row.status === "failed")
+        return { status: "failed", error: row.lastError ?? "unknown error" };
       return {
         status: "ready",
         normalizedSpecVersion: row.normalizedSpecVersion ?? undefined,

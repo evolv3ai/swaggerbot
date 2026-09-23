@@ -228,6 +228,25 @@ export function createRepo(db: Db) {
         .run();
     },
 
+    /**
+     * A Spec's Published Form as stored, byte for byte, with its format and
+     * API id; `undefined` for an unknown Spec.
+     */
+    getPublished(
+      specId: string,
+    ): { bytes: Uint8Array; format: SpecFormat; apiId: string } | undefined {
+      const row = db
+        .select({
+          bytes: specs.publishedBytes,
+          format: specs.format,
+          apiId: specs.apiId,
+        })
+        .from(specs)
+        .where(eq(specs.id, specId))
+        .get();
+      return row && { ...row, bytes: new Uint8Array(row.bytes) };
+    },
+
     findApiByName(name: string): Api | undefined {
       return db
         .select(apiColumns)

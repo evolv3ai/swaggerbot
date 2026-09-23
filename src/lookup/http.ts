@@ -52,17 +52,8 @@ export async function handleLookupRequest(
   gate: Gate,
 ): Promise<Response> {
   const now = gate.now?.() ?? new Date();
-  const limited = gate.rateLimiter.take(
-    clientIpOf(request, gate.clientIpHeader),
-  );
-  if (!limited.allowed)
-    return Response.json(
-      { error: "Rate limit exceeded." },
-      {
-        status: 429,
-        headers: { "retry-after": String(limited.retryAfterSeconds) },
-      },
-    );
+  const limited = rateLimited(request, gate);
+  if (limited) return limited;
 
   let json: unknown;
   try {
@@ -112,6 +103,28 @@ export async function handleLookupRequest(
       },
     );
   return Response.json(await lookup(body.data), { headers: quotaHeaders });
+}
+
+/**
+ * Takes one request from the client IP's bucket: a 429 with `retry-after`
+ * when it is over its rate limit, else `undefined`. Every route shares
+ * one `gate`, so the limit is per IP across all of them.
+ */
+export function rateLimited(
+  request: Request,
+  gate: Pick<Gate, "rateLimiter" | "clientIpHeader">,
+): Response | undefined {
+  const limited = gate.rateLimiter.take(
+    clientIpOf(request, gate.clientIpHeader),
+  );
+  if (limited.allowed) return undefined;
+  return Response.json(
+    { error: "Rate limit exceeded." },
+    {
+      status: 429,
+      headers: { "retry-after": String(limited.retryAfterSeconds) },
+    },
+  );
 }
 
 /**

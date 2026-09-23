@@ -124,7 +124,7 @@ describe("createSpecForms", () => {
     forms.markBuilding(id, AT);
     forms.saveFailure(id, new Error("boom 3"), AT);
 
-    expect(forms.getForms(id)).toEqual({ status: "failed" });
+    expect(forms.getForms(id)).toEqual({ status: "failed", error: "boom 3" });
     expect(forms.nextToBuild()).toBeUndefined();
   });
 
@@ -136,7 +136,7 @@ describe("createSpecForms", () => {
     forms.markBuilding(id, AT);
     forms.saveFailure(id, new SpecFormsError(kind, message), AT);
 
-    expect(forms.getForms(id)).toEqual({ status: "failed" });
+    expect(forms.getForms(id)).toEqual({ status: "failed", error: message });
     expect(forms.nextToBuild()).toBeUndefined();
   });
 
