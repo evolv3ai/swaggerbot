@@ -9,6 +9,7 @@ import {
   apisJsonSpecUrls,
   KNOWN_HOST_PREFIXES,
   KNOWN_PATHS,
+  MIN_GRACE_PATHS,
   probeKnownPaths,
 } from "./known-paths";
 
@@ -37,11 +38,14 @@ const slowFetcher = () =>
     timeoutMs: 5_000,
   });
 
-const spec = (title: string) =>
+/** A Spec with `pathCount` paths: enough, by default, to start the grace. */
+const spec = (title: string, pathCount = MIN_GRACE_PATHS) =>
   JSON.stringify({
     openapi: "3.0.3",
     info: { title, version: "1" },
-    paths: {},
+    paths: Object.fromEntries(
+      Array.from({ length: pathCount }, (_, i) => [`/p${i}`, {}]),
+    ),
   });
 
 // The existing cases hold both with the default grace and with none.
@@ -542,5 +546,66 @@ describe("apisJsonSpecUrls", () => {
     expect(
       apisJsonSpecUrls(new TextEncoder().encode("<html>"), "https://x.test/"),
     ).toEqual([]);
+  });
+});
+
+describe("probeKnownPaths beside the crawl", () => {
+  it("fetches the likeliest paths in the foreground, the rest in the background", async () => {
+    // Cloudflare: its crawl starts on developers.cloudflare.com, whose
+    // /openapi.json must still take its turn; the long tail yields (Mux).
+    const inner = fetcher();
+    const asked: [string, boolean | undefined][] = [];
+    const spy: Fetcher = {
+      fetchUrl(url, opts) {
+        asked.push([new URL(url).pathname, opts?.background]);
+        return inner.fetchUrl(url, opts);
+      },
+    };
+
+    await probeKnownPaths(`vendor.test:${server.port}`, spy, {
+      scheme: "http",
+    });
+
+    const foreground = new Set(
+      asked.filter(([, bg]) => !bg).map(([path]) => path),
+    );
+    expect(foreground).toEqual(
+      new Set(["/openapi.json", "/openapi.yaml", "/swagger.json"]),
+    );
+    expect(asked.filter(([, bg]) => bg).length).toBeGreaterThan(0);
+  });
+});
+
+describe("probeKnownPaths with a stub Spec", () => {
+  it("doesn't start the grace on a hit with too few paths", async () => {
+    // Cloudflare: a 3-path www. copy ended the probe before
+    // developers.cloudflare.com/openapi.json was reached.
+    server.send(
+      "vendor.test",
+      "/openapi.json",
+      spec("Stub", MIN_GRACE_PATHS - 2),
+      "application/json",
+    );
+    server.route("api.vendor.test", "/openapi.json", (_req, res) => {
+      setTimeout(() => {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(spec("Full"));
+      }, 400);
+    });
+
+    const hits = await probeKnownPaths(
+      `vendor.test:${server.port}`,
+      fetcher(),
+      {
+        scheme: "http",
+        budgetMs: 5_000,
+        graceAfterHitMs: 100,
+      },
+    );
+
+    expect(hits.map((h) => h.sniff.extract.title).sort()).toEqual([
+      "Full",
+      "Stub",
+    ]);
   });
 });

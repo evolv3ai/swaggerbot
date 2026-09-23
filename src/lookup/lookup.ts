@@ -58,9 +58,10 @@ import {
   DEFAULT_THRESHOLDS,
   freshnessMs,
   PARTIAL_SPEC_RATIO,
+  SPEC_STEP_BUDGET_MS,
   type Thresholds,
 } from "./thresholds";
-import { stepTimer, type Timed } from "./timings";
+import { type LookupStep, stepTimer, type Timed } from "./timings";
 import { enqueueVerification } from "./verify";
 
 export type LookupRequest = {
@@ -132,7 +133,11 @@ export type LookupDeps = {
    * A shallow crawl of a Developer Portal for Specs. Defaults to
    * `crawlForSpecs` with this Lookup's fetcher and Judge; tests inject a fake.
    */
-  crawl?: (opts: { startUrl: string; api: ApiRef }) => Promise<CrawlResult>;
+  crawl?: (opts: {
+    startUrl: string;
+    api: ApiRef;
+    budgetMs?: number;
+  }) => Promise<CrawlResult>;
   /**
    * A shallow crawl of a Developer Portal for the Vendor's APIs. Defaults to
    * `crawlForVendorApis` with this Lookup's fetcher and Judge; tests inject a
@@ -160,6 +165,12 @@ export type LookupDeps = {
    * the Outcome as `timings`. Off by default.
    */
   trace?: boolean;
+  /**
+   * The Spec step's deadline for the known-path probe, the crawl and GitHub
+   * code search, which run at once. Defaults to `SPEC_STEP_BUDGET_MS`;
+   * `Infinity` is none.
+   */
+  specStepBudgetMs?: number;
 };
 
 /**
@@ -167,6 +178,19 @@ export type LookupDeps = {
  * on the off-host domains it reports share what is left of it.
  */
 const CRAWL_STEP_BUDGET_MS = 20_000;
+
+/**
+ * A Source bounded by a budget of its own (the probe, the crawl) is given
+ * the time to the Spec step's deadline less this much, at most a tenth of
+ * it, so it returns what it has gathered before the deadline drops it.
+ */
+const SELF_BOUNDED_MARGIN_MS = 100;
+
+/**
+ * GitHub code search fetches at most this many of its ranked hits: they are
+ * gathered before any is judged, so it can't stop at the first that settles.
+ */
+const MAX_GITHUB_SPEC_FETCHES = 3;
 
 /** The diagnostic when GitHub code search answers `null`, which gives no reason. */
 const GITHUB_SEARCH_SKIPPED =
@@ -231,6 +255,46 @@ type SpecCandidate = ApiVersionOf & {
   robotsDisallowed?: boolean;
 };
 
+/** A Spec a Source gathered, not judged yet: what `consider` takes. */
+type Gathered = {
+  url: string;
+  bytes: Uint8Array;
+  sniff: SniffResult;
+  provenance: Provenance;
+  found: Pick<SpecCandidate, "offHost" | "robotsDisallowed" | "apisGuruMirror">;
+  /** The GitHub org its repo is in now, after a move, when fetched as an origin. */
+  githubOrg?: string;
+};
+
+/** What the crawl gathered: its hits, then each off-host host's probe hits. */
+type CrawlGathered = { hits: Gathered[]; offHost: Gathered[][] };
+
+/** A GitHub code search hit to fetch, in rank order, and its Spec once fetched. */
+type GitHubGathered = { hitUrl: string; spec?: Gathered };
+
+/**
+ * What a Source checked, the diagnostics it gave and what each URL it fetched
+ * served, kept apart while it gathers alongside the others.
+ */
+type SourceLog = {
+  checked: string[];
+  diagnostics: string[];
+  served: Map<string, string | null>;
+};
+
+/** A Source's log and what it gathers into. */
+function gathering<T>(out: T): { log: SourceLog; out: T } {
+  return { log: { checked: [], diagnostics: [], served: new Map() }, out };
+}
+
+function copyLog(log: SourceLog): SourceLog {
+  return {
+    checked: [...log.checked],
+    diagnostics: [...log.diagnostics],
+    served: new Map(log.served),
+  };
+}
+
 /**
  * The Lookup pipeline: turns a name into an Outcome. The Source chain runs in
  * order and stops once the Outcome is settled:
@@ -250,10 +314,11 @@ type SpecCandidate = ApiVersionOf & {
  *    it covers most of their names (a Vendor's product pages, one API);
  * 5. for the identified API, its Spec: APIs.guru origin URLs (a GitHub
  *    one skipped when its repo is archived, read from the default branch
- *    when it names another), then known paths on the Vendor's domain, then
- *    a shallow crawl of the Developer Portal and known paths on the other
- *    domains it links to, then GitHub code search in the Vendor's orgs or
- *    else across GitHub, then the APIs.guru mirror.
+ *    when it names another); then, at once and within the Spec step's
+ *    deadline (`specStepBudgetMs`), known paths on the Vendor's domain, a
+ *    shallow crawl of the Developer Portal and known paths on the other
+ *    domains it links to, and GitHub code search in the Vendor's orgs or
+ *    else across GitHub, judged in that order; then the APIs.guru mirror.
  *
  * A Judge, search or fetch error skips that step and is reported in
  * `diagnostics`; it never makes the Lookup throw.
@@ -264,13 +329,14 @@ export function createLookup(deps: LookupDeps): IndexedLookup {
   const t: Thresholds = { ...DEFAULT_THRESHOLDS, ...deps.thresholds };
   const now = deps.now ?? (() => new Date());
   const freshnessDays = deps.freshnessDays ?? DEFAULT_FRESHNESS_DAYS;
+  const specStepBudgetMs = deps.specStepBudgetMs ?? SPEC_STEP_BUDGET_MS;
   const probe =
     deps.probe ??
     ((domain: string, opts: ProbeOptions) =>
       probeKnownPaths(domain, fetcher, opts));
   const crawl =
     deps.crawl ??
-    ((opts: { startUrl: string; api: ApiRef }) =>
+    ((opts: { startUrl: string; api: ApiRef; budgetMs?: number }) =>
       crawlForSpecs({ ...opts, fetcher, judge }));
   const vendorCrawl =
     deps.vendorCrawl ??
@@ -766,8 +832,6 @@ export function createLookup(deps: LookupDeps): IndexedLookup {
     const originRank = new Map<string, number>();
     /** The origin URL being fetched, as its place in `choice.originUrls`. */
     let originIndex: number | undefined;
-    /** The GitHub orgs the crawl found the Vendor's pages linking to. */
-    let crawledGitHubOrgs: string[] = [];
     /** The GitHub orgs whose profile website is the Vendor's: its own, for Provenance. */
     const vendorOrgs = new Set<string>();
 
@@ -812,25 +876,34 @@ export function createLookup(deps: LookupDeps): IndexedLookup {
       });
     }
 
+    /** Judges a Spec a Source gathered, as `consider`. */
+    const judgeGathered = (g: Gathered) =>
+      consider(g.url, g.bytes, g.sniff, g.provenance, g.found);
+
+    /** What the Spec fetch step writes to: this Lookup's own record. */
+    const lookupLog: SourceLog = { checked, diagnostics, served };
+
     /**
-     * Fetches a URL and considers the Spec there; `false` when none was found.
-     * `githubOrg` is the GitHub org the URL's repo is in now, after a move.
+     * Fetches a URL and gathers the Spec there, writing what it checked to
+     * `log`; `null` when none was found. `githubOrg` is the GitHub org the
+     * URL's repo is in now, after a move.
      */
-    async function fetchAndConsider(
+    async function fetchSpec(
       url: string,
       mirror: boolean,
+      log: SourceLog,
       githubOrg?: string,
-    ): Promise<boolean> {
+    ): Promise<Gathered | null> {
       try {
         const res = await fetcher.fetchUrl(url);
         const sniff = sniffSpec(res.bytes, res.contentType);
         if (!sniff) {
-          checked.push(`${url} (not a Spec)`);
-          served.set(url, null).set(res.finalUrl, null);
-          return false;
+          log.checked.push(`${url} (not a Spec)`);
+          log.served.set(url, null).set(res.finalUrl, null);
+          return null;
         }
-        checked.push(url);
-        served.set(url, specIdOf(res.bytes));
+        log.checked.push(url);
+        log.served.set(url, specIdOf(res.bytes));
         const provenance = mirror
           ? "Mirror"
           : provenanceOf(
@@ -840,45 +913,51 @@ export function createLookup(deps: LookupDeps): IndexedLookup {
               githubOrg,
               vendorOrgs,
             );
-        await consider(
-          res.finalUrl,
-          res.bytes,
+        return {
+          url: res.finalUrl,
+          bytes: res.bytes,
           sniff,
           provenance,
-          mirror ? { apisGuruMirror: true } : {},
-        );
-        return true;
+          found: mirror ? { apisGuruMirror: true } : {},
+          ...(githubOrg ? { githubOrg } : {}),
+        };
       } catch (error) {
-        checked.push(`${url} (unreachable)`);
-        diagnostics.push(`fetch: ${message(error)}`);
+        log.checked.push(`${url} (unreachable)`);
+        log.diagnostics.push(`fetch: ${message(error)}`);
         // Gone, not merely unreachable.
         if (
           error instanceof FetchError &&
           (error.status === 404 || error.status === 410)
         )
-          served.set(url, null);
-        return false;
+          log.served.set(url, null);
+        return null;
       }
     }
 
+    /** Fetches a URL and considers the Spec there. */
+    async function fetchAndConsider(url: string, mirror: boolean) {
+      const spec = await fetchSpec(url, mirror, lookupLog);
+      if (spec) await judgeGathered(spec);
+    }
+
     /**
-     * An origin URL. On raw.githubusercontent.com its repo is looked up
-     * first: an archived repo's Spec is never used, and a URL on another
-     * branch is read from the default one, falling back to the URL as given.
-     * When GitHub can't say, the URL is fetched as it is.
+     * The Spec at an origin URL. On raw.githubusercontent.com its repo is
+     * looked up first: an archived repo's Spec is never used, and a URL on
+     * another branch is read from the default one, falling back to the URL
+     * as given. When GitHub can't say, the URL is fetched as it is.
      */
-    async function fetchOrigin(url: string) {
+    async function fetchOrigin(
+      url: string,
+      log: SourceLog,
+    ): Promise<Gathered | null> {
       const raw = parseRawGitHubUrl(url);
       const info =
         raw && github ? await github.repoInfo(raw.owner, raw.repo) : null;
-      if (!raw || !info) {
-        await fetchAndConsider(url, false);
-        return;
-      }
+      if (!raw || !info) return fetchSpec(url, false, log);
       if (info.archived) {
-        checked.push(`${url} (archived repo ${info.fullName})`);
-        diagnostics.push(`archived repo ${info.fullName}`);
-        return;
+        log.checked.push(`${url} (archived repo ${info.fullName})`);
+        log.diagnostics.push(`archived repo ${info.fullName}`);
+        return null;
       }
       const org = info.fullName.split("/")[0]?.toLowerCase();
       if (raw.ref !== info.defaultBranch) {
@@ -888,20 +967,64 @@ export function createLookup(deps: LookupDeps): IndexedLookup {
           info.defaultBranch,
           raw.path,
         );
-        if (await fetchAndConsider(onDefault, false, org)) return;
+        const spec = await fetchSpec(onDefault, false, log, org);
+        if (spec) return spec;
       }
-      await fetchAndConsider(url, false, org);
+      return fetchSpec(url, false, log, org);
     }
 
     /**
-     * Crawls the Developer Portal and considers every Spec it found, then
-     * probes known paths on the other domains it links to, stopping once
-     * settled. Hits on the portal's domain
-     * come first; those off it were reached by a link from the Vendor's pages,
-     * so are Endorsed.
+     * Known paths on the Vendor's own domain, within `budgetMs`; every hit is
+     * gathered.
      */
-    async function crawlStep() {
-      const deadline = Date.now() + CRAWL_STEP_BUDGET_MS;
+    async function gatherKnownPaths(
+      log: SourceLog,
+      out: Gathered[],
+      budgetMs: number | undefined,
+    ) {
+      let hits: KnownPathHit[] = [];
+      try {
+        // The Vendor's own domain: ADR 0003 allows a shut host's Spec once.
+        hits = await probe(choice.vendor.domain, {
+          allowBlanketRobots: true,
+          ...(budgetMs === undefined ? {} : { budgetMs }),
+        });
+      } catch (error) {
+        log.diagnostics.push(`known paths: ${message(error)}`);
+      }
+      log.checked.push(
+        `known paths on ${choice.vendor.domain} (${hits.length} found)`,
+      );
+      for (const hit of hits) {
+        if (hit.robotsDisallowed)
+          log.diagnostics.push(robotsDiagnostic(hit.url));
+        out.push({
+          url: hit.url,
+          bytes: hit.bytes,
+          sniff: hit.sniff,
+          provenance: provenanceOf(hit.url, choice.vendor, false),
+          found: { robotsDisallowed: hit.robotsDisallowed },
+        });
+      }
+    }
+
+    /**
+     * Crawls the Developer Portal, within `budget` and at most the crawl
+     * step's own budget, and gathers every Spec it found, hits on the
+     * portal's domain first; those off it were reached by a link from the
+     * Vendor's pages, so are Endorsed. Then probes known paths on the other
+     * domains it links to, all at once, in what is left. The GitHub orgs the
+     * crawl found go to `onGitHubOrgs` as soon as it ends.
+     */
+    async function gatherCrawl(
+      log: SourceLog,
+      out: CrawlGathered,
+      budget: () => number | undefined,
+      onGitHubOrgs: (orgs: string[]) => void,
+    ) {
+      const stepEndsAt = Date.now() + CRAWL_STEP_BUDGET_MS;
+      const left = () =>
+        Math.min(stepEndsAt - Date.now(), budget() ?? Infinity);
       const startUrl = choice.portalUrl ?? `https://${choice.vendor.domain}`;
       let result: CrawlResult = {
         hits: [],
@@ -910,109 +1033,125 @@ export function createLookup(deps: LookupDeps): IndexedLookup {
         githubOrgs: [],
       };
       try {
-        result = await crawl({ startUrl, api: ref });
+        const budgetMs = budget();
+        result = await crawl({
+          startUrl,
+          api: ref,
+          ...(budgetMs === undefined ? {} : { budgetMs }),
+        });
       } catch (error) {
-        diagnostics.push(`crawl: ${message(error)}`);
+        log.diagnostics.push(`crawl: ${message(error)}`);
+      } finally {
+        onGitHubOrgs(result.githubOrgs);
       }
       for (const { url, reason } of result.failed)
-        diagnostics.push(`crawl fetch failed: ${url} (${reason})`);
-      crawledGitHubOrgs = result.githubOrgs;
-      checked.push(`crawl from ${startUrl} (${result.hits.length} found)`);
+        log.diagnostics.push(`crawl fetch failed: ${url} (${reason})`);
+      log.checked.push(`crawl from ${startUrl} (${result.hits.length} found)`);
       const hits = [
         ...result.hits.filter((hit) => !hit.offHost),
         ...result.hits.filter((hit) => hit.offHost),
       ];
-      // Every hit is considered, as on known paths: it is fetched already,
-      // and the Judge's link scores, which set the order, vary between calls.
-      // Skipped once settled, a full Spec after its per-version add-on never
-      // reached the pool (WTR-95).
       for (const hit of hits) {
-        if (hit.robotsDisallowed) diagnostics.push(robotsDiagnostic(hit.url));
-        await consider(
-          hit.url,
-          hit.bytes,
-          hit.sniff,
-          provenanceOf(hit.url, choice.vendor, true),
-          { offHost: hit.offHost, robotsDisallowed: hit.robotsDisallowed },
-        );
+        if (hit.robotsDisallowed)
+          log.diagnostics.push(robotsDiagnostic(hit.url));
+        out.hits.push({
+          url: hit.url,
+          bytes: hit.bytes,
+          sniff: hit.sniff,
+          provenance: provenanceOf(hit.url, choice.vendor, true),
+          found: {
+            offHost: hit.offHost,
+            robotsDisallowed: hit.robotsDisallowed,
+          },
+        });
       }
 
       const vendorDomain =
         registrableDomain(choice.vendor.domain) ?? choice.vendor.domain;
-      for (const host of result.offHostHosts) {
-        if (settled()) return;
-        // The Vendor's own domain was probed in the step before.
-        if (host === vendorDomain) continue;
-        const budgetMs = deadline - Date.now();
-        if (budgetMs <= 0) break;
-        checked.push(`known paths on ${host} (from the crawl)`);
-        let hits: KnownPathHit[] = [];
-        try {
-          // Out of time is a miss, not an error.
-          hits =
-            (await withDeadline(probe(host, { budgetMs }), budgetMs)) ?? [];
-        } catch (error) {
-          diagnostics.push(`known paths on ${host}: ${message(error)}`);
-        }
-        for (const hit of hits) {
-          if (!goOn(hit.url)) continue;
-          await consider(
-            hit.url,
-            hit.bytes,
-            hit.sniff,
-            provenanceOf(hit.url, choice.vendor, true),
-            { offHost: true },
+      // The Vendor's own domain is probed by the known-path Source.
+      const hosts = result.offHostHosts.filter((host) => host !== vendorDomain);
+      const budgetMs = left();
+      if (hosts.length === 0 || budgetMs <= 0) return;
+      // Kept in the crawl's order, so judging can stop between hosts as the
+      // sequential probes did.
+      out.offHost.push(...hosts.map(() => [] as Gathered[]));
+      await Promise.all(
+        hosts.map(async (host, i) => {
+          log.checked.push(`known paths on ${host} (from the crawl)`);
+          let hits: KnownPathHit[] = [];
+          try {
+            // Out of time is a miss, not an error.
+            hits =
+              (await withDeadline(probe(host, { budgetMs }), budgetMs)) ?? [];
+          } catch (error) {
+            log.diagnostics.push(`known paths on ${host}: ${message(error)}`);
+          }
+          out.offHost[i]?.push(
+            ...hits.map((hit) => ({
+              url: hit.url,
+              bytes: hit.bytes,
+              sniff: hit.sniff,
+              provenance: provenanceOf(hit.url, choice.vendor, true),
+              found: { offHost: true },
+            })),
           );
-        }
-      }
+        }),
+      );
     }
 
     /**
-     * The GitHub orgs to search: those the crawl found linked whose profile
-     * website is on the Vendor's registrable domain, in the crawl's order, at
-     * most 3, each then counting as the Vendor's for Provenance; else the
-     * Vendor id's first label, as APIs.guru names no org.
+     * Of the GitHub orgs the crawl found linked, those whose profile website
+     * is on the Vendor's registrable domain, in the crawl's order, at most 3
+     * in all, each then counting as the Vendor's for Provenance.
      */
-    async function orgsToSearch(): Promise<string[]> {
+    async function verifiedOrgs(
+      linked: string[],
+      log: SourceLog,
+    ): Promise<string[]> {
       const vendorDomain =
         registrableDomain(choice.vendor.domain) ?? choice.vendor.domain;
-      for (const org of crawledGitHubOrgs) {
+      for (const org of linked) {
         if (!github || vendorOrgs.size >= MAX_VERIFIED_ORGS) break;
         let website: string | null;
         try {
           website = await github.orgWebsite(org);
         } catch (error) {
-          diagnostics.push(`GitHub org ${org}: ${message(error)}`);
+          log.diagnostics.push(`GitHub org ${org}: ${message(error)}`);
           continue;
         }
         if (website !== null && websiteDomain(website) === vendorDomain)
           vendorOrgs.add(org);
       }
-      return vendorOrgs.size > 0
-        ? [...vendorOrgs]
-        : [vendorLabel(choice.vendor)];
+      return [...vendorOrgs];
     }
 
     /**
-     * Searches GitHub for Spec files in the Vendor's orgs (`orgsToSearch`),
-     * or across GitHub by the API's name when they have none. The trees of
-     * each org's Spec repos (those with hits, or found by repo search) add the
-     * files code search can't index. An org GitHub says doesn't exist gets a
-     * diagnostic of its own, not a failed search's. The Judge ranks the hits as links first; those likely enough are fetched
-     * as origins, so archived repos are skipped and `HEAD` becomes the
-     * default branch. Stops once settled.
+     * Searches GitHub for Spec files in the Vendor's orgs: at once in the
+     * Vendor id's first label, as APIs.guru names no org, or across GitHub
+     * by the API's name when it has none, and fetches the likeliest; then,
+     * as an extra once the crawl has reported them, in the orgs it found
+     * linked (`verifiedOrgs`) not searched yet. The trees of each org's Spec
+     * repos (those with hits, or found by repo search) add the files code
+     * search can't index. An org GitHub says doesn't exist gets a diagnostic
+     * of its own, not a failed search's. Hits are fetched as origins, so
+     * archived repos are skipped and `HEAD` becomes the default branch.
      */
-    async function githubSearchStep(search: GitHubCodeSearch) {
+    async function gatherGitHub(
+      search: GitHubCodeSearch,
+      log: SourceLog,
+      out: GitHubGathered[],
+      crawledGitHubOrgs: Promise<string[]>,
+    ) {
       /** The hits, or `null` after one diagnostic when the search can't run. */
       const searchSpecs = async (org: string | null) => {
         let hits: SpecHit[] | null;
         try {
           hits = await search.searchSpecs(org, choice.api.name);
         } catch (error) {
-          diagnostics.push(`GitHub code search: ${message(error)}`);
+          log.diagnostics.push(`GitHub code search: ${message(error)}`);
           return null;
         }
-        if (hits === null) diagnostics.push(GITHUB_SEARCH_SKIPPED);
+        if (hits === null) log.diagnostics.push(GITHUB_SEARCH_SKIPPED);
         return hits;
       };
 
@@ -1027,10 +1166,10 @@ export function createLookup(deps: LookupDeps): IndexedLookup {
         try {
           repos = await search.searchSpecRepos(org, choice.api.name);
         } catch (error) {
-          diagnostics.push(`GitHub repo search: ${message(error)}`);
+          log.diagnostics.push(`GitHub repo search: ${message(error)}`);
           return [];
         }
-        if (repos === null) diagnostics.push(GITHUB_REPO_SEARCH_SKIPPED);
+        if (repos === null) log.diagnostics.push(GITHUB_REPO_SEARCH_SKIPPED);
         return repos ?? [];
       };
       /** A repo's Spec-looking files from its tree; `[]` after one diagnostic on failure. */
@@ -1039,77 +1178,281 @@ export function createLookup(deps: LookupDeps): IndexedLookup {
         try {
           files = await search.specsInRepo(fullName);
         } catch (error) {
-          diagnostics.push(`GitHub repo tree ${fullName}: ${message(error)}`);
+          log.diagnostics.push(
+            `GitHub repo tree ${fullName}: ${message(error)}`,
+          );
           return [];
         }
         if (files === null) {
-          diagnostics.push(`GitHub repo tree ${fullName}: skipped (failed)`);
+          log.diagnostics.push(
+            `GitHub repo tree ${fullName}: skipped (failed)`,
+          );
           return [];
         }
-        checked.push(`GitHub repo tree ${fullName} (${files.length} files)`);
+        log.checked.push(
+          `GitHub repo tree ${fullName} (${files.length} files)`,
+        );
         return files;
       };
 
-      let hits: SpecHit[] = [];
       const seen = new Set<string>();
-      const add = (found: SpecHit[]) => {
-        for (const hit of found) {
-          if (seen.has(hit.url)) continue;
-          seen.add(hit.url);
-          hits.push(hit);
+      /** The hits not gathered before, recorded as gathered. */
+      const unseen = (found: SpecHit[]) =>
+        found.filter((hit) => !seen.has(hit.url) && seen.add(hit.url));
+      const searched = new Set<string>();
+      /**
+       * Each org's hits and its Spec repos' tree files, for the orgs not
+       * searched yet; `null` when a search can't run.
+       */
+      const searchOrgs = async (orgs: string[]) => {
+        const hits: SpecHit[] = [];
+        for (const org of orgs) {
+          if (searched.has(org.toLowerCase())) continue;
+          searched.add(org.toLowerCase());
+          const orgHits = await searchSpecs(org);
+          if (orgHits === null) return null;
+          log.checked.push(
+            `GitHub code search in org ${org} (${orgHits.length} hits)`,
+          );
+          hits.push(...unseen(orgHits));
+          // Code search leaves out files it can't index (over its size limit),
+          // so the trees of the org's Spec repos are listed as well.
+          const repos = (await reposToList(org, orgHits)).slice(
+            0,
+            MAX_REPO_TREES_LISTED,
+          );
+          for (const fullName of repos)
+            hits.push(...unseen(await specsInRepo(fullName)));
+          if (search.missingOrgs().includes(org.toLowerCase()))
+            log.diagnostics.push(`GitHub org ${org}: no such org (HTTP 422)`);
         }
+        return hits;
       };
-      for (const org of await orgsToSearch()) {
-        const orgHits = await searchSpecs(org);
-        if (orgHits === null) return;
-        checked.push(
-          `GitHub code search in org ${org} (${orgHits.length} hits)`,
+      /**
+       * The Judge ranks the hits as links, and the likeliest few likely
+       * enough are fetched at once, as origins, into `out` after those
+       * already there, in rank order: a repo tree lists the right Spec after
+       * code search's wrong ones (PagerDuty's Events Specs before its REST
+       * Spec). Nothing is judged yet to stop at, hence only a few.
+       */
+      const fetchRanked = async (hits: SpecHit[]) => {
+        if (hits.length === 0) return;
+        const links: SpecLink[] = hits.map((hit) => ({
+          url: hit.url,
+          text: hit.path,
+          context: hit.fullName,
+        }));
+        let probabilities: number[];
+        try {
+          probabilities = (await judge.areSpecLinks(ref, links)).map(
+            (j) => j.probability,
+          );
+        } catch (error) {
+          log.diagnostics.push(`Judge areSpecLinks: ${message(error)}`);
+          return;
+        }
+        const slots: GitHubGathered[] = hits
+          .map((hit, i) => ({ hit, p: probabilities[i] ?? 0 }))
+          .filter(({ p }) => p >= t.specLink)
+          .sort((a, b) => b.p - a.p)
+          .slice(0, MAX_GITHUB_SPEC_FETCHES)
+          .map(({ hit }) => ({ hitUrl: hit.url }));
+        out.push(...slots);
+        await Promise.all(
+          slots.map(async (slot) => {
+            const spec = await fetchOrigin(slot.hitUrl, log);
+            if (spec) slot.spec = spec;
+          }),
         );
-        add(orgHits);
-        // Code search leaves out files it can't index (over its size limit),
-        // so the trees of the org's Spec repos are listed as well.
-        const repos = (await reposToList(org, orgHits)).slice(
-          0,
-          MAX_REPO_TREES_LISTED,
-        );
-        for (const fullName of repos) add(await specsInRepo(fullName));
-        if (search.missingOrgs().includes(org.toLowerCase()))
-          diagnostics.push(`GitHub org ${org}: no such org (HTTP 422)`);
-      }
+      };
+
+      // The org known up front, without waiting for the crawl.
+      let hits = await searchOrgs([vendorLabel(choice.vendor)]);
+      if (hits === null) return;
       if (hits.length === 0) {
         const global = await searchSpecs(null);
         if (global === null) return;
-        checked.push(
+        log.checked.push(
           `GitHub code search for "${choice.api.name}" (${global.length} hits)`,
         );
-        hits = global;
+        hits = unseen(global);
       }
-      if (hits.length === 0) return;
+      await fetchRanked(hits);
 
-      const links: SpecLink[] = hits.map((hit) => ({
-        url: hit.url,
-        text: hit.path,
-        context: hit.fullName,
-      }));
-      let probabilities: number[];
+      // The orgs the crawl found, an extra when it reports them in time.
+      const linked = await crawledGitHubOrgs;
+      const extra = await searchOrgs(await verifiedOrgs(linked, log));
+      if (extra) await fetchRanked(extra);
+    }
+
+    /**
+     * The known-path probe, the crawl and GitHub code search, gathering at
+     * once within the Spec step's deadline, each judged as soon as it and
+     * those before it have ended, in the order they ran in one after another.
+     * Once settled, the Sources after are not waited for. What a Source had
+     * gathered by the deadline is judged, the rest is dropped.
+     */
+    async function gatherAndJudge() {
+      const startedAt = Date.now();
+      const endsAt = startedAt + specStepBudgetMs;
+      /**
+       * What is left for a Source bounded by a budget of its own, less a
+       * margin so it returns what it has before the deadline drops it;
+       * `undefined` without a deadline.
+       */
+      const budget = () =>
+        Number.isFinite(endsAt)
+          ? Math.max(
+              0,
+              endsAt -
+                Date.now() -
+                Math.min(SELF_BOUNDED_MARGIN_MS, specStepBudgetMs / 10),
+            )
+          : undefined;
+
+      const known = gathering<Gathered[]>([]);
+      const crawled = gathering<CrawlGathered>({ hits: [], offHost: [] });
+      const githubHits = gathering<GitHubGathered[]>([]);
+      let orgsFound: (orgs: string[]) => void = () => {};
+      const crawledGitHubOrgs = new Promise<string[]>((resolve) => {
+        orgsFound = resolve;
+      });
+
+      const running = new Set<LookupStep>();
+      /** When the deadline passed, in ms from the start. */
+      let deadlineAfter: number | undefined;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const deadline = new Promise<void>((resolve) => {
+        if (!Number.isFinite(endsAt)) return;
+        timer = setTimeout(() => {
+          deadlineAfter = Date.now() - startedAt;
+          resolve();
+        }, specStepBudgetMs);
+      });
+      /** Resolves once the Spec step stops waiting on the Sources. */
+      let stopWaiting: () => void = () => {};
+      const stopped = new Promise<void>((resolve) => {
+        stopWaiting = resolve;
+      });
+      /**
+       * Starts a Source's gather, timed until it ends, the deadline passes
+       * or the Spec step stops waiting; a Source's error is its diagnostic.
+       */
+      const start = (
+        step: LookupStep,
+        log: SourceLog,
+        gather: () => Promise<void>,
+      ) => {
+        running.add(step);
+        const done = gather()
+          .catch((error) => {
+            log.diagnostics.push(`${step}: ${message(error)}`);
+          })
+          .finally(() => running.delete(step));
+        return timed(step, () => Promise.race([done, deadline, stopped]));
+      };
+
+      const knownDone = start("known paths", known.log, () =>
+        gatherKnownPaths(known.log, known.out, budget()),
+      );
+      const crawlDone = start("Developer Portal crawl", crawled.log, () =>
+        gatherCrawl(crawled.log, crawled.out, budget, orgsFound),
+      );
+      const githubDone = githubSearch
+        ? start("GitHub code search", githubHits.log, () =>
+            gatherGitHub(
+              githubSearch,
+              githubHits.log,
+              githubHits.out,
+              crawledGitHubOrgs,
+            ),
+          )
+        : undefined;
+
+      /** The Sources the deadline stopped while they were waited for. */
+      const cut: LookupStep[] = [];
+      /**
+       * Waits for a Source, then takes what it gathered and its log: a
+       * Source still running writes on, to nothing read.
+       */
+      const wait = async <T>(
+        step: LookupStep,
+        done: Promise<unknown>,
+        source: { log: SourceLog; out: T },
+        copy: (out: T) => T,
+      ): Promise<T> => {
+        await done;
+        if (running.has(step)) cut.push(step);
+        const log = copyLog(source.log);
+        checked.push(...log.checked);
+        diagnostics.push(...log.diagnostics);
+        for (const [url, specId] of log.served) served.set(url, specId);
+        return copy(source.out);
+      };
+      const judging = <T>(fn: () => Promise<T>) => timed("Spec judging", fn);
+
       try {
-        probabilities = (await judge.areSpecLinks(ref, links)).map(
-          (j) => j.probability,
+        const knownHits = await wait("known paths", knownDone, known, (o) => [
+          ...o,
+        ]);
+        // Every hit, even once settled: the bytes are in hand, and a stale
+        // copy on one host (docs.) may answer before the current Spec on
+        // another.
+        await judging(async () => {
+          for (const g of knownHits) await judgeGathered(g);
+        });
+        if (settled()) return;
+
+        const crawl = await wait(
+          "Developer Portal crawl",
+          crawlDone,
+          crawled,
+          (o) => ({
+            hits: [...o.hits],
+            offHost: o.offHost.map((hits) => [...hits]),
+          }),
         );
-      } catch (error) {
-        diagnostics.push(`Judge areSpecLinks: ${message(error)}`);
-        return;
-      }
-      // Likeliest first: the first Spec fetched may settle the Lookup, and a
-      // repo tree lists the right Spec after code search's wrong ones
-      // (PagerDuty's Events Specs before its REST Spec).
-      const ranked = hits
-        .map((hit, i) => ({ hit, p: probabilities[i] ?? 0 }))
-        .filter(({ p }) => p >= t.specLink)
-        .sort((a, b) => b.p - a.p);
-      for (const { hit } of ranked) {
-        if (!goOn(hit.url)) continue;
-        await fetchOrigin(hit.url);
+        await judging(async () => {
+          // Every crawl hit too: the Judge's link scores, which set the
+          // order, vary between calls. Skipped once settled, a full Spec
+          // after its per-version add-on never reached the pool (WTR-95).
+          for (const g of crawl.hits) await judgeGathered(g);
+          for (const hits of crawl.offHost) {
+            if (settled()) return;
+            for (const g of hits) if (goOn(g.url)) await judgeGathered(g);
+          }
+        });
+        if (settled() || !githubDone) return;
+
+        const slots = await wait(
+          "GitHub code search",
+          githubDone,
+          githubHits,
+          (o) => o.map((slot) => ({ ...slot })),
+        );
+        await judging(async () => {
+          // Its Provenance as of now: an org the crawl reported may have
+          // been verified as the Vendor's after the hit was fetched.
+          for (const { hitUrl, spec } of slots)
+            if (spec && goOn(hitUrl))
+              await judgeGathered({
+                ...spec,
+                provenance: provenanceOf(
+                  spec.url,
+                  choice.vendor,
+                  false,
+                  spec.githubOrg,
+                  vendorOrgs,
+                ),
+              });
+        });
+      } finally {
+        stopWaiting();
+        clearTimeout(timer);
+        if (cut.length > 0)
+          diagnostics.push(
+            `spec step deadline: ${cut.join(", ")} stopped after ${deadlineAfter ?? Date.now() - startedAt} ms`,
+          );
       }
     }
 
@@ -1119,17 +1462,18 @@ export function createLookup(deps: LookupDeps): IndexedLookup {
      */
     const wanted = (c: SpecCandidate) =>
       apiVersion === undefined ? !c.isPreview : c.apiVersion === apiVersion;
-    /** The likeliest wanted candidate at `tier` that describes the API. */
-    const describing = (tier: Provenance) =>
-      best(
-        candidates.filter(
-          (c) =>
-            c.provenance === tier && c.probability >= t.describes && wanted(c),
-        ),
-      );
-    // The Vendor's own Spec wins over one it links to.
-    const confirmed = () => describing("Official") ?? describing("Endorsed");
-    const settled = () => confirmed() !== undefined;
+    /**
+     * Settled once a wanted Spec from the Vendor or linked by it describes
+     * the API, and its URL names no API Version: a Spec whose URL does may
+     * be a per-version add-on (Box's 24-path `openapi-v2025.0.json` on
+     * GitHub, judged before the crawl brought `box-openapi.json`), so later
+     * Sources are still waited for and judged. When none comes in time,
+     * `answer` weighs such Specs as ever.
+     */
+    const confirming = (c: SpecCandidate) =>
+      isVendorBacked(c.provenance) && c.probability >= t.describes && wanted(c);
+    const settled = () =>
+      candidates.some((c) => confirming(c) && !urlNamesApiVersion(c.url));
     /**
      * Whether a step goes on to its next Source. Once settled, it still takes
      * those whose URL names an API Version (`openapi-v2026.0.json` beside
@@ -1142,44 +1486,16 @@ export function createLookup(deps: LookupDeps): IndexedLookup {
         for (const [i, url] of choice.originUrls.entries()) {
           if (!goOn(url)) continue;
           originIndex = i;
-          await fetchOrigin(url);
+          const spec = await fetchOrigin(url, lookupLog);
+          if (spec) await judgeGathered(spec);
         }
       });
     originIndex = undefined;
-    if (!settled()) await timed("known paths", knownPathsStep);
-    if (!settled()) await timed("Developer Portal crawl", crawlStep);
-    if (!settled() && githubSearch)
-      await timed("GitHub code search", () => githubSearchStep(githubSearch));
+    if (!settled()) await gatherAndJudge();
     const { mirrorUrl } = choice;
-    if (!settled() && mirrorUrl)
+    // The mirror never answers over a Spec the Vendor backs, add-on or not.
+    if (!candidates.some(confirming) && mirrorUrl)
       await timed("Spec fetch", () => fetchAndConsider(mirrorUrl, true));
-
-    /** Known paths on the Vendor's own domain; every hit is considered. */
-    async function knownPathsStep() {
-      let hits: KnownPathHit[] = [];
-      try {
-        // The Vendor's own domain: ADR 0003 allows a shut host's Spec once.
-        hits = await probe(choice.vendor.domain, { allowBlanketRobots: true });
-      } catch (error) {
-        diagnostics.push(`known paths: ${message(error)}`);
-      }
-      checked.push(
-        `known paths on ${choice.vendor.domain} (${hits.length} found)`,
-      );
-      // Every hit, even once settled: the bytes are in hand, and a stale copy
-      // on one host (docs.) may answer before the current Spec on another.
-      for (const hit of hits) {
-        if (hit.robotsDisallowed) diagnostics.push(robotsDiagnostic(hit.url));
-        await consider(
-          hit.url,
-          hit.bytes,
-          hit.sniff,
-          provenanceOf(hit.url, choice.vendor, false),
-          { robotsDisallowed: hit.robotsDisallowed },
-        );
-      }
-    }
-
     // A third-party Source is a Mirror only of bytes the Vendor stands behind;
     // otherwise it is Community.
     const backed = new Set(

@@ -94,6 +94,13 @@ export type FetchUrlOptions = {
    * applies. Default false.
    */
   ignoreRobots?: boolean;
+  /**
+   * Yields to other requests to the same host: takes a slot only when the
+   * host is free at that moment, so a request made meanwhile goes first.
+   * For the known-path probe, which runs beside the Developer Portal crawl
+   * on the same hosts and would otherwise halve its pace. Default false.
+   */
+  background?: boolean;
 };
 
 export type Fetcher = {
@@ -156,13 +163,28 @@ export function createFetcher(opts: FetcherOptions = {}): Fetcher {
     { expiresAt: number; verdict: Promise<RobotsVerdict> }
   >();
 
-  /** Reserves the next slot for a host and waits for it. */
-  async function waitTurn(host: string, signal?: AbortSignal) {
+  /**
+   * Reserves the next slot for a host and waits for it. A `background`
+   * request reserves none ahead: it waits until the host is free, and again
+   * whenever another request took that slot first.
+   */
+  async function waitTurn(
+    host: string,
+    signal: AbortSignal | undefined,
+    background: boolean,
+  ) {
     if (minIntervalMs <= 0) return;
-    const now = Date.now();
-    const at = Math.max(now, nextSlot.get(host) ?? 0);
-    nextSlot.set(host, at + minIntervalMs);
-    if (at > now) await sleep(at - now, undefined, { signal });
+    for (;;) {
+      const now = Date.now();
+      const at = Math.max(now, nextSlot.get(host) ?? 0);
+      if (background && at > now) {
+        await sleep(at - now, undefined, { signal });
+        continue;
+      }
+      nextSlot.set(host, at + minIntervalMs);
+      if (at > now) await sleep(at - now, undefined, { signal });
+      return;
+    }
   }
 
   function checkTarget(url: URL, original: string): URL {
@@ -181,8 +203,9 @@ export function createFetcher(opts: FetcherOptions = {}): Fetcher {
     url: URL,
     limit: number,
     signal?: AbortSignal,
+    background = false,
   ): Promise<RawResponse> {
-    await waitTurn(url.hostname, signal);
+    await waitTurn(url.hostname, signal, background);
     const timeout = AbortSignal.timeout(timeoutMs);
     const combined = signal ? AbortSignal.any([signal, timeout]) : timeout;
     const client = url.protocol === "https:" ? https : http;
@@ -311,7 +334,10 @@ export function createFetcher(opts: FetcherOptions = {}): Fetcher {
   }
 
   return {
-    async fetchUrl(input, { signal, ignoreRobots = false } = {}) {
+    async fetchUrl(
+      input,
+      { signal, ignoreRobots = false, background = false } = {},
+    ) {
       let url: URL;
       try {
         url = new URL(input);
@@ -334,7 +360,7 @@ export function createFetcher(opts: FetcherOptions = {}): Fetcher {
           }
           robotsDisallowed = true;
         }
-        const res = await requestOnce(url, maxBytes, signal);
+        const res = await requestOnce(url, maxBytes, signal, background);
         if (REDIRECT_STATUSES.has(res.status) && res.location) {
           if (hop >= maxRedirects) {
             throw new FetchError("http-error", input, "too many redirects", {

@@ -1690,20 +1690,37 @@ describe("lookup with the Developer Portal crawl", () => {
     );
   });
 
-  it("does not crawl once the known-path probe has settled the answer", async () => {
+  it("judges no crawl hit once the known-path probe has settled the answer", async () => {
+    // The crawl runs alongside the probe now, but its hits are judged only
+    // when the probe's didn't settle, as when it ran after it.
     server.send(
       "api.nospec.test",
       "/openapi.json",
       spec("NoSpec API"),
       "application/json",
     );
-    const { lookup, crawls } = setup(script);
+    const { lookup, crawls, judge } = setup(
+      script,
+      undefined,
+      undefined,
+      fakeCrawl({
+        hits: [
+          crawlHit(
+            `${server.origin("docs.nospec.test")}/openapi.json`,
+            "NoSpec API (crawled)",
+          ),
+        ],
+      }),
+    );
 
     expect(await ask(lookup, "nospec")).toMatchObject({
       outcome: "Resolved",
       sources: [{ url: `${server.origin("api.nospec.test")}/openapi.json` }],
     });
-    expect(crawls).toEqual([]);
+    expect(crawls).toEqual(["https://nospec.test"]);
+    expect(
+      judge.calls.filter((c) => c.judgment === "specDescribesApi"),
+    ).toHaveLength(1);
   });
 
   it("starts the crawl at a portal Candidate's page", async () => {
@@ -1998,22 +2015,491 @@ describe("lookup with the Developer Portal crawl", () => {
       currentSpec: { specVersion: "3.0.3" },
       sources: [{ url, provenance: "Endorsed" }],
     });
-    // The Vendor's own domain was already probed; settled on machines.test.
-    expect(probed).toEqual(["nospec.test", "machines.test"]);
+    // The Vendor's own domain is probed by the known-path Source; the
+    // others all at once now, and machines.test, judged first, settles it.
+    expect(probed).toEqual(["nospec.test", "machines.test", "later.test"]);
   });
 
-  it("skips the off-host probe once the crawl has settled the answer", async () => {
+  it("judges no off-host probe hit once the crawl has settled the answer", async () => {
+    // Probed alongside, as nothing is judged while the Sources gather, but
+    // judged only when the crawl's own hits didn't settle.
     const url = `${server.origin("docs.nospec.test")}/openapi.json`;
-    const { lookup, probed } = setup(
+    server.send(
+      "docs.machines.test",
+      "/openapi.json",
+      spec("NoSpec API (machines)"),
+      "application/json",
+    );
+    const { lookup, probed, judge } = setup(
       script,
       undefined,
       undefined,
       fakeCrawl({ hits: [crawlHit(url)], offHostHosts: ["machines.test"] }),
     );
 
-    expect(await ask(lookup, "nospec")).toMatchObject({ outcome: "Resolved" });
-    expect(probed).toEqual(["nospec.test"]);
+    expect(await ask(lookup, "nospec")).toMatchObject({
+      outcome: "Resolved",
+      sources: [{ url }],
+    });
+    expect(probed).toEqual(["nospec.test", "machines.test"]);
+    expect(
+      judge.calls.filter((c) => c.judgment === "specDescribesApi"),
+    ).toHaveLength(1);
   });
+});
+
+describe("lookup with the Spec step's Sources at once", () => {
+  const RAW = "raw.githubusercontent.com";
+  const script: FakeJudgeScript = {
+    whichApi: {
+      nospec: {
+        probabilities: { "nospec.test/nospec-api": 0.95, none: 0.05 },
+        confidence: 0.95,
+      },
+    },
+    specDescribesApi: {
+      "NoSpec API": yes,
+      "NoSpec API (known path)": yes,
+      "NoSpec API (GitHub)": yes,
+    },
+    defaults: { isSpecLink: yes },
+  };
+
+  const wait = (ms: number) =>
+    new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+  /** A Spec titled `title` at `url`, as a Source gives it. */
+  function found(url: string, title: string) {
+    const bytes = new TextEncoder().encode(spec(title));
+    const sniff = sniffSpec(bytes, "application/json");
+    if (!sniff) throw new Error("fixture is not a Spec");
+    return { url, bytes, sniff, robotsDisallowed: false };
+  }
+
+  /** A probe answering `hits` after `ms`, recording each domain. */
+  function slowProbe(ms: number, hits: KnownPathHit[] = []) {
+    const probed: string[] = [];
+    const probe: NonNullable<LookupDeps["probe"]> = async (domain) => {
+      probed.push(domain);
+      await wait(ms);
+      return hits;
+    };
+    return { probe, probed };
+  }
+
+  /** A crawl answering `result` after `ms`. */
+  function slowCrawl(ms: number, result: Partial<CrawlResult> = {}) {
+    const fake = fakeCrawl(result);
+    return {
+      ...fake,
+      crawl: (async (opts) => {
+        await wait(ms);
+        return fake.crawl(opts);
+      }) satisfies NonNullable<LookupDeps["crawl"]>,
+    };
+  }
+
+  /**
+   * A GitHub code search answering `orgs[org]` (else nothing) after `ms`,
+   * recording each org searched.
+   */
+  function slowSearch(ms: number, orgs: Record<string, SpecHit[]> = {}) {
+    const calls: (string | null)[] = [];
+    const search: GitHubCodeSearch = {
+      async searchSpecs(org) {
+        calls.push(org);
+        await wait(ms);
+        return org === null ? [] : (orgs[org] ?? []);
+      },
+      async searchSpecRepos() {
+        return [];
+      },
+      async specsInRepo() {
+        return [];
+      },
+      missingOrgs() {
+        return [];
+      },
+    };
+    return { search, calls };
+  }
+
+  /** A hit in `fullName` on `HEAD`, served by the fixture server as `title`. */
+  function githubHit(fullName: string, title: string): SpecHit {
+    server.send(
+      RAW,
+      `/${fullName}/HEAD/openapi.json`,
+      spec(title),
+      "application/json",
+    );
+    return {
+      fullName,
+      path: "openapi.json",
+      url: `${server.origin(RAW)}/${fullName}/HEAD/openapi.json`,
+    };
+  }
+
+  it("runs the probe, the crawl and GitHub code search at once", async () => {
+    const { probe } = slowProbe(300);
+    const { search } = slowSearch(300, {
+      nospec: [githubHit("nospec/openapi", "Not this API")],
+    });
+    const { lookup } = setup(
+      script,
+      undefined,
+      undefined,
+      slowCrawl(300),
+      search,
+      undefined,
+      undefined,
+      { probe, trace: true },
+    );
+
+    const start = performance.now();
+    const outcome = await ask(lookup, "nospec");
+    const elapsed = performance.now() - start;
+
+    expect(outcome.outcome).toBe("NoSpec");
+    // One after another they would take 900 ms.
+    expect(elapsed).toBeLessThan(700);
+    expect(outcome.timings).toMatchObject({
+      "known paths": expect.any(Number),
+      "Developer Portal crawl": expect.any(Number),
+      "GitHub code search": expect.any(Number),
+      "Spec judging": expect.any(Number),
+    });
+    expect(outcome.diagnostics?.join("\n")).not.toMatch(/deadline/);
+  });
+
+  it("answers the known-path Spec over GitHub's, whichever is gathered first", async () => {
+    const known = `${server.origin("api.nospec.test")}/openapi.json`;
+    const { probe } = slowProbe(200, [found(known, "NoSpec API (known path)")]);
+    const { search } = slowSearch(0, {
+      nospec: [githubHit("nospec/openapi", "NoSpec API (GitHub)")],
+    });
+    const { lookup, judge } = setup(
+      script,
+      undefined,
+      undefined,
+      undefined,
+      search,
+      undefined,
+      undefined,
+      { probe },
+    );
+
+    // As when the probe ran before GitHub code search.
+    expect(await ask(lookup, "nospec")).toMatchObject({
+      outcome: "Resolved",
+      provenance: "Official",
+      sources: [{ url: known }],
+    });
+    expect(
+      judge.calls.filter((c) => c.judgment === "specDescribesApi"),
+    ).toHaveLength(1);
+  });
+
+  it("drops a Spec the crawl finds after the deadline, and says so", async () => {
+    const url = `${server.origin("docs.nospec.test")}/openapi.json`;
+    const { probe } = slowProbe(0);
+    const { lookup } = setup(
+      script,
+      undefined,
+      undefined,
+      slowCrawl(500, { hits: [crawlHitAt(url)] }),
+      undefined,
+      undefined,
+      undefined,
+      { probe, specStepBudgetMs: 150 },
+    );
+
+    const outcome = await ask(lookup, "nospec");
+
+    expect(outcome.outcome).toBe("NoSpec");
+    expect(outcome.diagnostics).toContainEqual(
+      expect.stringMatching(
+        /^spec step deadline: Developer Portal crawl stopped after \d+ ms$/,
+      ),
+    );
+  });
+
+  it("answers a known-path Spec as soon as the probe ends, without waiting for the others", async () => {
+    // Neon: the probe had its Spec at 3.6 s, but the Lookup waited on the
+    // crawl and GitHub code search.
+    const known = `${server.origin("api.nospec.test")}/openapi.json`;
+    const { probe } = slowProbe(0, [found(known, "NoSpec API (known path)")]);
+    const { search } = slowSearch(1500);
+    const { lookup } = setup(
+      script,
+      undefined,
+      undefined,
+      slowCrawl(1500, {
+        hits: [crawlHitAt(`${server.origin("docs.nospec.test")}/openapi.json`)],
+      }),
+      search,
+      undefined,
+      undefined,
+      { probe, trace: true },
+    );
+
+    const start = performance.now();
+    const outcome = await ask(lookup, "nospec");
+
+    expect(performance.now() - start).toBeLessThan(1000);
+    expect(outcome).toMatchObject({
+      outcome: "Resolved",
+      sources: [{ url: known }],
+    });
+    expect(outcome.diagnostics?.join("\n")).not.toMatch(/deadline/);
+    // The abandoned Sources are timed until the answer.
+    expect(outcome.timings?.["Developer Portal crawl"]).toBeLessThan(1000);
+  });
+
+  it("judges the crawl's Spec as soon as it ends, without waiting for GitHub", async () => {
+    const url = `${server.origin("docs.nospec.test")}/openapi.json`;
+    const { probe } = slowProbe(0);
+    const { search } = slowSearch(1500);
+    const { lookup } = setup(
+      script,
+      undefined,
+      undefined,
+      slowCrawl(0, { hits: [crawlHitAt(url)] }),
+      search,
+      undefined,
+      undefined,
+      { probe },
+    );
+
+    const start = performance.now();
+    expect(await ask(lookup, "nospec")).toMatchObject({
+      outcome: "Resolved",
+      sources: [{ url }],
+    });
+    expect(performance.now() - start).toBeLessThan(1000);
+  });
+
+  it("resolves from GitHub's known org within the deadline while the crawl runs on", async () => {
+    // Box and Asana: GitHub waited on the crawl for orgs, and the deadline
+    // cut it off.
+    const hit = githubHit("nospec/openapi", "NoSpec API (GitHub)");
+    const { probe } = slowProbe(0);
+    const { search } = slowSearch(0, { nospec: [hit] });
+    const { lookup } = setup(
+      script,
+      undefined,
+      undefined,
+      slowCrawl(2000, { githubOrgs: ["nospecinc"] }),
+      search,
+      undefined,
+      undefined,
+      { probe, specStepBudgetMs: 300 },
+    );
+
+    const outcome = await ask(lookup, "nospec");
+
+    expect(outcome).toMatchObject({
+      outcome: "Resolved",
+      provenance: "Official",
+      sources: [{ url: hit.url }],
+    });
+    // GitHub's extra, the crawl's orgs, is what the deadline stopped.
+    expect(outcome.diagnostics).toContainEqual(
+      expect.stringMatching(
+        /^spec step deadline: Developer Portal crawl, GitHub code search stopped after \d+ ms$/,
+      ),
+    );
+  });
+
+  it("keeps a late crawl's Spec without a deadline (Infinity)", async () => {
+    const url = `${server.origin("docs.nospec.test")}/openapi.json`;
+    const { probe } = slowProbe(0);
+    const { lookup } = setup(
+      script,
+      undefined,
+      undefined,
+      slowCrawl(500, { hits: [crawlHitAt(url)] }),
+      undefined,
+      undefined,
+      undefined,
+      { probe, specStepBudgetMs: Infinity },
+    );
+
+    const outcome = await ask(lookup, "nospec");
+
+    expect(outcome).toMatchObject({ outcome: "Resolved", sources: [{ url }] });
+    expect(outcome.diagnostics?.join("\n") ?? "").not.toMatch(/deadline/);
+  });
+
+  it("searches an org the crawl reports once it ends before the deadline", async () => {
+    const hit = githubHit("nospecinc/openapi", "NoSpec API (GitHub)");
+    const github: GitHubRepos = {
+      async repoInfo(owner, repo) {
+        return {
+          fullName: `${owner}/${repo}`,
+          defaultBranch: "HEAD",
+          archived: false,
+        };
+      },
+      async orgWebsite(org) {
+        return org === "nospecinc" ? "https://nospec.test" : null;
+      },
+    };
+    const { probe } = slowProbe(0);
+    const { search, calls } = slowSearch(0, { nospecinc: [hit] });
+    const { lookup } = setup(
+      script,
+      undefined,
+      github,
+      slowCrawl(100, { githubOrgs: ["nospecinc"] }),
+      search,
+      undefined,
+      undefined,
+      { probe },
+    );
+
+    const outcome = await ask(lookup, "nospec");
+
+    // The id's first label, then across GitHub, at once; the crawl's org
+    // once it has ended.
+    expect(calls).toEqual(["nospec", null, "nospecinc"]);
+    expect(outcome).toMatchObject({
+      outcome: "Resolved",
+      provenance: "Official",
+      sources: [{ url: hit.url, provenance: "Official" }],
+    });
+  });
+
+  describe("with a per-version add-on found first (Box)", () => {
+    /** Box's shape: a Spec with `paths` paths, titled as the full one. */
+    const boxSpec = (paths: number) =>
+      JSON.stringify({
+        openapi: "3.0.3",
+        info: { title: "NoSpec API", version: "2025.0" },
+        paths: Object.fromEntries(
+          Array.from({ length: paths }, (_, i) => [`/files/${i}`, {}]),
+        ),
+      });
+    const bytesHit = (url: string, paths: number) => {
+      const bytes = new TextEncoder().encode(boxSpec(paths));
+      const sniff = sniffSpec(bytes, "application/json");
+      if (!sniff) throw new Error("fixture is not a Spec");
+      return { url, bytes, sniff, robotsDisallowed: false };
+    };
+    let addOn: string;
+    let full: string;
+    beforeEach(() => {
+      addOn = `${server.origin("api.nospec.test")}/openapi/openapi-v2025.0.json`;
+      full = `${server.origin("docs.nospec.test")}/box-openapi.json`;
+    });
+
+    it("waits for a later Source's full Spec rather than settle on the add-on", async () => {
+      const { probe } = slowProbe(0, [bytesHit(addOn, 5)]);
+      const { lookup } = setup(
+        script,
+        undefined,
+        undefined,
+        slowCrawl(300, {
+          hits: [{ ...bytesHit(full, 60), linkedFrom: full, offHost: false }],
+        }),
+        undefined,
+        undefined,
+        undefined,
+        { probe },
+      );
+
+      expect(await ask(lookup, "nospec")).toMatchObject({
+        outcome: "Resolved",
+        currentSpec: { specVersion: "3.0.3" },
+        sources: [{ url: full }],
+      });
+    });
+
+    it("judges GitHub's unversioned Spec after its add-on", async () => {
+      // GitHub ranked box-openapi's add-on above its openapi.json.
+      const addOnPath = "openapi/openapi-v2025.0.json";
+      server.send(
+        RAW,
+        `/nospec/openapi/HEAD/${addOnPath}`,
+        boxSpec(5),
+        "application/json",
+      );
+      server.send(
+        RAW,
+        "/nospec/openapi/HEAD/openapi.json",
+        boxSpec(60),
+        "application/json",
+      );
+      const url = (path: string) =>
+        `${server.origin(RAW)}/nospec/openapi/HEAD/${path}`;
+      const { probe } = slowProbe(0);
+      const { search } = slowSearch(0, {
+        nospec: [
+          { fullName: "nospec/openapi", path: addOnPath, url: url(addOnPath) },
+          {
+            fullName: "nospec/openapi",
+            path: "openapi.json",
+            url: url("openapi.json"),
+          },
+        ],
+      });
+      const { lookup } = setup(
+        {
+          ...script,
+          isSpecLink: {
+            [url(addOnPath)]: yesNo(0.95),
+            [url("openapi.json")]: yesNo(0.9),
+          },
+        },
+        undefined,
+        undefined,
+        undefined,
+        search,
+        undefined,
+        undefined,
+        { probe },
+      );
+
+      expect(await ask(lookup, "nospec")).toMatchObject({
+        outcome: "Resolved",
+        sources: [{ url: url("openapi.json") }],
+      });
+    });
+
+    it("answers the add-on when the deadline passes with nothing else", async () => {
+      const { probe } = slowProbe(0, [bytesHit(addOn, 5)]);
+      const { lookup } = setup(
+        script,
+        undefined,
+        undefined,
+        slowCrawl(1000, {
+          hits: [{ ...bytesHit(full, 60), linkedFrom: full, offHost: false }],
+        }),
+        undefined,
+        undefined,
+        undefined,
+        { probe, specStepBudgetMs: 200 },
+      );
+
+      const outcome = await ask(lookup, "nospec");
+
+      expect(outcome).toMatchObject({
+        outcome: "Resolved",
+        sources: [{ url: addOn }],
+      });
+      expect(outcome.diagnostics?.join("\n")).toMatch(
+        /spec step deadline: Developer Portal crawl/,
+      );
+    });
+  });
+
+  /** A crawl hit for a Spec titled "NoSpec API", on the Vendor's domain. */
+  function crawlHitAt(url: string): CrawlHit {
+    return {
+      ...found(url, "NoSpec API"),
+      linkedFrom: "https://nospec.test/docs",
+      offHost: false,
+    };
+  }
 });
 
 describe("lookup with a GitHub origin", () => {
@@ -2531,8 +3017,8 @@ describe("lookup with GitHub code search", () => {
 
   it("fetches the likeliest hit first, so a tree file can settle ahead of code search's hits", async () => {
     // PagerDuty: code search finds the Events Spec, the tree adds the REST
-    // Spec; both pass the link threshold, and whichever is fetched first
-    // settles the Lookup.
+    // Spec; both pass the link threshold and are fetched, and whichever is
+    // judged first settles the Lookup.
     const events = hit("nospec/api-schema", "reference/events/openapi.json");
     const rest = hit("nospec/api-schema", "reference/REST/openapi.json");
     for (const h of [events, rest]) {
@@ -2563,8 +3049,10 @@ describe("lookup with GitHub code search", () => {
       outcome: "Resolved",
       sources: [{ url: rest.url, provenance: "Official" }],
     });
-    expect(rawPaths()).toEqual([
+    // Both fetched while gathering, at most MAX_GITHUB_SPEC_FETCHES.
+    expect(rawPaths().sort()).toEqual([
       "/nospec/api-schema/HEAD/reference/REST/openapi.json",
+      "/nospec/api-schema/HEAD/reference/events/openapi.json",
     ]);
   });
 
@@ -2617,7 +3105,7 @@ describe("lookup with GitHub code search", () => {
     );
   });
 
-  it("does not search once the crawl has settled the answer", async () => {
+  it("judges no GitHub hit once the crawl has settled the answer", async () => {
     const url = `${server.origin("docs.nospec.test")}/openapi.json`;
     const bytes = new TextEncoder().encode(spec("NoSpec API"));
     const sniff = sniffSpec(bytes, "application/json");
@@ -2641,9 +3129,20 @@ describe("lookup with GitHub code search", () => {
       }),
       search,
     );
+    server.send(
+      RAW,
+      "/nospec/openapi/HEAD/openapi.json",
+      spec("NoSpec API (GitHub)"),
+      "application/json",
+    );
 
-    expect(await ask(lookup, "nospec")).toMatchObject({ outcome: "Resolved" });
-    expect(calls).toEqual([]);
+    // Searched alongside the crawl, but its hits are judged only when the
+    // crawl's didn't settle.
+    expect(await ask(lookup, "nospec")).toMatchObject({
+      outcome: "Resolved",
+      sources: [{ url }],
+    });
+    expect(calls).toEqual([["nospec", "NoSpec API"]]);
   });
 
   describe("in the orgs the Vendor's pages link to", () => {
@@ -2666,7 +3165,7 @@ describe("lookup with GitHub code search", () => {
       return { github, asked };
     }
 
-    it("searches a linked org whose website is the Vendor's, not the id's first label", async () => {
+    it("searches a linked org whose website is the Vendor's, after the id's first label", async () => {
       const { github, asked } = fakeOrgs({
         "nospec-examples": "https://examples.elsewhere.test",
         nospecinc: "nospec.test",
@@ -2683,9 +3182,12 @@ describe("lookup with GitHub code search", () => {
       await ask(lookup, "nospec");
 
       expect(asked).toEqual(["nospec-examples", "nospecinc"]);
+      // The id's first label at once, and across GitHub as it had nothing,
+      // without waiting for the crawl; the verified org once it reports it.
       expect(calls).toEqual([
-        ["nospecinc", "NoSpec API"],
+        ["nospec", "NoSpec API"],
         [null, "NoSpec API"],
+        ["nospecinc", "NoSpec API"],
       ]);
     });
 

@@ -59,3 +59,11 @@ export const DEFAULT_FRESHNESS_DAYS = 7;
 export function freshnessMs(days: number): number {
   return days * 24 * 60 * 60 * 1000;
 }
+
+/**
+ * The Spec step's deadline, in milliseconds (`SPEC_STEP_BUDGET_MS`): the
+ * known-path probe, the Developer Portal crawl and GitHub code search run at
+ * once, and what they have gathered by then is judged; the rest is dropped.
+ * `Infinity` is no deadline. Keeps Discovery's p90 under 15 s.
+ */
+export const SPEC_STEP_BUDGET_MS = 9_000;

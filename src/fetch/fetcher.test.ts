@@ -119,6 +119,28 @@ describe("fetchUrl", () => {
     );
   });
 
+  it("lets a request go ahead of a background one to the same host", async () => {
+    // Mux: the known-path probe (background) beside the crawl on the same
+    // hosts took every other slot, and the crawl ran out of budget.
+    for (const path of ["/warm", "/probe", "/crawl"])
+      server.send("vendor.test", path, path, "text/plain");
+    const fetcher = testFetcher({ minIntervalMs: 150 });
+    await fetcher.fetchUrl(`${server.origin("vendor.test")}/warm`);
+
+    await Promise.all([
+      fetcher.fetchUrl(`${server.origin("vendor.test")}/probe`, {
+        background: true,
+      }),
+      fetcher.fetchUrl(`${server.origin("vendor.test")}/crawl`),
+    ]);
+
+    const requests = server.requests.filter((r) => r.path !== "/robots.txt");
+    expect(requests.map((r) => r.path)).toEqual(["/warm", "/crawl", "/probe"]);
+    // Still spaced.
+    const at = requests.map((r) => r.at);
+    expect((at[2] ?? 0) - (at[1] ?? 0)).toBeGreaterThanOrEqual(140);
+  });
+
   it("refuses a body over the cap, with or without Content-Length", async () => {
     const big = "x".repeat(4096);
     server.send("vendor.test", "/declared", big, "text/plain");
