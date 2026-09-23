@@ -45,12 +45,10 @@
     "group": "popular",
     "expected": "Resolved",
     "apiId": "slack.com/web-api",
-    "specSources": [
-      "https://raw.githubusercontent.com/slackapi/slack-api-specs/master/web-api/slack_web_openapi_v2.json"
-    ],
-    "evidenceUrl": "https://github.com/slackapi/slack-api-specs",
-    "reviewed": false,
-    "notes": "Swagger 2.0. https://api.slack.com/specs/openapi/v2/slack_web.json also serves a Slack Web API spec, but a different one (170 paths vs 174 on GitHub), so it is left out; a reviewer should decide whether it counts. Review 2026-09-22: slackapi/slack-api-specs has been archived since 2021-09, so this Source is probably not the Current Spec; api.slack.com/specs/openapi/v2/slack_web.json is the candidate. Needs a decision."
+    "specSources": ["https://api.slack.com/specs/openapi/v2/slack_web.json"],
+    "evidenceUrl": "https://api.slack.com/specs/openapi/v2/slack_web.json",
+    "reviewed": true,
+    "notes": "Swagger 2.0, Slack Web API 1.7.0, 170 paths, served by Slack at api.slack.com. The older GitHub copy (slackapi/slack-api-specs, web-api/slack_web_openapi_v2.json, 1.7.0, 174 paths) is in a repo archived since 2021-09-07, so it is not the Current Spec. Relabelled to api.slack.com by Wes, 2026-09-22."
   },
   {
     "name": "Jira Cloud Platform REST API",
