@@ -34,6 +34,8 @@ Filed 2026-09-22 as WTR-88..93 (Backlog, `swaggerbot` only), with Linear "blocke
 | 5 | WTR-92 | The HTTP gate: per-IP rate limit, API keys for Discovery, daily quotas | 3, 4 | 3 |
 | 6 | WTR-93 | `scripts/loadcheck.ts`: p90 against a deployed URL | 1, 5 | 4 |
 | 7 | — | Speed up Discovery | 1 | filed after #1's numbers |
+| 7a | | The known-path probe stops soon after its first hit | 1 | 5 |
+| 8 | | Box: the full Spec sometimes never reaches the pool, and an add-on answers | — | 5 |
 
 #3 and #4 both add a Drizzle migration, so #4 waits for #3 to avoid two `0004_*` files. #4 and #5 both touch the Lookup's entry point (`lookup.ts`, `http.ts`), so they're queued in waves, not together.
 
@@ -55,6 +57,8 @@ Seconds summed over the run, by step: known paths 431 s (22 Lookups, mean 19.6 s
 - **7b. Run the three Spec sources at the same time**, then weigh their hits in today's order (known paths, then crawl, then GitHub), so the precedence and precision rules don't change. The wall time becomes the slowest of the three instead of their sum.
 - **7c. A deadline for the whole Spec step** (for example 9 s), answering from what has been found by then. This is what bounds NoSpec answers. It costs coverage wherever a Spec is only found late: Mux's crawl took 16 s, and Fly.io's 20 s.
 - **7d. Less politeness spacing for known-path probes only** (for example 250 ms instead of 1 s). The PRD asks for a rate limit per host, not a number. This is the bluntest lever.
+
+**Wes, 2026-09-23: 7a now** (issue 7a below). **7b, 7c and 7d are to be decided after 7a is measured.** He also asked for Box's intermittent False Resolution to be filed now (issue 8).
 
 7a and 7b don't trade anything away. 7c is the only one that bounds the worst case, and it's the one that costs coverage. A rough estimate: 7a and 7b together bring p50 under 10 s but leave the p90 around 20–25 s, because of the NoSpec names. Reaching p90 < 15 s very likely needs 7c too.
 
@@ -261,4 +265,56 @@ Put the argument parsing and the report arithmetic in pure exported functions. T
 ## Done when
 - A unit test for the argument parsing (unknown flag, bad `--rps`, missing URL → exit 2) and for the PASS/FAIL arithmetic on known timings.
 - A test that runs the script's main loop against a local `node:http` server on port 0, which fakes `/api/lookup` with fixed delays. The report counts the phases and 429s correctly. No real service is called.
+- `pnpm check` and `pnpm build` green.
+
+---
+
+## 7a. swaggerbot: the known-path probe stops soon after its first hit
+
+## Problem
+The known-path probe (`probeKnownPaths` in `src/fetch/known-paths.ts`) is the step that most often finds the Spec, and the slowest. `pnpm bench --concurrency 1` on 2026-09-23 (the "Where Discovery's time goes" section of `docs/slices/slice-3-backlog.md`) shows it takes 15–25 s **even when it finds the Spec**: Neon 14.8 s, Loops 16.8 s, Val Town 16.3 s, and Replicate, Cloudflare and Supabase all at the 25 s budget with the Spec already in hand.
+
+The reason: every host prefix is probed in parallel, but each host walks the whole `KNOWN_PATHS` list at the fetcher's 1 s per-host spacing (about 16 s), and nothing stops the probe when a Spec turns up. Since the hosts run in parallel and the list is ordered likeliest first, a Spec at `/openapi.json` is usually in hand within about 2 s. Everything after that is waiting. Discovery must reach p90 < 15 s (PRD, Slice 3).
+
+WTR-42 deliberately keeps every hit rather than the first one: a stale copy on one host (`docs.`) can answer before the current Spec on another. That guard must survive in a bounded form.
+
+## Change
+In `src/fetch/known-paths.ts`:
+- `ProbeOptions` gains `graceAfterHitMs` (default `DEFAULT_GRACE_AFTER_HIT_MS = 3000`). When the first hit is collected, the probe's deadline becomes the earlier of the existing budget and "now + grace". When it passes, every host stops, exactly as the budget stops them today. Hits collected before the stop are kept (the existing `collect` behaviour).
+- `graceAfterHitMs: 0` stops at the first hit, and `Infinity` keeps today's behaviour. Document both on the option.
+- Nothing else changes: host prefixes, the path list and its order, the per-host sequencing, `robots.txt` handling, the `apis.json` following, dead-host short-circuiting and the dedupe by URL.
+
+Callers in `src/lookup/lookup.ts` (the known-path step, and the crawl step's off-host probes) keep the default. Don't change them beyond what the type needs.
+
+## Done when
+- `src/fetch/known-paths.test.ts`, against the existing fixture server:
+  - A host with a Spec at its first path while another host hangs: the probe returns that Spec within about `graceAfterHitMs` plus a margin, not the budget. Use small numbers (for example, a 200 ms grace and a 5 s budget).
+  - A second Spec on another host, found inside the grace window, is also returned.
+  - A second Spec that would only be found after the grace window is not returned.
+  - With no hits, the probe still runs until the budget, or until every host finishes.
+  - `graceAfterHitMs: Infinity` reproduces today's results on the existing cases.
+- In the PR description, describe as a manual check for the reviewer (who has keys) a `pnpm bench --json --concurrency 1` run. In it, the `known paths` step time for Neon, Loops, Val Town, Replicate, Cloudflare and Supabase drops to about 6 s or less, False Resolution stays < 2%, and long-tail coverage stays ≥ 60%.
+- `pnpm check` and `pnpm build` green.
+
+---
+
+## 8. swaggerbot: Box — the full Spec sometimes never reaches the pool, and an add-on answers
+
+## Problem
+`Box Platform API` intermittently resolves to `https://developer.box.com/box-openapi-v2025.0.json`: API Version 2025.0, 24 paths, one of Box's per-version add-on files. Its full Spec is `https://developer.box.com/box-openapi.json` (2024.0, 187 paths; labelled in `benchmark/entries.json`). It's a False Resolution, and on its own it takes the Benchmark over the 2% gate (1/21 on 2026-09-23). It has been intermittent since Slice 2 round 3.
+
+Two live Lookups on 2026-09-23, each on a fresh Index with `LOOKUP_TRACE=1`, both had `crawl from https://box.com (3 found)`:
+- **Right:** `pool: …/box-openapi.json (2024.0, 187 paths, Judge 0.98)`, `pool: …/box-openapi-v2025.0.json (2025.0, 24 paths, Judge 0.93)`, `not in pool: …/box-openapi-v2026.0.json (2026.0, 5 paths, Judge 0.79)`. Current 2024.0: correct.
+- **Wrong:** `pool: …/box-openapi-v2025.0.json (24 paths, Judge 0.94)`, `pool: …/box-openapi-v2026.0.json (5 paths, Judge 0.82)`. **`box-openapi.json` doesn't appear at all**, not even as "not in pool". No `crawl fetch failed` diagnostic appeared either (WTR-86 reports those). Current 2025.0: wrong. Because a Spec was confirmed, the Lookup counts as settled, and GitHub code search, which would find `box/box-openapi/openapi.json`, never runs.
+
+So one of the three crawl hits sometimes vanishes between the crawl and the pool, silently. WTR-58's rule (a per-version add-on isn't Current over the full Spec) can only work when the full Spec is in the pool.
+
+## Change
+1. **Find where the third hit goes**, in `src/sources/crawl.ts` (the crawl's result) and in the crawl step and `consider`/pool code of `src/lookup/lookup.ts`. Possible causes include a fetch that fails without a diagnostic, a timeout or budget cut inside the crawl step (it took about 10 s both times), a Judge error swallowed as "not a Spec", and a dedupe keyed wrongly. Whatever the cause, a crawl hit that doesn't reach the pool must leave a diagnostic that says why. Add that even if the root cause turns out to be elsewhere.
+2. **Fix the cause.** If it's a transient fetch or Judge failure, retry once, as WTR-86 does for Spec fetches.
+3. **Don't add a speculative guard.** If, once you've found the cause, you see a narrow rule that would also have stopped the add-on from answering (for example, keep searching when the only confirmed Specs are ones whose URL names an API Version), propose it in the PR description with the evidence. Don't build it in this issue.
+
+## Done when
+- A test reproduces the silent drop with fakes (a crawl result of three Specs where one can't be fetched or judged): the diagnostic appears, and the answer isn't the add-on.
+- In the PR description, as a manual check for the reviewer (who has keys): `LOOKUP_TRACE=1 pnpm tsx scripts/lookup.ts "Box Platform API"` with a fresh `DATABASE_PATH` five times. All five answer Current 2024.0 (`box-openapi.json` or the GitHub `openapi.json`).
 - `pnpm check` and `pnpm build` green.
