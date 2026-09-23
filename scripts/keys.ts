@@ -2,6 +2,7 @@
 // ./data/swaggerbot.db). A key's secret is printed once, when it is created;
 // only its hash is stored.
 // Usage: pnpm tsx scripts/keys.ts create <owner> [--quota N] | list | revoke <id>
+// Built into .output/cli/keys.mjs by `pnpm build` (vite.cli.config.ts) for the production image.
 import { openDb } from "../src/index-store/db";
 import { createKeys, dailyQuotaOf, utcDay } from "../src/index-store/keys";
 import { KEYS_USAGE, parseKeysArgs } from "../src/index-store/keys-cli";

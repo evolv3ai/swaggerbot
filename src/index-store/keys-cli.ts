@@ -1,6 +1,6 @@
 import { parseArgs } from "node:util";
 
-export const KEYS_USAGE = `usage: pnpm tsx scripts/keys.ts <command>
+export const KEYS_USAGE = `usage: pnpm tsx scripts/keys.ts <command>   (built: node .output/cli/keys.mjs <command>)
   create <owner> [--quota N]   issue a key; prints its id and secret once
   list                         every key, with today's (UTC) usage
   revoke <id>                  revoke a key`;
