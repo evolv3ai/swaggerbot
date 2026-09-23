@@ -27,7 +27,15 @@ The operator runbook for the live service ([Slice 3](slices/slice-3-backlog.md),
   - **The gate is live** since the redeploy with WTR-92 (`324bef9`, 2026-09-23). An Index answer is open to anyone (Stripe, 0.43 s through Cloudflare). Discovery and `fresh` without a key get 401 `Discovery needs an API key.`. The Index survived the redeploy on its volume.
   - **Load-check key** `key_qyg4vkdz` (owner `loadcheck (operator)`, 200 a day). Its secret is `LOADCHECK_KEY` in the repo's gitignored `.env.local` on WOPR3. It was checked live: 200, `x-quota-remaining: 199`.
   - **Issuing keys.** `key_qyg4vkdz` was inserted by hand (`sb_` + 32 random bytes in base64url, its sha256 hex written into `api_keys` with the container's own `better-sqlite3`), because the image then had no way to run `scripts/keys.ts`. Since WTR-98 the image carries the CLI, bundled by `pnpm build`: `docker exec <container> node .output/cli/keys.mjs create "<owner>" [--quota N]`, `… list`, `… revoke <id>`. It opens `DATABASE_PATH` (`/app/data/swaggerbot.db`), so it works on the live Index. The container's name comes from `docker ps` on the server (`--filter name=z1hr4xe7sa8ni5s5zbryey6y`). Checked live after the WTR-98 redeploy (2026-09-23): `list` shows the hand-made `key_qyg4vkdz` with its use counted, so the formats match.
-- [ ] **O5. Restore rehearsal.** Restore the replica into a scratch path, compare row counts and a Lookup against the live database, then restore into a fresh volume and boot the app from it.
+- [x] **O5. Restore rehearsal** (2026-09-23, against the production replica, image `782dc6f`). Done on the server, without touching the live container or its volume:
+  1. The Litestream settings went into a root-only env file, written by Coolify's tinker and shredded afterwards.
+  2. `docker run --rm --env-file … -v o5-restored:/app/data --entrypoint sh <image> -c "litestream restore -config /app/docker/litestream.yml -o /app/data/swaggerbot.db /app/data/swaggerbot.db"`: **3 s**.
+  3. Row counts in every table (vendors, apis, specs, sources, api_names, api_keys, api_key_usage, verifications) and the latest `last_verified_at` were **identical** to the live database, read with a read-only `better-sqlite3` in the live container.
+  4. The app booted from the restored volume **with replication off** (no `LITESTREAM_*`; a second replicator on the same replica path would corrupt it), on a loopback port. A Lookup of Stripe gave **the same answer as production**: API, Current Spec id and `verifiedAt`.
+  5. Everything was removed afterwards: containers, the volume and the env files.
+
+  **To restore for real:** stop the app in Coolify, then either delete the volume's `swaggerbot.db*` (the entrypoint restores when the database is missing and a replica exists), or restore into a new volume as in step 2 and mount it at `/app/data`. Then start the app, which replicates again.
+  **Gotcha:** the app needs its API keys (`TYPESAFE_API_KEY` and the rest) even to serve Index answers, because `createApp` builds the Judge on the first request. Booted without them, every Lookup returns 500.
 - [ ] **O6. Load check**, after WTR-93: `scripts/loadcheck.ts https://swaggerbot.dev`. The numbers go in `docs/slices/slice-3-result.md`.
 
 ## Gotchas
