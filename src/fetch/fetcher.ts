@@ -166,7 +166,9 @@ export function createFetcher(opts: FetcherOptions = {}): Fetcher {
   /**
    * Reserves the next slot for a host and waits for it. A `background`
    * request reserves none ahead: it waits until the host is free, and again
-   * whenever another request took that slot first.
+   * whenever another request took that slot first. An aborted request
+   * reserves nothing, and one aborted while it waits hands its slot back
+   * unless a later one was reserved behind it.
    */
   async function waitTurn(
     host: string,
@@ -175,14 +177,27 @@ export function createFetcher(opts: FetcherOptions = {}): Fetcher {
   ) {
     if (minIntervalMs <= 0) return;
     for (;;) {
+      signal?.throwIfAborted();
       const now = Date.now();
-      const at = Math.max(now, nextSlot.get(host) ?? 0);
+      const previous = nextSlot.get(host);
+      const at = Math.max(now, previous ?? 0);
       if (background && at > now) {
         await sleep(at - now, undefined, { signal });
         continue;
       }
-      nextSlot.set(host, at + minIntervalMs);
-      if (at > now) await sleep(at - now, undefined, { signal });
+      const reserved = at + minIntervalMs;
+      nextSlot.set(host, reserved);
+      if (at > now) {
+        try {
+          await sleep(at - now, undefined, { signal });
+        } catch (error) {
+          if (nextSlot.get(host) === reserved) {
+            if (previous === undefined) nextSlot.delete(host);
+            else nextSlot.set(host, previous);
+          }
+          throw error;
+        }
+      }
       return;
     }
   }

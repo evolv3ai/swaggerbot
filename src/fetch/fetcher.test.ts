@@ -141,6 +141,54 @@ describe("fetchUrl", () => {
     expect((at[2] ?? 0) - (at[1] ?? 0)).toBeGreaterThanOrEqual(140);
   });
 
+  it("reserves no slot for a request whose signal is already aborted", async () => {
+    // WTR-116: each aborted reference fetch pushed the host's next slot on.
+    for (const path of ["/warm", "/real"])
+      server.send("vendor.test", path, path, "text/plain");
+    const fetcher = testFetcher({ minIntervalMs: 200 });
+    await fetcher.fetchUrl(`${server.origin("vendor.test")}/warm`);
+
+    const aborted = AbortSignal.abort();
+    for (let i = 0; i < 20; i++) {
+      await expect(
+        fetcher.fetchUrl(`${server.origin("vendor.test")}/aborted`, {
+          signal: aborted,
+        }),
+      ).rejects.toThrow();
+    }
+    const start = Date.now();
+    await fetcher.fetchUrl(`${server.origin("vendor.test")}/real`);
+
+    expect(Date.now() - start).toBeLessThan(250);
+    expect(server.requests.map((r) => r.path)).not.toContain("/aborted");
+  });
+
+  it("hands back the slot of a request aborted while it waits", async () => {
+    for (const path of ["/warm", "/aborted", "/next"])
+      server.send("vendor.test", path, path, "text/plain");
+    const fetcher = testFetcher({ minIntervalMs: 200 });
+    await fetcher.fetchUrl(`${server.origin("vendor.test")}/warm`);
+
+    const controller = new AbortController();
+    const waiting = fetcher.fetchUrl(
+      `${server.origin("vendor.test")}/aborted`,
+      {
+        signal: controller.signal,
+      },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    controller.abort();
+    await expect(waiting).rejects.toThrow();
+    await fetcher.fetchUrl(`${server.origin("vendor.test")}/next`);
+
+    const requests = server.requests.filter((r) => r.path !== "/robots.txt");
+    expect(requests.map((r) => r.path)).toEqual(["/warm", "/next"]);
+    // It took the aborted request's slot, one interval after /warm, not two.
+    const at = requests.map((r) => r.at);
+    expect((at[1] ?? 0) - (at[0] ?? 0)).toBeGreaterThanOrEqual(190);
+    expect((at[1] ?? 0) - (at[0] ?? 0)).toBeLessThan(350);
+  });
+
   it("refuses a body over the cap, with or without Content-Length", async () => {
     const big = "x".repeat(4096);
     server.send("vendor.test", "/declared", big, "text/plain");

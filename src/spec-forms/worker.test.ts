@@ -142,7 +142,10 @@ describe("createFormsWorker", () => {
 
     expect(fetchUrl).toHaveBeenCalledWith(
       `${server.origin("vendor.test")}/specs/schemas/widget.json`,
-      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      expect.objectContaining({
+        signal: expect.any(AbortSignal),
+        background: true,
+      }),
     );
     expect(userAgents).toEqual([USER_AGENT]);
     const forms = createSpecForms(db).getForms(id);
@@ -151,6 +154,102 @@ describe("createFormsWorker", () => {
       new TextDecoder().decode(createSpecForms(db).getNormalizedBytes(id)),
     );
     expect(JSON.stringify(normalized)).toContain('"id"');
+  });
+
+  it("counts a build whose references outran the budget as a failed attempt", async () => {
+    // WTR-116: DigitalOcean's 697 references didn't fit, and the build was
+    // saved ready with our unresolved references as its Validity Issues.
+    for (const name of ["a", "b", "c"]) {
+      server.route(
+        "vendor.test",
+        `/specs/schemas/${name}.json`,
+        (_req, res) => {
+          setTimeout(() => {
+            if (!res.destroyed)
+              res
+                .writeHead(200, { "content-type": "application/json" })
+                .end('{"type":"object"}');
+          }, 300).unref();
+        },
+      );
+    }
+    const spec = {
+      openapi: "3.1.0",
+      info: { title: "Split", version: "1.0.0" },
+      paths: Object.fromEntries(
+        ["a", "b", "c"].map((name) => [
+          `/${name}`,
+          {
+            get: {
+              responses: {
+                "200": {
+                  description: name,
+                  content: {
+                    "application/json": {
+                      schema: { $ref: `schemas/${name}.json` },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        ]),
+      ),
+    };
+    const id = putSpec(
+      new TextEncoder().encode(JSON.stringify(spec)),
+      "json",
+      "2026-09-21T00:00:00.000Z",
+      `${server.origin("vendor.test")}/specs/openapi.json`,
+    );
+    const worker = createFormsWorker({
+      db,
+      fetcher,
+      env: {},
+      refBudgetMs: 100,
+    });
+    const forms = createSpecForms(db);
+    const row = () =>
+      db
+        .select({
+          attempts: specForms.attempts,
+          lastError: specForms.lastError,
+        })
+        .from(specForms)
+        .where(eq(specForms.specId, id))
+        .get();
+
+    expect(await worker.runOnce()).toBe(true);
+    expect(forms.getForms(id).status).toBe("pending");
+    expect(row()).toMatchObject({
+      attempts: 1,
+      lastError: expect.stringContaining("external references not all fetched"),
+    });
+    expect(forms.nextToBuild()).toBe(id);
+
+    while (await worker.runOnce());
+    expect(status(id)).toBe("failed");
+    expect(row()?.attempts).toBe(MAX_FORMS_ATTEMPTS);
+  });
+
+  it("saves a Spec whose same-origin reference answers 404, with the reference as a Validity Issue", async () => {
+    const id = putSpec(
+      fixture("openapi31-same-origin.json"),
+      "json",
+      "2026-09-21T00:00:00.000Z",
+      `${server.origin("vendor.test")}/specs/openapi.json`,
+    );
+    const worker = createFormsWorker({ db, fetcher, env: {} });
+
+    expect(await worker.runOnce()).toBe(true);
+
+    const forms = createSpecForms(db).getForms(id);
+    expect(forms.status).toBe("ready");
+    expect(forms.validityIssues).toContainEqual(
+      expect.objectContaining({
+        message: `Unresolved external reference: ${server.origin("vendor.test")}/specs/schemas/widget.json`,
+      }),
+    );
   });
 
   it("start() builds in the background until stopped", async () => {
