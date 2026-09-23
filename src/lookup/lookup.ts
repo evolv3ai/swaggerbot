@@ -1462,17 +1462,18 @@ export function createLookup(deps: LookupDeps): IndexedLookup {
      */
     const wanted = (c: SpecCandidate) =>
       apiVersion === undefined ? !c.isPreview : c.apiVersion === apiVersion;
-    /** The likeliest wanted candidate at `tier` that describes the API. */
-    const describing = (tier: Provenance) =>
-      best(
-        candidates.filter(
-          (c) =>
-            c.provenance === tier && c.probability >= t.describes && wanted(c),
-        ),
-      );
-    // The Vendor's own Spec wins over one it links to.
-    const confirmed = () => describing("Official") ?? describing("Endorsed");
-    const settled = () => confirmed() !== undefined;
+    /**
+     * Settled once a wanted Spec from the Vendor or linked by it describes
+     * the API, and its URL names no API Version: a Spec whose URL does may
+     * be a per-version add-on (Box's 24-path `openapi-v2025.0.json` on
+     * GitHub, judged before the crawl brought `box-openapi.json`), so later
+     * Sources are still waited for and judged. When none comes in time,
+     * `answer` weighs such Specs as ever.
+     */
+    const confirming = (c: SpecCandidate) =>
+      isVendorBacked(c.provenance) && c.probability >= t.describes && wanted(c);
+    const settled = () =>
+      candidates.some((c) => confirming(c) && !urlNamesApiVersion(c.url));
     /**
      * Whether a step goes on to its next Source. Once settled, it still takes
      * those whose URL names an API Version (`openapi-v2026.0.json` beside
@@ -1492,7 +1493,8 @@ export function createLookup(deps: LookupDeps): IndexedLookup {
     originIndex = undefined;
     if (!settled()) await gatherAndJudge();
     const { mirrorUrl } = choice;
-    if (!settled() && mirrorUrl)
+    // The mirror never answers over a Spec the Vendor backs, add-on or not.
+    if (!candidates.some(confirming) && mirrorUrl)
       await timed("Spec fetch", () => fetchAndConsider(mirrorUrl, true));
     // A third-party Source is a Mirror only of bytes the Vendor stands behind;
     // otherwise it is Community.

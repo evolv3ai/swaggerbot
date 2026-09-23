@@ -2369,6 +2369,129 @@ describe("lookup with the Spec step's Sources at once", () => {
     });
   });
 
+  describe("with a per-version add-on found first (Box)", () => {
+    /** Box's shape: a Spec with `paths` paths, titled as the full one. */
+    const boxSpec = (paths: number) =>
+      JSON.stringify({
+        openapi: "3.0.3",
+        info: { title: "NoSpec API", version: "2025.0" },
+        paths: Object.fromEntries(
+          Array.from({ length: paths }, (_, i) => [`/files/${i}`, {}]),
+        ),
+      });
+    const bytesHit = (url: string, paths: number) => {
+      const bytes = new TextEncoder().encode(boxSpec(paths));
+      const sniff = sniffSpec(bytes, "application/json");
+      if (!sniff) throw new Error("fixture is not a Spec");
+      return { url, bytes, sniff, robotsDisallowed: false };
+    };
+    let addOn: string;
+    let full: string;
+    beforeEach(() => {
+      addOn = `${server.origin("api.nospec.test")}/openapi/openapi-v2025.0.json`;
+      full = `${server.origin("docs.nospec.test")}/box-openapi.json`;
+    });
+
+    it("waits for a later Source's full Spec rather than settle on the add-on", async () => {
+      const { probe } = slowProbe(0, [bytesHit(addOn, 5)]);
+      const { lookup } = setup(
+        script,
+        undefined,
+        undefined,
+        slowCrawl(300, {
+          hits: [{ ...bytesHit(full, 60), linkedFrom: full, offHost: false }],
+        }),
+        undefined,
+        undefined,
+        undefined,
+        { probe },
+      );
+
+      expect(await ask(lookup, "nospec")).toMatchObject({
+        outcome: "Resolved",
+        currentSpec: { specVersion: "3.0.3" },
+        sources: [{ url: full }],
+      });
+    });
+
+    it("judges GitHub's unversioned Spec after its add-on", async () => {
+      // GitHub ranked box-openapi's add-on above its openapi.json.
+      const addOnPath = "openapi/openapi-v2025.0.json";
+      server.send(
+        RAW,
+        `/nospec/openapi/HEAD/${addOnPath}`,
+        boxSpec(5),
+        "application/json",
+      );
+      server.send(
+        RAW,
+        "/nospec/openapi/HEAD/openapi.json",
+        boxSpec(60),
+        "application/json",
+      );
+      const url = (path: string) =>
+        `${server.origin(RAW)}/nospec/openapi/HEAD/${path}`;
+      const { probe } = slowProbe(0);
+      const { search } = slowSearch(0, {
+        nospec: [
+          { fullName: "nospec/openapi", path: addOnPath, url: url(addOnPath) },
+          {
+            fullName: "nospec/openapi",
+            path: "openapi.json",
+            url: url("openapi.json"),
+          },
+        ],
+      });
+      const { lookup } = setup(
+        {
+          ...script,
+          isSpecLink: {
+            [url(addOnPath)]: yesNo(0.95),
+            [url("openapi.json")]: yesNo(0.9),
+          },
+        },
+        undefined,
+        undefined,
+        undefined,
+        search,
+        undefined,
+        undefined,
+        { probe },
+      );
+
+      expect(await ask(lookup, "nospec")).toMatchObject({
+        outcome: "Resolved",
+        sources: [{ url: url("openapi.json") }],
+      });
+    });
+
+    it("answers the add-on when the deadline passes with nothing else", async () => {
+      const { probe } = slowProbe(0, [bytesHit(addOn, 5)]);
+      const { lookup } = setup(
+        script,
+        undefined,
+        undefined,
+        slowCrawl(1000, {
+          hits: [{ ...bytesHit(full, 60), linkedFrom: full, offHost: false }],
+        }),
+        undefined,
+        undefined,
+        undefined,
+        { probe, specStepBudgetMs: 200 },
+      );
+
+      const outcome = await ask(lookup, "nospec");
+
+      expect(outcome).toMatchObject({
+        outcome: "Resolved",
+        sources: [{ url: addOn }],
+      });
+      expect(outcome.diagnostics?.join("\n")).toMatch(
+        /spec step deadline: Developer Portal crawl/,
+      );
+    });
+  });
+
   /** A crawl hit for a Spec titled "NoSpec API", on the Vendor's domain. */
   function crawlHitAt(url: string): CrawlHit {
     return {

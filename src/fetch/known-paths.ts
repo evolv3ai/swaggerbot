@@ -32,6 +32,24 @@ export const KNOWN_PATHS = [
 ] as const;
 
 const APIS_JSON_PATH = "/apis.json";
+
+/**
+ * The likeliest known paths, which hold most Specs found (Cloudflare's and
+ * Neon's `/openapi.json`): fetched in the foreground, taking their turn with
+ * a crawl on the same host. The rest of the list yields to it (`background`).
+ */
+const FOREGROUND_PATHS: ReadonlySet<string> = new Set([
+  "/openapi.json",
+  "/openapi.yaml",
+  "/swagger.json",
+]);
+
+/**
+ * A hit starts the grace window only when its Spec has at least this many
+ * paths: a stub (Cloudflare's 3-path `www.` copy) is kept but doesn't cut
+ * the other hosts short.
+ */
+export const MIN_GRACE_PATHS = 5;
 const DEFAULT_BUDGET_MS = 25_000;
 export const DEFAULT_GRACE_AFTER_HIT_MS = 3_000;
 
@@ -54,7 +72,8 @@ export type ProbeOptions = {
    */
   budgetMs?: number;
   /**
-   * Default 3 s. Once the first hit is collected, the probe stops at the
+   * Default 3 s. Once the first hit with `MIN_GRACE_PATHS` paths is
+   * collected, the probe stops at the
    * earlier of the budget and this long after that hit, as the budget stops
    * it. The window keeps a Spec on another host that answers a little later
    * than a stale copy (WTR-42). `0` stops at the first hit; `Infinity` runs
@@ -76,9 +95,10 @@ export type ProbeOptions = {
  * on the domain and its `api.`, `developer.`, `developers.`, `docs.`, `app.`,
  * `api-docs.` and `spec.` hosts, plus the Specs an `apis.json` lists. Hosts
  * run in parallel and paths one after another per host, so the fetcher's
- * per-host spacing holds; its requests yield to others on the same host
- * (`background`), so a crawl beside it keeps its pace. The first hit starts a short grace window
- * (`graceAfterHitMs`), after which every host stops.
+ * per-host spacing holds; past the likeliest paths its requests yield to
+ * others on the same host (`background`), so a crawl beside it keeps its
+ * pace. The first hit with `MIN_GRACE_PATHS` paths starts a short grace
+ * window (`graceAfterHitMs`), after which every host stops.
  */
 export async function probeKnownPaths(
   domain: string,
@@ -112,7 +132,7 @@ export async function probeKnownPaths(
   const collect = (i: number, hit: KnownPathHit) => {
     if (stop.signal.aborted) return;
     found[i]?.push(hit);
-    if (graceStarted) return;
+    if (graceStarted || hit.sniff.extract.pathCount < MIN_GRACE_PATHS) return;
     graceStarted = true;
     if (graceAfterHitMs <= 0) end();
     else if (graceAfterHitMs < endsAt - Date.now()) {
@@ -154,9 +174,10 @@ async function probeHost(
   for (const path of KNOWN_PATHS) {
     if (signal.aborted) break;
     const url = `${origin}${path}`;
+    const background = !FOREGROUND_PATHS.has(path);
     let res: FetchResult;
     try {
-      res = await fetcher.fetchUrl(url, { signal, background: true });
+      res = await fetcher.fetchUrl(url, { signal, background });
     } catch (error) {
       if (!(error instanceof FetchError)) continue;
       // A host that can't be reached won't answer on another path either.
@@ -173,7 +194,7 @@ async function probeHost(
         res = await fetcher.fetchUrl(url, {
           signal,
           ignoreRobots: true,
-          background: true,
+          background,
         });
       } catch (retryError) {
         if (retryError instanceof FetchError && isHostDead(retryError)) break;
