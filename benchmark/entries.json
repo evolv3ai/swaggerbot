@@ -83,7 +83,8 @@
     "expected": "Resolved",
     "apiId": "box.com/box-platform",
     "specSources": [
-      "https://raw.githubusercontent.com/box/box-openapi/main/openapi.json"
+      "https://raw.githubusercontent.com/box/box-openapi/main/openapi.json",
+      "https://developer.box.com/box-openapi.json"
     ],
     "evidenceUrl": "https://developer.box.com/reference/",
     "reviewed": true
@@ -168,7 +169,8 @@
     "apiId": "neon.com/neon-api",
     "specSources": [
       "https://neon.com/api_spec/release/v2.json",
-      "https://neon.tech/api_spec/release/v2.json"
+      "https://neon.tech/api_spec/release/v2.json",
+      "https://neon.com/openapi.json"
     ],
     "evidenceUrl": "https://neon.com/docs/reference/api-reference",
     "reviewed": true,
@@ -201,7 +203,10 @@
     "group": "longtail",
     "expected": "Resolved",
     "apiId": "novu.co/novu-api",
-    "specSources": ["https://api.novu.co/openapi.json"],
+    "specSources": [
+      "https://api.novu.co/openapi.json",
+      "https://api.novu.co/openapi.yaml"
+    ],
     "evidenceUrl": "https://docs.novu.co/api-reference/overview",
     "reviewed": true
   },

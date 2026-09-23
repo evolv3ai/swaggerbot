@@ -1,5 +1,5 @@
 ---
-status: gate not met; WTR-57..62 merged, WTR-56 held; three label questions for Wes
+status: gate not met; WTR-57..62 merged, WTR-56 held; round-2 labels accepted
 ---
 
 # Slice 2 result
@@ -27,7 +27,7 @@ resolutions, two (Box, Neon, in both runs) are **label questions**: each resolve
 an Official URL serving the labelled Spec. If Wes accepts them, run 2 has 0/20. The
 third (GitHub, run 1 only) is a new intermittent defect, WTR-65.
 
-## Label questions for Wes (from this round)
+## Label questions from this round (all three **accepted** by Wes, 2026-09-22; added to `entries.json`)
 
 | Entry | Source found | Finding |
 |---|---|---|
@@ -90,7 +90,7 @@ Two structural rulings from the same review:
 
 ## Remaining failures, by cause (run 2)
 
-- **Box, Neon**: label questions above.
+- **Box, Neon**: Sources accepted since; no longer failures.
 - **GitHub REST API** (run 1 only): resolved to GitHub Enterprise Cloud's
   `ghec.2022-11-28.json`. APIs.guru's 20 `github.com` entries share one name, so
   `mergeGuruChoices` puts GHEC's origins in GitHub's Choice, all at 1.1.4; the order
@@ -106,7 +106,7 @@ Two structural rulings from the same review:
 
 ## What to do next
 
-1. Wes: rule on the three label questions and on WTR-56 (Plaid).
+1. Wes: rule on WTR-56 (Plaid). (The three label questions were accepted.)
 2. WTR-65 first step: log the pool for a failing GitHub run.
 3. Then two more `pnpm bench` runs; with the label rulings accepted and WTR-65
    fixed, the gate is within reach.
