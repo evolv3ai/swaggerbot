@@ -34,8 +34,8 @@ Filed 2026-09-22 as WTR-88..93 (Backlog, `swaggerbot` only), with Linear "blocke
 | 5 | WTR-92 | The HTTP gate: per-IP rate limit, API keys for Discovery, daily quotas | 3, 4 | 3 |
 | 6 | WTR-93 | `scripts/loadcheck.ts`: p90 against a deployed URL | 1, 5 | 4 |
 | 7 | — | Speed up Discovery | 1 | filed after #1's numbers |
-| 7a | | The known-path probe stops soon after its first hit | 1 | 5 |
-| 8 | | Box: the full Spec sometimes never reaches the pool, and an add-on answers | — | 5 |
+| 7a | WTR-94 | The known-path probe stops soon after its first hit | 1 | 5 |
+| 8 | WTR-95 | Box: the full Spec sometimes never reaches the pool, and an add-on answers | — | 5 |
 
 #3 and #4 both add a Drizzle migration, so #4 waits for #3 to avoid two `0004_*` files. #4 and #5 both touch the Lookup's entry point (`lookup.ts`, `http.ts`), so they're queued in waves, not together.
 
