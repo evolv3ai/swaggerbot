@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Outcome } from "~/domain/outcome";
 import type { BenchmarkEntry } from "./entry";
+import { percentile } from "./latency";
 import { runBenchmark } from "./run";
 import { type BenchmarkAnswer, normalizeUrl, score } from "./score";
 
@@ -235,6 +236,56 @@ describe("score", () => {
       ],
     );
     expect(report.falseResolutions).toBe(0);
+  });
+});
+
+describe("percentile (nearest rank)", () => {
+  it("is 0 for no values", () => {
+    expect(percentile([], 50)).toBe(0);
+    expect(percentile([], 90)).toBe(0);
+  });
+
+  it("is the value itself for one value", () => {
+    expect(percentile([42], 50)).toBe(42);
+    expect(percentile([42], 90)).toBe(42);
+    expect(percentile([42], 100)).toBe(42);
+  });
+
+  it("ranks ten values whatever their order", () => {
+    const ten = [100, 10, 90, 20, 80, 30, 70, 40, 60, 50];
+    expect(percentile(ten, 10)).toBe(10);
+    expect(percentile(ten, 50)).toBe(50);
+    expect(percentile(ten, 55)).toBe(60);
+    expect(percentile(ten, 90)).toBe(90);
+    expect(percentile(ten, 91)).toBe(100);
+    expect(percentile(ten, 100)).toBe(100);
+    // The input is not reordered.
+    expect(ten[0]).toBe(100);
+  });
+});
+
+describe("the report's latency", () => {
+  it("is over the answers' ms, leaving out those not timed", () => {
+    const names = ["A", "B", "C", "D"];
+    const report = score(
+      names.map((name) => entry({ name, expected: "Unknown" })),
+      [
+        { ...answer("A", unknown("A")), ms: 3000 },
+        { ...answer("B", unknown("B")), ms: 1000 },
+        { ...answer("C", unknown("C")), ms: 57_500 },
+        answer("D", unknown("D")),
+      ],
+    );
+    expect(report.latency).toEqual({
+      count: 3,
+      p50: 3000,
+      p90: 57_500,
+      max: 57_500,
+    });
+  });
+
+  it("is all zeros with no answers", () => {
+    expect(score([], []).latency).toEqual({ count: 0, p50: 0, p90: 0, max: 0 });
   });
 });
 

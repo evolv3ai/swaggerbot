@@ -58,6 +58,7 @@ import {
   PARTIAL_SPEC_RATIO,
   type Thresholds,
 } from "./thresholds";
+import { stepTimer, type Timed } from "./timings";
 
 export type LookupRequest = {
   name: string;
@@ -123,7 +124,8 @@ export type LookupDeps = {
   /**
    * Adds to `diagnostics` what the Spec step checked and each Spec it found,
    * with its API Version, path count and Judge probability, for diagnosing
-   * a Lookup afterwards (`LOOKUP_TRACE=1`). Off by default.
+   * a Lookup afterwards (`LOOKUP_TRACE=1`), and puts each step's time on
+   * the Outcome as `timings`. Off by default.
    */
   trace?: boolean;
 };
@@ -242,41 +244,56 @@ export function createLookup(deps: LookupDeps): Lookup {
 
   return async function lookup({ name, apiVersion, allowCommunity = false }) {
     const diagnostics: string[] = [];
-    const finish = (outcome: Outcome): Outcome =>
-      diagnostics.length > 0 ? { ...outcome, diagnostics } : outcome;
+    const { timed, timings } = stepTimer();
+    const finish = (outcome: Outcome): Outcome => ({
+      ...outcome,
+      ...(diagnostics.length > 0 ? { diagnostics } : {}),
+      ...(deps.trace ? { timings: timings() } : {}),
+    });
 
     // 1. The Index.
-    const indexed = answerFromIndex(name, allowCommunity, apiVersion);
-    if (indexed) return indexed;
+    const indexed = await timed("Index", () =>
+      answerFromIndex(name, allowCommunity, apiVersion),
+    );
+    if (indexed) return finish(indexed);
 
     // 2. APIs.guru.
     let guru: ApiChoice[] = [];
     try {
-      guru = mergeGuruChoices(await apisGuru.findCandidates(name));
+      guru = mergeGuruChoices(
+        await timed("APIs.guru", () => apisGuru.findCandidates(name)),
+      );
     } catch (error) {
       diagnostics.push(`APIs.guru: ${message(error)}`);
     }
 
-    const umbrella = umbrellaCandidates(name, guru);
+    const umbrella = await timed("umbrella check", () =>
+      umbrellaCandidates(name, guru),
+    );
     if (umbrella) return finish({ outcome: "Ambiguous", candidates: umbrella });
 
     let verdict: Verdict | null =
-      guru.length > 0 ? await whichApi(name, guru, diagnostics) : null;
+      guru.length > 0
+        ? await timed("Judge whichApi", () => whichApi(name, guru, diagnostics))
+        : null;
 
     // 3. Developer Portal, when step 2 settled nothing.
     if ((!verdict || verdict.kind === "unknown") && webSearch) {
-      let portals: PortalCandidate[] = [];
-      try {
-        portals = await findPortalCandidates(name, webSearch);
-      } catch (error) {
-        diagnostics.push(`web search: ${message(error)}`);
-      }
-      const all = uniqueById([
-        ...guru,
-        ...portalChoices(await followPortals(portals, diagnostics), guru),
-      ]);
+      const portals = await timed("Developer Portal search", async () => {
+        let found: PortalCandidate[] = [];
+        try {
+          found = await findPortalCandidates(name, webSearch);
+        } catch (error) {
+          diagnostics.push(`web search: ${message(error)}`);
+        }
+        return followPortals(found, diagnostics);
+      });
+      const all = uniqueById([...guru, ...portalChoices(portals, guru)]);
       if (all.length > guru.length) {
-        verdict = (await whichApi(name, all, diagnostics)) ?? verdict;
+        verdict =
+          (await timed("Judge whichApi", () =>
+            whichApi(name, all, diagnostics),
+          )) ?? verdict;
       }
     }
 
@@ -288,7 +305,7 @@ export function createLookup(deps: LookupDeps): Lookup {
           ? verdict.top
           : undefined;
     if (top) {
-      const vendorApis = await vendorCandidates(name, top, diagnostics);
+      const vendorApis = await vendorCandidates(name, top, diagnostics, timed);
       if (vendorApis?.crawled && verdict?.kind === "identified")
         return finish(
           await vendorOrSpec(
@@ -297,6 +314,7 @@ export function createLookup(deps: LookupDeps): Lookup {
             vendorApis.candidates,
             { allowCommunity, apiVersion },
             diagnostics,
+            timed,
           ),
         );
       if (vendorApis)
@@ -317,6 +335,7 @@ export function createLookup(deps: LookupDeps): Lookup {
       verdict.choice,
       { allowCommunity, apiVersion },
       diagnostics,
+      timed,
     );
     return finish(found.outcome);
   };
@@ -536,20 +555,22 @@ export function createLookup(deps: LookupDeps): Lookup {
     name: string,
     top: ApiChoice,
     diagnostics: string[],
+    timed: Timed,
   ): Promise<{ candidates: AmbiguousCandidate[]; crawled: boolean } | null> {
     const { vendor } = top;
     let members: ApiChoice[] = [];
     try {
-      members = mergeGuruChoices(await apisGuru.findVendorApis(vendor.id));
+      members = mergeGuruChoices(
+        await timed("APIs.guru", () => apisGuru.findVendorApis(vendor.id)),
+      );
     } catch (error) {
       diagnostics.push(`APIs.guru: ${message(error)}`);
     }
     let probability: number;
     try {
-      ({ probability } = await judge.isVendorName(name, {
-        id: vendor.id,
-        name: vendor.name,
-      }));
+      ({ probability } = await timed("Judge isVendorName", () =>
+        judge.isVendorName(name, { id: vendor.id, name: vendor.name }),
+      ));
     } catch (error) {
       diagnostics.push(`Judge isVendorName: ${message(error)}`);
       return null;
@@ -561,10 +582,12 @@ export function createLookup(deps: LookupDeps): Lookup {
       const startUrl = top.portalUrl ?? `https://${vendor.domain}`;
       let hits: VendorApiHit[] = [];
       try {
-        const result = await vendorCrawl({
-          startUrl,
-          vendor: { id: vendor.id, name: vendor.name },
-        });
+        const result = await timed("Vendor API crawl", () =>
+          vendorCrawl({
+            startUrl,
+            vendor: { id: vendor.id, name: vendor.name },
+          }),
+        );
         hits = result.hits;
         for (const { url, reason } of result.failed)
           diagnostics.push(`Vendor API crawl fetch failed: ${url} (${reason})`);
@@ -597,6 +620,7 @@ export function createLookup(deps: LookupDeps): Lookup {
     crawledApis: AmbiguousCandidate[],
     request: { allowCommunity: boolean; apiVersion: string | undefined },
     diagnostics: string[],
+    timed: Timed,
   ): Promise<Outcome> {
     const ambiguous: Outcome = {
       outcome: "Ambiguous",
@@ -607,6 +631,7 @@ export function createLookup(deps: LookupDeps): Lookup {
       choice,
       { ...request, remember: false },
       diagnostics,
+      timed,
     );
     if (found.outcome.outcome !== "Resolved" || !found.current)
       return ambiguous;
@@ -641,6 +666,7 @@ export function createLookup(deps: LookupDeps): Lookup {
       remember?: boolean;
     },
     diagnostics: string[],
+    timed: Timed,
   ): Promise<{ outcome: Outcome; current?: SpecCandidate }> {
     const ref = apiRef(choice);
     const candidates: SpecCandidate[] = [];
@@ -1025,13 +1051,25 @@ export function createLookup(deps: LookupDeps): Lookup {
      */
     const goOn = (url: string) => !settled() || urlNamesApiVersion(url);
 
-    for (const [i, url] of choice.originUrls.entries()) {
-      if (!goOn(url)) continue;
-      originIndex = i;
-      await fetchOrigin(url);
-    }
+    if (choice.originUrls.length > 0)
+      await timed("Spec fetch", async () => {
+        for (const [i, url] of choice.originUrls.entries()) {
+          if (!goOn(url)) continue;
+          originIndex = i;
+          await fetchOrigin(url);
+        }
+      });
     originIndex = undefined;
-    if (!settled()) {
+    if (!settled()) await timed("known paths", knownPathsStep);
+    if (!settled()) await timed("Developer Portal crawl", crawlStep);
+    if (!settled() && githubSearch)
+      await timed("GitHub code search", () => githubSearchStep(githubSearch));
+    const { mirrorUrl } = choice;
+    if (!settled() && mirrorUrl)
+      await timed("Spec fetch", () => fetchAndConsider(mirrorUrl, true));
+
+    /** Known paths on the Vendor's own domain; every hit is considered. */
+    async function knownPathsStep() {
       let hits: KnownPathHit[] = [];
       try {
         // The Vendor's own domain: ADR 0003 allows a shut host's Spec once.
@@ -1055,10 +1093,6 @@ export function createLookup(deps: LookupDeps): Lookup {
         );
       }
     }
-    if (!settled()) await crawlStep();
-    if (!settled() && githubSearch) await githubSearchStep(githubSearch);
-    if (!settled() && choice.mirrorUrl)
-      await fetchAndConsider(choice.mirrorUrl, true);
 
     // A third-party Source is a Mirror only of bytes the Vendor stands behind;
     // otherwise it is Community.

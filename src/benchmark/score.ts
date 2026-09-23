@@ -1,5 +1,6 @@
 import type { Outcome, OutcomeKind } from "~/domain/outcome";
 import type { BenchmarkEntry, BenchmarkGroup } from "./entry";
+import { type Latency, latencyOf } from "./latency";
 
 /** What a Lookup answered for one Benchmark entry. */
 export type BenchmarkAnswer = {
@@ -50,6 +51,11 @@ export type BenchmarkReport = {
   errors: { name: string; message: string }[];
   /** Every entry's answer, in entry order. */
   answers: BenchmarkEntryAnswer[];
+  /**
+   * How long the answers took, over those timed (`ms`): Discoveries, and with
+   * `--index` answers from the Index as well.
+   */
+  latency: Latency;
   /** The Index the run used; set by `pnpm bench`, not by `score`. */
   indexPath?: string;
   /** Whether that Index started empty (a fresh temporary one) rather than given with `--index`. */
@@ -186,5 +192,6 @@ export function score(
     failures,
     errors,
     answers,
+    latency: latencyOf(answers.flatMap((a) => a.ms ?? [])),
   };
 }

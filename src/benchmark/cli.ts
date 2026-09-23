@@ -11,7 +11,12 @@ export type BenchOptions = {
   index?: string;
   /** Keep the fresh Index's temporary directory and print its path. */
   keepIndex: boolean;
+  /** How many Lookups run at once. */
+  concurrency: number;
 };
+
+/** Lookups at once when `--concurrency` isn't given. */
+export const DEFAULT_CONCURRENCY = 4;
 
 export type ParsedBenchArgs =
   | { ok: true; options: BenchOptions }
@@ -25,6 +30,7 @@ export function parseBenchArgs(args: string[]): ParsedBenchArgs {
     search?: string;
     index?: string;
     "keep-index"?: boolean;
+    concurrency?: string;
   };
   try {
     ({ values } = parseArgs({
@@ -35,6 +41,7 @@ export function parseBenchArgs(args: string[]): ParsedBenchArgs {
         search: { type: "string" },
         index: { type: "string" },
         "keep-index": { type: "boolean", default: false },
+        concurrency: { type: "string" },
       },
     }));
   } catch (err) {
@@ -63,6 +70,19 @@ export function parseBenchArgs(args: string[]): ParsedBenchArgs {
   if (values.index === "") {
     return { ok: false, error: "--index needs a path", exitCode: 2 };
   }
+  const concurrency =
+    values.concurrency === undefined
+      ? DEFAULT_CONCURRENCY
+      : /^\d+$/.test(values.concurrency)
+        ? Number(values.concurrency)
+        : 0;
+  if (concurrency < 1) {
+    return {
+      ok: false,
+      error: `--concurrency must be a positive integer (got "${values.concurrency}")`,
+      exitCode: 2,
+    };
+  }
 
   return {
     ok: true,
@@ -72,6 +92,7 @@ export function parseBenchArgs(args: string[]): ParsedBenchArgs {
       search: search as SearchProvider | undefined,
       index: values.index,
       keepIndex: values["keep-index"] ?? false,
+      concurrency,
     },
   };
 }
@@ -85,6 +106,18 @@ export function indexLabel(index: BenchIndex): string {
   return index.kept
     ? `Index: kept at ${index.path}`
     : "Index: fresh (temporary)";
+}
+
+/**
+ * The report's latency line. Every answer of a fresh Index is a Discovery;
+ * with `--index`, some came from the Index, and the line says so.
+ */
+export function latencyLine(report: BenchmarkReport): string {
+  const { count, p50, p90, max } = report.latency;
+  const s = (ms: number) => `${(ms / 1000).toFixed(1)} s`;
+  const what =
+    report.indexFresh === false ? "Discovery and Index" : "Discovery";
+  return `Latency (${what}): p50 ${s(p50)} · p90 ${s(p90)} · max ${s(max)} (n=${count})`;
 }
 
 /** The report with the Index it was run against. */
