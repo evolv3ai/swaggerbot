@@ -61,6 +61,11 @@ Seconds summed over the run, by step: known paths 431 s (22 Lookups, mean 19.6 s
 
 **Wes, 2026-09-23: 7a now** (issue 7a below). **7b, 7c and 7d are to be decided after 7a is measured.** He also asked for Box's intermittent False Resolution to be filed now (issue 8).
 
+**7a measured (WTR-94, merged `b900308`; bench on its branch, concurrency 1, 2026-09-23):** Discovery **p50 19.4 s → 7.1 s**; p90 46.3 s → 45.8 s; max 59.6 s. False Resolution 0/22, long-tail coverage 100%, Outcome accuracy 85%. The six probe wins now spend 4.0–4.8 s in the probe (were 15–25 s): Supabase 27.9 → 6.3 s total, Cloudflare 27.8 → 7.1 s, Neon 21.1 → 9.8 s. **14 of 40 Lookups are still over 15 s**, and they are the NoSpec names and the late finds: Mailchimp 59.6 s, Codeberg 53.5 s, Asana 49.4 s, Mux 46.3 s, Zoho 45.8 s, Slack 45.4 s, Dropbox 42.4 s, Reddit 40.0 s, Fly.io 34.1 s and Intuit 32.2 s. Each of them pays the probe's 25 s budget with no hit, **plus** the crawl's 20 s, plus GitHub. To reach p90 < 15 s, at most 4 of 40 may be over.
+
+- **With 7b**, each of these costs its slowest source, not the sum of all three: roughly 25–30 s for the NoSpec names (the probe's 25 s with no hit, plus about 3–5 s of Developer Portal search). That's still over 15 s.
+- **With 7b and 7c** (a Spec-step deadline of about 9 s), nearly all fall under about 15 s. The late finds are lost: Mux (crawl 16 s) and Fly.io (crawl 12.9 s) would answer NoSpec. That is 2 of 11 long-tail entries, so coverage would be about 82%, still over the 60% gate. Asana stays, because GitHub finds it in about 2 s once it runs in parallel.
+
 7a and 7b don't trade anything away. 7c is the only one that bounds the worst case, and it's the one that costs coverage. A rough estimate: 7a and 7b together bring p50 under 10 s but leave the p90 around 20–25 s, because of the NoSpec names. Reaching p90 < 15 s very likely needs 7c too.
 
 
