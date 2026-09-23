@@ -1452,7 +1452,7 @@ describe("lookup with APIs.guru duplicates", () => {
     expect(originsFetched()).toEqual([DOTCOM]);
   });
 
-  it("makes the earliest origin URL's Spec Current among Specs of one API Version", async () => {
+  it("makes the earliest origin URL's Spec Current among Specs of one API Version, from Discovery and from the Index", async () => {
     const versioned = (title: string) =>
       JSON.stringify({
         openapi: "3.0.3",
@@ -1481,12 +1481,20 @@ describe("lookup with APIs.guru duplicates", () => {
     const outcome = await ask(lookup, "ghub");
 
     expect(originsFetched()).toEqual([DOTCOM, DOTCOM_DATED]);
-    expect(outcome).toMatchObject({
+    const current = {
       outcome: "Resolved",
       currentSpec: { apiVersion: "1.1.4" },
       sources: [{ url: `${server.origin("api.ghub.test")}${DOTCOM}` }],
       alternateSpecs: [],
-    });
+    };
+    expect(outcome).toMatchObject(current);
+
+    // Asked again, the Index answers the same, fetching nothing.
+    const requests = server.requests.length;
+    const again = await ask(lookup, "ghub");
+    expect(again).toMatchObject(current);
+    expect(again.diagnostics).toBeUndefined();
+    expect(server.requests).toHaveLength(requests);
   });
 
   it("keeps one Vendor's entries with different titles apart", async () => {
@@ -2467,12 +2475,14 @@ describe("lookup with several API Versions", () => {
   function setupVersions(
     probe?: LookupDeps["probe"],
     pathCounts?: Record<string, number>,
+    /** Where each Version is served; `path` by default. */
+    pathOf: (version: string) => string = path,
   ) {
     const versions = pathCounts ? Object.keys(pathCounts) : VERSIONS;
     for (const v of versions)
       server.send(
         HOST,
-        path(v),
+        pathOf(v),
         versionSpec(v, pathCounts?.[v]),
         "application/json",
       );
@@ -2489,7 +2499,7 @@ describe("lookup with several API Versions", () => {
       ...candidate,
       originUrls: probe
         ? []
-        : versions.map((v) => `${server.origin(HOST)}${path(v)}`),
+        : versions.map((v) => `${server.origin(HOST)}${pathOf(v)}`),
     };
     const lookup = createLookup({
       db: openDb(join(dir, "index.db")),
@@ -2553,6 +2563,29 @@ describe("lookup with several API Versions", () => {
       current: "2024.0",
       alternates: ["2026.0", "2025.0"],
     });
+  });
+
+  it("does not answer a partial Spec as Current from the Index either", async () => {
+    // Box: the full Spec at `openapi.json`, 2024.0, and a 2026.0 add-on.
+    const { lookup, judge } = setupVersions(
+      undefined,
+      { "2024.0": 187, "2026.0": 5 },
+      (v) => (v === "2024.0" ? "/openapi/openapi.json" : path(v)),
+    );
+
+    const first = await ask(lookup, "boxy");
+    expect(versionsOf(first)).toEqual({
+      current: "2024.0",
+      alternates: ["2026.0"],
+    });
+
+    const requests = server.requests.length;
+    const calls = judge.calls.length;
+    const second = await ask(lookup, "boxy");
+    expect(second).toEqual(first);
+    expect(second.diagnostics).toBeUndefined();
+    expect(server.requests).toHaveLength(requests);
+    expect(judge.calls).toHaveLength(calls);
   });
 
   it("answers the highest API Version when the Specs are about the same size", async () => {
@@ -2710,15 +2743,15 @@ describe("lookup with a deprecated Spec", () => {
   const API_JSON = "https://api.novvy.test/api-json";
   const OPENAPI = "https://api.novvy.test/openapi.json";
 
-  /** A known-path hit serving API Version 3.19.2 with this `info`. */
+  /** A known-path hit serving API Version 3.19.2, unless `info` says otherwise. */
   const hit = (
     url: string,
-    info: { title: string; description?: string },
+    info: { title: string; description?: string; version?: string },
   ): KnownPathHit => {
     const bytes = new TextEncoder().encode(
       JSON.stringify({
         openapi: "3.0.3",
-        info: { ...info, version: "3.19.2" },
+        info: { version: "3.19.2", ...info },
         paths: { "/events": { get: { tags: ["events"] } } },
       }),
     );
@@ -2727,8 +2760,11 @@ describe("lookup with a deprecated Spec", () => {
     return { url, bytes, sniff, robotsDisallowed: false };
   };
 
-  /** A Lookup whose only Specs are these known-path hits, in order. */
-  function setupHits(hits: KnownPathHit[]) {
+  /**
+   * A Lookup whose only Specs are these known-path hits, in order; each
+   * probe is counted in `probes`.
+   */
+  function setupHits(hits: KnownPathHit[], probes = { count: 0 }) {
     const guru: ApiCandidate = {
       key: "novvy.test",
       apiId: API_ID,
@@ -2762,7 +2798,10 @@ describe("lookup with a deprecated Spec", () => {
         minIntervalMs: 0,
       }),
       now: () => new Date(NOW),
-      probe: async () => hits,
+      probe: async () => {
+        probes.count++;
+        return hits;
+      },
       crawl: fakeCrawl().crawl,
     });
   }
@@ -2783,6 +2822,30 @@ describe("lookup with a deprecated Spec", () => {
       );
 
       expect(currentUrl(await ask(lookup, "novvy"))).toBe(OPENAPI);
+    },
+  );
+
+  it.each([
+    ["the same API Version", "3.19.2"],
+    ["a higher API Version", "3.20.0"],
+  ])(
+    "does not answer a deprecated Spec at %s as Current from the Index either",
+    async (_, version) => {
+      const probes = { count: 0 };
+      const lookup = setupHits(
+        [
+          hit(API_JSON, { title: DEPRECATED, version }),
+          hit(OPENAPI, { title: "Novvy API" }),
+        ],
+        probes,
+      );
+
+      expect(currentUrl(await ask(lookup, "novvy"))).toBe(OPENAPI);
+
+      const second = await ask(lookup, "novvy");
+      expect(currentUrl(second)).toBe(OPENAPI);
+      expect(second.diagnostics).toBeUndefined();
+      expect(probes.count).toBe(1);
     },
   );
 
