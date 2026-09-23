@@ -12,13 +12,17 @@ export type App = ReturnType<typeof createApp>;
 // Built when the server starts (`src/server/open-index.ts`), which also starts
 // the background Verification and forms workers, or, if that failed, on the
 // first request that needs it. One per server: every route shares its
-// database connection and workers.
-let app: App | undefined;
+// database connection and workers. It lives on `globalThis`, not in a module
+// variable, because Nitro bundles this module into both the start-up plugin's
+// chunk and the routes' chunk, and each copy would otherwise build its own app
+// and start a second pair of workers on the same Index.
+const APP = Symbol.for("swaggerbot.app");
+const store = globalThis as { [APP]?: App };
 
 /** The server's one app, built on the first call. */
 export function getApp(): App {
-  app ??= createApp();
-  return app;
+  store[APP] ??= createApp();
+  return store[APP];
 }
 
 /**

@@ -102,6 +102,11 @@ describe("POST /api/lookup", () => {
       { fromIndex: vi.fn(() => null) },
     );
     createApp.mockImplementationOnce(() => ({ lookup, keys }));
+    // The app is kept on `globalThis` (see `getApp`), which a module reset
+    // doesn't clear.
+    delete (globalThis as Record<symbol, unknown>)[
+      Symbol.for("swaggerbot.app")
+    ];
     vi.resetModules();
     const { Route: fresh } = await import("./lookup");
     const handlers = fresh.options.server?.handlers;
