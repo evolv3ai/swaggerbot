@@ -6,7 +6,7 @@ The issues for [Slice 4](../PRD.md#slice-4--spec-forms-and-navigation), written 
 
 ## Decisions going in (Wes, 2026-09-23)
 
-Recorded in [ADR 0004](../adr/0004-normalized-form-built-in-background-with-scalar.md).
+Recorded in [ADR 0004](../adr/0004-normalized-form-built-in-background-with-scalar.md). **The backlog and ADR 0004 were approved by Wes, 2026-09-23.**
 
 - **Library and target:** `@scalar/openapi-parser` (with `@scalar/json-magic` for bundling), converting to **OpenAPI 3.1**.
 - **Stored, not computed per request.** The Normalized Form, the Validity Issues and the Spec Outline are stored in the Index.
