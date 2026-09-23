@@ -53,6 +53,7 @@ Filed 2026-09-23 as WTR-104..111 (Backlog, `swaggerbot` only), with Linear "bloc
 | 8 | WTR-111 | `scripts/formscheck.ts`: the acceptance check against a deployed URL | 5, 6, 7 | 5 |
 | 9 | WTR-112 | The Normalized Form drops `allowReserved` from parameters that aren't `query` (added 2026-09-23 after WTR-104: Cloudflare's 3 normalized findings) | 1 | 2 |
 | 10 | WTR-116 | The forms worker gives external references a budget that fits, and aborted fetches release their host slot (added 2026-09-23 after WTR-105's backfill rehearsal: DigitalOcean's 697 `$ref`d files; **gates the wave 2 deploy**) | 2 | 3 |
+| 11 | WTR-117 | The forms worker has a reference budget DigitalOcean fits (75 min; its `$ref` closure is 2,976 files, measured by WTR-116), and retries go to the back of the queue. **Gates the wave 2 deploy** | 10 | 3 |
 
 #3 and #4 touch different files (`lookup.ts` and `outcome.ts`; routes and `src/server/`), so they run together. #5, #6 and #7 each add a route file, and TanStack's generated `src/routeTree.gen.ts` changes with each. That's a mechanical conflict, so wave 4 is merged one PR at a time, regenerating the route tree (`pnpm build`) on each rebase.
 
@@ -396,4 +397,25 @@ A build of a Spec like DigitalOcean's holds up the other builds for as long as i
   - A Spec whose same-origin `$ref` answers 404 is still saved `ready`, with the unresolved reference as a Validity Issue.
   - Reference fetches are made with `background: true` (check through an injected fetcher).
 - Manual check in the PR description: build DigitalOcean's Spec through the worker with the real fetcher (`sourceUrl` above; a throwaway script over a temp Index holding just that Spec is fine). Report the build time, the number of references fetched, `validityFindingCount` and `normalizedFindingCount`. Expected: all references fetched in about 12 minutes, and both counts small. Report what they are; don't tune for them.
+- `pnpm check` and `pnpm build` green.
+
+---
+
+## 11. swaggerbot: the forms worker has a reference budget DigitalOcean fits, and retries go to the back of the queue
+
+## Problem
+WTR-116 gave a Spec's external references a 20 min budget. Its manual check measured DigitalOcean's Spec (`https://raw.githubusercontent.com/digitalocean/openapi/main/specification/DigitalOcean-public.v2.yaml`) properly: the `$ref` closure is **2,976 files** (717 at the first level, 1,890 at the second, then 226, 69, 47, 20 and 7), and at the fetcher's one request per second per host it fetched 1,201 in 21 min, about 0.94 a second. A full build needs about 53 min. With 20 min, DigitalOcean runs out three times (an hour of worker time) and ends `failed`, so its forms are never built.
+
+Two more things make that worse in production. DigitalOcean is the 7th of 27 Specs by `created_at`, and `nextToBuild` orders by `created_at` only. A Spec whose attempt ran out stays first in line, so its retries block the backfill of every newer Spec behind it. And a new Spec found by a Lookup waits behind any such retry.
+
+Decided (Wes gave standing approval to proceed, 2026-09-23): a budget that fits the measured case, and a Spec that ran out goes to the back of the queue. Every external document stays in the Normalized Form (`x-codeSamples` included).
+
+## Change
+- `src/spec-forms/worker.ts`: `FORMS_REF_BUDGET_MS = 75 * 60_000`. Update its comment with the measurement above (2,976 files, ~53 min at 1 req/s per host).
+- `src/index-store/spec-forms.ts`, `nextToBuild()`: order by `attempts` ascending (a Spec with no row counts as 0), then `specs.created_at`, then `rowid`. A Spec that has never been tried is built before one that is being retried.
+- `README.md`: the budget in the background-build sentence.
+
+## Done when
+- `src/index-store/spec-forms.test.ts`: with an older Spec that has one failed attempt and a newer Spec with no row, `nextToBuild` returns the newer one. Between two Specs with equal attempts, the older comes first (the existing tests pass unchanged).
+- `src/spec-forms/worker.test.ts`: the existing budget tests pass (they inject `refBudgetMs`).
 - `pnpm check` and `pnpm build` green.
