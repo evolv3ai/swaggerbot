@@ -34,6 +34,15 @@ export const SWAGGER2_LEFTOVER_KEYS = {
   operation: ["schemes", "consumes", "produces"],
 } as const;
 
+/**
+ * Parameter Object keys that apply only when `in` is `query`. OpenAPI 3.0's
+ * text says `allowReserved` is ignored elsewhere though its schema allows it;
+ * 3.1's schema rejects it, and the upgrader keeps it (ADR 0004: Cloudflare's
+ * Spec had 3 findings, all on a `path` parameter). The builder deletes them
+ * from the Normalized Form's other parameters.
+ */
+export const QUERY_ONLY_PARAMETER_KEYS = ["allowReserved"] as const;
+
 export type SpecFormsErrorKind = "too-large" | "unparseable" | "not-openapi";
 
 export class SpecFormsError extends Error {
@@ -164,8 +173,10 @@ export async function buildSpecForms(
   const normalized: Obj = upgraded;
   await step("upgrade");
 
-  // 5. Strip the Swagger 2 keys the upgrader leaves behind.
+  // 5. Strip the Swagger 2 keys the upgrader leaves behind, and the
+  // query-only keys on other parameters.
   stripSwagger2Leftovers(normalized);
+  stripQueryOnlyParameterKeys(normalized);
   await step("strip");
 
   // 6. Validate the Normalized Form.
@@ -387,6 +398,27 @@ function stripSwagger2Leftovers(doc: Obj): void {
       for (const key of SWAGGER2_LEFTOVER_KEYS.operation) delete operation[key];
     }
   }
+}
+
+function stripQueryOnlyParameterKeys(doc: Obj): void {
+  const strip = (parameter: unknown) => {
+    if (!isObj(parameter) || "$ref" in parameter || parameter.in === "query")
+      return;
+    for (const key of QUERY_ONLY_PARAMETER_KEYS) delete parameter[key];
+  };
+  const stripAll = (parameters: unknown) => {
+    if (Array.isArray(parameters)) parameters.forEach(strip);
+  };
+  if (isObj(doc.paths))
+    for (const item of Object.values(doc.paths)) {
+      if (!isObj(item)) continue;
+      stripAll(item.parameters);
+      for (const [method, operation] of Object.entries(item))
+        if (HTTP_METHODS.has(method) && isObj(operation))
+          stripAll(operation.parameters);
+    }
+  if (isObj(doc.components) && isObj(doc.components.parameters))
+    Object.values(doc.components.parameters).forEach(strip);
 }
 
 /** The Spec Outline of a Normalized Form (see `SpecOutline`). */

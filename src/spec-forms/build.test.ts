@@ -203,6 +203,68 @@ describe("buildSpecForms", () => {
     expect(forms.normalizedFindingCount).toBe(0);
   });
 
+  it("keeps allowReserved only on query parameters", async () => {
+    // Cloudflare's Spec has it on a `path` parameter: 3.0 ignores it there,
+    // 3.1's schema rejects it.
+    const spec = {
+      openapi: "3.0.3",
+      info: { title: "Objects", version: "1" },
+      paths: {
+        "/objects/{key}": {
+          parameters: [
+            {
+              name: "prefix",
+              in: "query",
+              allowReserved: true,
+              schema: { type: "string" },
+            },
+          ],
+          get: {
+            parameters: [
+              {
+                name: "key",
+                in: "path",
+                required: true,
+                allowReserved: true,
+                schema: { type: "string" },
+              },
+              { $ref: "#/components/parameters/Trace" },
+            ],
+            responses: { "200": { description: "The object" } },
+          },
+        },
+      },
+      components: {
+        parameters: {
+          Trace: {
+            name: "X-Trace",
+            in: "header",
+            allowReserved: true,
+            schema: { type: "string" },
+          },
+        },
+      },
+    };
+    const forms = await buildSpecForms({
+      bytes: new TextEncoder().encode(JSON.stringify(spec)),
+      format: "json",
+      sourceUrl: SOURCE,
+    });
+    const doc = parsed(forms.normalized);
+
+    expect(
+      at(doc, "paths", "/objects/{key}", "get", "parameters", "0"),
+    ).not.toHaveProperty("allowReserved");
+    expect(at(doc, "components", "parameters", "Trace")).not.toHaveProperty(
+      "allowReserved",
+    );
+    expect(
+      at(doc, "paths", "/objects/{key}", "parameters", "0", "allowReserved"),
+    ).toBe(true);
+    expect(forms.normalizedFindingCount).toBe(0);
+    expect(forms.validityIssues).toEqual([]);
+  });
+
   it("outlines the 3.0 Spec's tags, operations and security schemes", async () => {
     const { outline } = await build("openapi30.yaml");
     expect(SpecOutline.parse(outline)).toEqual(outline);
