@@ -3,6 +3,7 @@ import {
   blob,
   index,
   integer,
+  primaryKey,
   sqliteTable,
   text,
   uniqueIndex,
@@ -103,4 +104,31 @@ export const apiNames = sqliteTable(
     createdAt: text("created_at").notNull().default(now),
   },
   (t) => [index("api_names_api_id_idx").on(t.apiId)],
+);
+
+export const apiKeys = sqliteTable("api_keys", {
+  /** `key_` + 8 base32 characters; safe to show. */
+  id: text("id").primaryKey(),
+  /** Who the key was issued to. */
+  owner: text("owner").notNull(),
+  /** Lowercase hex sha256 of the secret; the secret itself is never stored. */
+  keyHash: text("key_hash").notNull().unique(),
+  /** Discovery or `fresh` Lookups a UTC day; null means the default. */
+  dailyQuota: integer("daily_quota"),
+  createdAt: text("created_at").notNull().default(now),
+  /** When it was revoked; null while it is live. */
+  revokedAt: text("revoked_at"),
+});
+
+export const apiKeyUsage = sqliteTable(
+  "api_key_usage",
+  {
+    keyId: text("key_id")
+      .notNull()
+      .references(() => apiKeys.id),
+    /** A UTC day, `YYYY-MM-DD`. */
+    day: text("day").notNull(),
+    count: integer("count").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.keyId, t.day] })],
 );
