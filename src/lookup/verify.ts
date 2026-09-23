@@ -14,7 +14,8 @@ export const VERIFICATION_POLL_MS = 5_000;
 /**
  * Queues a Verification of `name`, unless it already has one waiting or
  * running, or its last one finished within the freshness window. `true`
- * when it was queued.
+ * when it was queued. Either way the row keeps `name` as the Caller spelt
+ * it, so the Verification asks what the latest Lookup asked.
  */
 export function enqueueVerification(
   db: Db,
@@ -24,12 +25,14 @@ export function enqueueVerification(
 ): boolean {
   const requestedAt = at.toISOString();
   const cutoff = new Date(at.getTime() - freshnessMs(freshnessDays));
+  const nameNormalized = normalizeName(name);
   const { changes } = db
     .insert(verifications)
-    .values({ nameNormalized: normalizeName(name), requestedAt })
+    .values({ nameNormalized, name, requestedAt })
     .onConflictDoUpdate({
       target: verifications.nameNormalized,
       set: {
+        name,
         requestedAt,
         startedAt: null,
         finishedAt: null,
@@ -43,15 +46,20 @@ export function enqueueVerification(
       ),
     })
     .run();
-  return changes > 0;
+  if (changes > 0) return true;
+  db.update(verifications)
+    .set({ name })
+    .where(eq(verifications.nameNormalized, nameNormalized))
+    .run();
+  return false;
 }
 
 export type Verifier = {
   /** Queues a Verification of `name` (see `enqueueVerification`). */
   enqueue(name: string): boolean;
   /**
-   * Runs the oldest waiting Verification: a Lookup of its name that skips
-   * the Index. `false` when the queue was empty.
+   * Runs the oldest waiting Verification: a Lookup of its name, as the
+   * Caller spelt it, that skips the Index. `false` when the queue was empty.
    */
   runOnce(): Promise<boolean>;
   /**
@@ -83,9 +91,12 @@ export function createVerifier({
   let running = false;
   let timer: NodeJS.Timeout | undefined;
 
-  function claim(): string | undefined {
+  function claim(): { nameNormalized: string; name: string } | undefined {
     const next = db
-      .select({ name: verifications.nameNormalized })
+      .select({
+        nameNormalized: verifications.nameNormalized,
+        name: verifications.name,
+      })
       .from(verifications)
       .where(
         and(isNull(verifications.startedAt), isNull(verifications.finishedAt)),
@@ -95,17 +106,17 @@ export function createVerifier({
     if (!next) return undefined;
     db.update(verifications)
       .set({ startedAt: now().toISOString() })
-      .where(eq(verifications.nameNormalized, next.name))
+      .where(eq(verifications.nameNormalized, next.nameNormalized))
       .run();
-    return next.name;
+    return next;
   }
 
   async function runOnce(): Promise<boolean> {
-    const name = claim();
-    if (name === undefined) return false;
-    const row = eq(verifications.nameNormalized, name);
+    const next = claim();
+    if (next === undefined) return false;
+    const row = eq(verifications.nameNormalized, next.nameNormalized);
     try {
-      await lookup({ name }, { skipIndex: true });
+      await lookup({ name: next.name }, { skipIndex: true });
       db.update(verifications)
         .set({ finishedAt: now().toISOString(), lastError: null })
         .where(row)

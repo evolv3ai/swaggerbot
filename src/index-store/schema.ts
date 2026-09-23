@@ -137,6 +137,8 @@ export const apiKeyUsage = sqliteTable(
 export const verifications = sqliteTable("verifications", {
   /** A name as `normalizeName` leaves it. */
   nameNormalized: text("name_normalized").primaryKey(),
+  /** The spelling from the Lookup that last queued it; the worker looks this up. */
+  name: text("name").notNull(),
   requestedAt: text("requested_at").notNull().default(now),
   /** When the worker took it; null while it waits. */
   startedAt: text("started_at"),

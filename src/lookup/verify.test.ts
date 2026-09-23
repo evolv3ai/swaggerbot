@@ -1,8 +1,17 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import {
+  cpSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import Database from "better-sqlite3";
+import { drizzle } from "drizzle-orm/better-sqlite3";
+import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { type Db, openDb } from "~/index-store/db";
+import { type Db, MIGRATIONS_FOLDER, openDb } from "~/index-store/db";
 import { verifications } from "~/index-store/schema";
 import type { Lookup } from "./lookup";
 import { createVerifier, MAX_VERIFICATION_ATTEMPTS } from "./verify";
@@ -54,12 +63,13 @@ describe("createVerifier", () => {
     expect(await verifier.runOnce()).toBe(true);
 
     expect(lookup).toHaveBeenCalledExactlyOnceWith(
-      { name: "payco" },
+      { name: "PayCo API " },
       { skipIndex: true },
     );
     expect(rows()).toEqual([
       {
         nameNormalized: "payco",
+        name: "PayCo API ",
         requestedAt: NOW,
         startedAt: finished,
         finishedAt: finished,
@@ -67,6 +77,35 @@ describe("createVerifier", () => {
         lastError: null,
       },
     ]);
+  });
+
+  it("runs the Lookup with the Caller's spelling, not the normalised name", async () => {
+    const { verifier, lookup } = setup();
+    verifier.enqueue("PayCo API");
+
+    await verifier.runOnce();
+
+    expect(lookup).toHaveBeenCalledExactlyOnceWith(
+      { name: "PayCo API" },
+      { skipIndex: true },
+    );
+  });
+
+  it("keeps the latest spelling when a queued name is queued again", async () => {
+    const { verifier, lookup, at } = setup();
+    verifier.enqueue("PayCo API");
+    at(60_000);
+
+    expect(verifier.enqueue("payco")).toBe(false);
+    expect(rows()).toMatchObject([
+      { nameNormalized: "payco", name: "payco", requestedAt: NOW },
+    ]);
+    await verifier.runOnce();
+
+    expect(lookup).toHaveBeenCalledExactlyOnceWith(
+      { name: "payco" },
+      { skipIndex: true },
+    );
   });
 
   it("answers false with nothing queued", async () => {
@@ -143,6 +182,7 @@ describe("createVerifier", () => {
     expect(rows()).toEqual([
       {
         nameNormalized: "payco",
+        name: "payco",
         requestedAt: later,
         startedAt: null,
         finishedAt: null,
@@ -154,7 +194,12 @@ describe("createVerifier", () => {
 
   it("requeues on start a Verification a previous process left running", async () => {
     db.insert(verifications)
-      .values({ nameNormalized: "payco", requestedAt: NOW, startedAt: NOW })
+      .values({
+        nameNormalized: "payco",
+        name: "PayCo",
+        requestedAt: NOW,
+        startedAt: NOW,
+      })
       .run();
     let done: () => void = () => {};
     const ran = new Promise<void>((resolve) => {
@@ -172,7 +217,7 @@ describe("createVerifier", () => {
     verifier.stop();
 
     expect(lookup).toHaveBeenCalledExactlyOnceWith(
-      { name: "payco" },
+      { name: "PayCo" },
       { skipIndex: true },
     );
   });
@@ -195,6 +240,52 @@ describe("createVerifier", () => {
       expect(lookup).toHaveBeenCalledTimes(1);
     } finally {
       vi.useRealTimers();
+    }
+  });
+});
+
+describe("migration 0006", () => {
+  it("gives Verifications queued before it their normalised name as spelling", async () => {
+    // The migrations up to 0005 only, as an Index from before this one.
+    const before = join(dir, "drizzle");
+    cpSync(MIGRATIONS_FOLDER, before, { recursive: true });
+    const journalPath = join(before, "meta", "_journal.json");
+    const journal = JSON.parse(readFileSync(journalPath, "utf8"));
+    journal.entries = journal.entries.filter(
+      (e: { idx: number }) => e.idx <= 5,
+    );
+    writeFileSync(journalPath, JSON.stringify(journal));
+    const path = join(dir, "old.db");
+    const sqlite = new Database(path);
+    migrate(drizzle({ client: sqlite }), { migrationsFolder: before });
+    sqlite
+      .prepare(
+        "INSERT INTO verifications (name_normalized, requested_at, attempts, last_error) VALUES (?, ?, ?, ?)",
+      )
+      .run("payco", NOW, 1, "index locked");
+    sqlite.close();
+
+    const old = openDb(path);
+    try {
+      expect(old.select().from(verifications).all()).toEqual([
+        {
+          nameNormalized: "payco",
+          name: "payco",
+          requestedAt: NOW,
+          startedAt: null,
+          finishedAt: null,
+          attempts: 1,
+          lastError: "index locked",
+        },
+      ]);
+      const lookup = vi.fn(async () => unknown("payco"));
+      await createVerifier({ db: old, lookup }).runOnce();
+      expect(lookup).toHaveBeenCalledExactlyOnceWith(
+        { name: "payco" },
+        { skipIndex: true },
+      );
+    } finally {
+      old.$client.close();
     }
   });
 });
