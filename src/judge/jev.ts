@@ -102,6 +102,46 @@ export type JevJudgeOptions = {
   retryDelayMs?: number;
 };
 
+/**
+ * How much of a payload's free text (descriptions, link text and context) a
+ * call sends: all of it, shortened by `shortenFreeText`, or none. Cloudflare's
+ * WAF in front of TypeSafe blocks some vendor descriptions (shell examples
+ * with `curl`), so a blocked call is retried with less.
+ */
+export type FreeText = "full" | "shortened" | "omitted";
+
+const FREE_TEXT_STEPS: readonly FreeText[] = ["full", "shortened", "omitted"];
+
+/** Longest free-text field a shortened call sends. */
+export const SHORTENED_FREE_TEXT_LENGTH = 300;
+
+/**
+ * A free-text field cut down for a call Cloudflare blocked: its first
+ * paragraph (up to the first blank line or code fence), without any line
+ * containing `curl `, then its first 300 characters. `undefined` when
+ * nothing is left.
+ */
+export function shortenFreeText(text: string): string | undefined {
+  const [paragraph = ""] = text.split(/\n[ \t]*\n|```/);
+  const shortened = paragraph
+    .split("\n")
+    .filter((line) => !line.includes("curl "))
+    .join("\n")
+    .trim()
+    .slice(0, SHORTENED_FREE_TEXT_LENGTH)
+    .trim();
+  return shortened || undefined;
+}
+
+/** Apply a `FreeText` level to one free-text field. */
+function reduceFreeText(
+  text: string | null | undefined,
+  level: FreeText,
+): string | undefined {
+  if (!text || level === "omitted") return undefined;
+  return level === "shortened" ? shortenFreeText(text) : text;
+}
+
 /** A Judge backed by TypeSafe's Jev through `@typesafe-ai/sdk`. */
 export class JevJudge implements Judge {
   readonly #client: SystemOneClient;
@@ -121,23 +161,27 @@ export class JevJudge implements Judge {
     if (candidates.length === 0) {
       return { probabilities: { [NONE]: 1 }, confidence: 1 };
     }
-    const criteria: ChoiceCriteria = {};
+    const ids = new Set<string>();
     for (const c of candidates) {
-      if (c.id === NONE || c.id in criteria) {
+      if (c.id === NONE || ids.has(c.id)) {
         throw new Error(`whichApi: duplicate or reserved Candidate id ${c.id}`);
       }
-      criteria[c.id] = describeApi(c);
+      ids.add(c.id);
     }
-    criteria[NONE] = WHICH_API_QUESTION.none;
 
-    const answers = await this.#ask({
-      state: { name },
-      questions: { api: choice(WHICH_API_QUESTION.instructions, criteria) },
+    const answers = await this.#ask((freeText) => {
+      const criteria: ChoiceCriteria = {};
+      for (const c of candidates) criteria[c.id] = describeApi(c, freeText);
+      criteria[NONE] = WHICH_API_QUESTION.none;
+      return {
+        state: { name },
+        questions: { api: choice(WHICH_API_QUESTION.instructions, criteria) },
+      };
     });
     const answer = answers.api;
     if (answer?.type !== "choice") throw badResponse("api", answer);
     const probabilities: Record<string, number> = {};
-    for (const label of Object.keys(criteria)) {
+    for (const label of [...ids, NONE]) {
       probabilities[label] = probabilityOf(answer.probabilities[label] ?? 0);
     }
     return { probabilities, confidence: probabilityOf(answer.confidence) };
@@ -161,10 +205,13 @@ export class JevJudge implements Judge {
         IS_SPEC_LINK_QUESTION.criteria,
       );
     });
-    const answers = await this.#ask({
-      state: { api: describeApi(api), links: links.map(describeLink) },
+    const answers = await this.#ask((freeText) => ({
+      state: {
+        api: describeApi(api, freeText),
+        links: links.map((link) => describeLink(link, freeText)),
+      },
       questions,
-    });
+    }));
     return links.map((_, i) => yesNoFrom(answers, `link${i}`));
   }
 
@@ -172,20 +219,24 @@ export class JevJudge implements Judge {
     api: ApiRef,
     extract: SpecExtract,
   ): Promise<YesNoJudgment> {
-    const answers = await this.#ask({
-      state: { api: describeApi(api), spec: clampSpecExtract(extract) },
+    const answers = await this.#ask((freeText) => ({
+      state: {
+        api: describeApi(api, freeText),
+        spec: describeSpecExtract(extract, freeText),
+      },
       questions: {
         describes: noul(
           SPEC_DESCRIBES_API_QUESTION.instructions,
           SPEC_DESCRIBES_API_QUESTION.criteria,
         ),
       },
-    });
+    }));
     return yesNoFrom(answers, "describes");
   }
 
   async isVendorName(name: string, vendor: VendorRef): Promise<YesNoJudgment> {
-    const answers = await this.#ask({
+    // No free text to reduce: a Vendor is sent as its id and name only.
+    const answers = await this.#ask(() => ({
       state: { name, vendor: { id: vendor.id, name: vendor.name } },
       questions: {
         vendor: noul(
@@ -193,7 +244,7 @@ export class JevJudge implements Judge {
           IS_VENDOR_NAME_QUESTION.criteria,
         ),
       },
-    });
+    }));
     return yesNoFrom(answers, "vendor");
   }
 
@@ -221,18 +272,43 @@ export class JevJudge implements Judge {
         IS_VENDOR_API_LINK_QUESTION.criteria,
       );
     });
-    const answers = await this.#ask({
+    const answers = await this.#ask((freeText) => ({
       state: {
         vendor: { id: vendor.id, name: vendor.name },
-        links: links.map(describeLink),
+        links: links.map((link) => describeLink(link, freeText)),
       },
       questions,
-    });
+    }));
     return links.map((_, i) => yesNoFrom(answers, `link${i}`));
   }
 
-  /** One `systemOne` call, retried once on 429/5xx. */
+  /**
+   * One `systemOne` call built at each `FreeText` level in turn: sent in full,
+   * and only when Cloudflare's block page answers, again with shortened and
+   * then with no free text.
+   */
   async #ask(
+    build: (freeText: FreeText) => SystemOneRequest,
+  ): Promise<Readonly<Record<string, Answer>>> {
+    for (const [i, freeText] of FREE_TEXT_STEPS.entries()) {
+      try {
+        return await this.#askOnce(build(freeText));
+      } catch (err) {
+        if (!(err instanceof JudgeError) || !isBlockPage(err.cause)) throw err;
+        if (i === FREE_TEXT_STEPS.length - 1) {
+          throw new JudgeError(
+            "http",
+            "Jev returned HTTP 403 (Cloudflare block page; also with shortened and without descriptions)",
+            { cause: err.cause },
+          );
+        }
+      }
+    }
+    throw new Error("unreachable");
+  }
+
+  /** One `systemOne` request, retried once on 429/5xx. */
+  async #askOnce(
     request: SystemOneRequest,
   ): Promise<Readonly<Record<string, Answer>>> {
     try {
@@ -280,30 +356,43 @@ export class JevJudge implements Judge {
   }
 }
 
-function describeApi(api: ApiRef) {
+function describeApi(api: ApiRef, freeText: FreeText) {
+  const description = reduceFreeText(api.description, freeText);
   return {
     name: api.name,
     vendor: api.vendor,
-    ...(api.description ? { description: api.description } : {}),
+    ...(description ? { description } : {}),
   };
 }
 
-/** Cut an extract to its limits, whoever built it: never send a whole Spec. */
-function clampSpecExtract(extract: SpecExtract): SpecExtract {
+/**
+ * Cut an extract to its limits, whoever built it: never send a whole Spec.
+ * Its description is sent at the call's `FreeText` level, and left out when
+ * omitted.
+ */
+function describeSpecExtract(extract: SpecExtract, freeText: FreeText) {
+  const { description, ...rest } = extract;
+  const clamped = description?.slice(0, SPEC_EXTRACT_LIMITS.description);
+  const reduced = reduceFreeText(clamped, freeText);
   return {
-    ...extract,
-    description:
-      extract.description?.slice(0, SPEC_EXTRACT_LIMITS.description) ?? null,
+    ...rest,
     tags: extract.tags.slice(0, SPEC_EXTRACT_LIMITS.tags),
     samplePaths: extract.samplePaths.slice(0, SPEC_EXTRACT_LIMITS.samplePaths),
+    ...(freeText === "full"
+      ? { description: clamped ?? null }
+      : reduced
+        ? { description: reduced }
+        : {}),
   };
 }
 
-function describeLink(link: SpecLink) {
+function describeLink(link: SpecLink, freeText: FreeText) {
+  const text = reduceFreeText(link.text, freeText);
+  const context = reduceFreeText(link.context, freeText);
   return {
     url: link.url,
-    text: link.text,
-    ...(link.context ? { context: link.context } : {}),
+    ...(text ? { text } : {}),
+    ...(context ? { context } : {}),
   };
 }
 
@@ -327,6 +416,19 @@ function badResponse(key: string, answer: unknown): JudgeError {
   return new JudgeError(
     "bad-response",
     `Jev answer ${key} is missing or of the wrong type: ${JSON.stringify(answer)}`,
+  );
+}
+
+/**
+ * A 403 whose body is Cloudflare's block page ("Attention Required! |
+ * Cloudflare"): its WAF read the payload as an attack.
+ */
+function isBlockPage(err: unknown): boolean {
+  return (
+    err instanceof APIError &&
+    err.status === 403 &&
+    typeof err.body === "string" &&
+    /attention required|cloudflare/i.test(err.body)
   );
 }
 
