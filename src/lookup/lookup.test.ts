@@ -220,8 +220,10 @@ describe("lookup", () => {
     // Settled by the origin: no known paths, no mirror.
     expect(server.requests.map((r) => r.host)).not.toContain("apis-guru.test");
     expect(server.requests.map((r) => r.host)).not.toContain("api.payco.test");
+    // A bare name is asked whether it means PayCo as a whole; it doesn't.
     expect(judge.calls.map((c) => c.judgment)).toEqual([
       "whichApi",
+      "isVendorName",
       "specDescribesApi",
     ]);
   });
@@ -1056,6 +1058,253 @@ describe("lookup with a Vendor's APIs from its Developer Portal", () => {
 
     expect(outcome).toMatchObject({ outcome: "Unknown", name: "mailco" });
     expect(outcome.diagnostics).toContain("Vendor API crawl: portal exploded");
+  });
+});
+
+describe("lookup with an identified API whose name is the Vendor's", () => {
+  const identified = (name: string, apiId: string) => ({
+    [name]: {
+      probabilities: { [apiId]: 0.9, none: 0.1 },
+      confidence: 0.9,
+    },
+  });
+  const paycoSpec = () =>
+    server.send(
+      "developer.payco.test",
+      "/openapi.json",
+      spec("PayCo API"),
+      "application/json",
+    );
+
+  it("answers Ambiguous over the Vendor's APIs.guru APIs", async () => {
+    const { lookup, judge, vendorCrawls, probed } = setup(
+      {
+        whichApi: identified("Zenith", "zenithcorp.test/nova"),
+        isVendorName: { Zenith: yesNo(0.9) },
+      },
+      null,
+    );
+
+    expect(await ask(lookup, "Zenith")).toEqual({
+      outcome: "Ambiguous",
+      candidates: ["Nova", "Orbit", "Pulse"].map((service) => ({
+        apiId: `zenithcorp.test/${service.toLowerCase()}`,
+        name: `Zenith ${service}`,
+        vendor: "zenithcorp.test",
+        probability: 1 / 3,
+      })),
+    });
+    // Separate APIs.guru APIs are separate APIs: no Spec is looked for.
+    expect(judge.calls.map((c) => c.judgment)).toEqual([
+      "whichApi",
+      "isVendorName",
+    ]);
+    expect(vendorCrawls).toEqual([]);
+    expect(probed).toEqual([]);
+    expect(server.requests).toEqual([]);
+  });
+
+  it("answers Ambiguous over the APIs the Vendor's portal names", async () => {
+    const vendorCrawl = fakeVendorCrawl([
+      { name: "PayCo API", url: "https://payco.test/api" },
+      { name: "PayCo Payouts", url: "https://payco.test/payouts" },
+    ]);
+    const { lookup, vendorCrawls } = setup(
+      {
+        whichApi: identified("payco", "payco.test/payco-api"),
+        isVendorName: { payco: yesNo(0.9) },
+      },
+      null,
+      undefined,
+      fakeCrawl(),
+      undefined,
+      vendorCrawl,
+    );
+
+    expect(await ask(lookup, "payco")).toMatchObject({
+      outcome: "Ambiguous",
+      candidates: [
+        { apiId: "payco.test/payco-api", probability: 0.5 },
+        { apiId: "payco.test/payco-payouts", probability: 0.5 },
+      ],
+    });
+    expect(vendorCrawls).toEqual(["https://payco.test"]);
+  });
+
+  it("answers Resolved when the name is unlikely to be the Vendor's", async () => {
+    paycoSpec();
+    const { lookup, vendorCrawls } = setup(
+      {
+        whichApi: identified("payco", "payco.test/payco-api"),
+        isVendorName: { payco: yesNo(0.3) },
+        specDescribesApi: { "PayCo API": yes },
+      },
+      null,
+      undefined,
+      fakeCrawl(),
+      undefined,
+      fakeVendorCrawl([
+        { name: "PayCo API", url: "https://payco.test/api" },
+        { name: "PayCo Payouts", url: "https://payco.test/payouts" },
+      ]),
+    );
+
+    expect(await ask(lookup, "payco")).toMatchObject({
+      outcome: "Resolved",
+      api: { id: "payco.test/payco-api" },
+    });
+    expect(vendorCrawls).toEqual([]);
+  });
+
+  it("answers Resolved when the Vendor has only one API", async () => {
+    paycoSpec();
+    const { lookup, vendorCrawls } = setup(
+      {
+        whichApi: identified("payco", "payco.test/payco-api"),
+        isVendorName: { payco: yesNo(0.9) },
+        specDescribesApi: { "PayCo API": yes },
+      },
+      null,
+      undefined,
+      fakeCrawl(),
+      undefined,
+      fakeVendorCrawl([{ name: "PayCo API", url: "https://payco.test/api" }]),
+    );
+
+    const outcome = await ask(lookup, "payco");
+
+    expect(outcome).toMatchObject({
+      outcome: "Resolved",
+      api: { id: "payco.test/payco-api" },
+    });
+    expect(outcome.diagnostics).toBeUndefined();
+    expect(vendorCrawls).toEqual(["https://payco.test"]);
+  });
+
+  it("diagnoses a failed isVendorName and answers Resolved", async () => {
+    paycoSpec();
+    const { lookup, judge, vendorCrawls } = setup(
+      {
+        whichApi: identified("payco", "payco.test/payco-api"),
+        specDescribesApi: { "PayCo API": yes },
+      },
+      null,
+    );
+    judge.isVendorName = async () => {
+      throw new JudgeError("timeout", "Jev did not answer within 10 s");
+    };
+
+    const outcome = await ask(lookup, "payco");
+
+    expect(outcome).toMatchObject({
+      outcome: "Resolved",
+      api: { id: "payco.test/payco-api" },
+      diagnostics: ["Judge isVendorName: Jev did not answer within 10 s"],
+    });
+    expect(vendorCrawls).toEqual([]);
+  });
+
+  describe("when the portal's APIs may be one Spec's products", () => {
+    const products = () =>
+      fakeVendorCrawl(
+        ["ChargesCard payments", "Refunds", "PayoutsSend money out"].map(
+          (name) => ({ name, url: `https://payco.test/${slugify(name)}` }),
+        ),
+      );
+    const paycoProductsSpec = (paths: string[]) =>
+      server.send(
+        "developer.payco.test",
+        "/openapi.json",
+        JSON.stringify({
+          openapi: "3.0.3",
+          info: { title: "PayCo API", version: "1" },
+          paths: Object.fromEntries(paths.map((p) => [p, { get: {} }])),
+        }),
+        "application/json",
+      );
+    const productsSetup = (vendorCrawl = products()) =>
+      setup(
+        {
+          whichApi: identified("payco", "payco.test/payco-api"),
+          isVendorName: { payco: yesNo(0.9) },
+          specDescribesApi: { "PayCo API": yes },
+        },
+        null,
+        undefined,
+        fakeCrawl(),
+        undefined,
+        vendorCrawl,
+      );
+    const specUrl = () =>
+      `${server.origin("developer.payco.test")}/openapi.json`;
+
+    it("answers Resolved when the Spec covers most of the crawled names", async () => {
+      paycoProductsSpec(["/charges/{id}", "/refunds", "/balance"]);
+      const { lookup, vendorCrawls } = productsSetup();
+
+      const outcome = await ask(lookup, "payco");
+
+      expect(outcome).toMatchObject({
+        outcome: "Resolved",
+        api: { id: "payco.test/payco-api" },
+        diagnostics: [
+          `Vendor API crawl: 2 of 3 API names are covered by ${specUrl()}`,
+        ],
+      });
+      expect(vendorCrawls).toEqual(["https://payco.test"]);
+      // Remembered: the next Lookup is answered from the Index.
+      expect(await ask(lookup, "payco")).toMatchObject({
+        outcome: "Resolved",
+        api: { id: "payco.test/payco-api" },
+      });
+      expect(vendorCrawls).toHaveLength(1);
+    });
+
+    it("answers Ambiguous when the Spec covers too few of the crawled names", async () => {
+      paycoProductsSpec(["/charges/{id}", "/customers", "/balance"]);
+      const { lookup, vendorCrawls } = productsSetup();
+
+      const outcome = await ask(lookup, "payco");
+
+      expect(outcome).toMatchObject({
+        outcome: "Ambiguous",
+        candidates: [
+          { apiId: "payco.test/payco-api", probability: 0.25 },
+          { apiId: "payco.test/chargescard-payments" },
+          { apiId: "payco.test/refunds" },
+          { apiId: "payco.test/payoutssend-money-out" },
+        ],
+        diagnostics: [
+          `Vendor API crawl: 1 of 3 API names are covered by ${specUrl()}`,
+        ],
+      });
+      // Not remembered: the next Lookup asks again, and is Ambiguous again.
+      expect(await ask(lookup, "payco")).toMatchObject({
+        outcome: "Ambiguous",
+      });
+      expect(vendorCrawls).toHaveLength(2);
+    });
+
+    it("answers Ambiguous when the identified API's Spec is not Resolved", async () => {
+      const { lookup, probed } = productsSetup();
+
+      const outcome = await ask(lookup, "payco");
+
+      expect(outcome).toMatchObject({
+        outcome: "Ambiguous",
+        candidates: [
+          { apiId: "payco.test/payco-api" },
+          { apiId: "payco.test/chargescard-payments" },
+          { apiId: "payco.test/refunds" },
+          { apiId: "payco.test/payoutssend-money-out" },
+        ],
+      });
+      // The Spec was looked for, not found, and nothing was compared.
+      expect(probed).toEqual(["payco.test"]);
+      expect(outcome.diagnostics).not.toContainEqual(
+        expect.stringMatching(/^Vendor API crawl:/),
+      );
+    });
   });
 });
 
