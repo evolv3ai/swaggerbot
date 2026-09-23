@@ -54,6 +54,7 @@ Filed 2026-09-23 as WTR-104..111 (Backlog, `swaggerbot` only), with Linear "bloc
 | 9 | WTR-112 | The Normalized Form drops `allowReserved` from parameters that aren't `query` (added 2026-09-23 after WTR-104: Cloudflare's 3 normalized findings) | 1 | 2 |
 | 10 | WTR-116 | The forms worker gives external references a budget that fits, and aborted fetches release their host slot (added 2026-09-23 after WTR-105's backfill rehearsal: DigitalOcean's 697 `$ref`d files; **gates the wave 2 deploy**) | 2 | 3 |
 | 11 | WTR-117 | The forms worker has a reference budget DigitalOcean fits (75 min; its `$ref` closure is 2,976 files, measured by WTR-116), and retries go to the back of the queue. **Gates the wave 2 deploy** | 10 | 3 |
+| 12 | WTR-119 | The server starts the Verification and forms workers when it boots (added 2026-09-23 after the wave 2 deploy: no worker ran until a request came) | 2 | 3 |
 
 #3 and #4 touch different files (`lookup.ts` and `outcome.ts`; routes and `src/server/`), so they run together. #5, #6 and #7 each add a route file, and TanStack's generated `src/routeTree.gen.ts` changes with each. That's a mechanical conflict, so wave 4 is merged one PR at a time, regenerating the route tree (`pnpm build`) on each rebase.
 
@@ -419,3 +420,17 @@ Decided (Wes gave standing approval to proceed, 2026-09-23): a budget that fits 
 - `src/index-store/spec-forms.test.ts`: with an older Spec that has one failed attempt and a newer Spec with no row, `nextToBuild` returns the newer one. Between two Specs with equal attempts, the older comes first (the existing tests pass unchanged).
 - `src/spec-forms/worker.test.ts`: the existing budget tests pass (they inject `refBudgetMs`).
 - `pnpm check` and `pnpm build` green.
+
+## 12. swaggerbot: the server starts the Verification and forms workers when it boots
+
+## Problem
+`getApp()` (`src/server/app-instance.ts`) builds the app, and so starts the background Verification worker and the forms worker, only on the first request that needs it (a valid Lookup or a download). `/api/health` doesn't call it. Found in production on 2026-09-23: after the wave 2 deploy (`22aed14`, 15:36 CDT) nothing called `getApp` for 2 h 20 min. Not one of the 27 Specs had a `spec_forms` row, and Litestream saw no write. One open `GET /api/specs/<id>/published` at 17:55 started the worker, and six Specs were ready within 20 s. Every deploy restarts the container, so after each one the backfill, the retry of an interrupted build and any queued Verification wait for traffic.
+
+## Change
+- `src/server/open-index.ts` (the Nitro start-up plugin): after opening the Index as now, call `getApp()` so both workers start when the server boots. `createApp()` throws when `TYPESAFE_API_KEY` is unset, so catch that, log it with `console.error` (saying the workers didn't start), and let the server start anyway: `/api/health` answers, and `getApp()` tries again on the first request that needs it, as it does today. Put the call in an exported function that takes the getter (default `getApp`) so it can be tested without a server.
+- Update the comments that say the app is built on the first request (`app-instance.ts`, `createApp`'s doc) and the README's background-build sentence if it says so.
+
+## Done when
+- A test of the exported function: it calls the getter once, and when the getter throws it logs and doesn't throw.
+- `pnpm check` and `pnpm build` green.
+- The operator checks it live after the deploy: with no request sent, `spec_forms` changes (or the container logs show the worker running) within a minute of start-up.
