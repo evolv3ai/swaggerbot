@@ -27,7 +27,7 @@ The Index stores only `published_bytes` (`src/index-store/schema.ts`). The Resol
 
 | Spec | as published | upgrade | validate | dereference | findings | peak RSS |
 |---|---|---|---|---|---|---|
-| Cloudflare, 26.0 MB | 3.1.1 | 0.21 s | 0.36 s | 0.55 s | 3 (`allowReserved` where it isn't allowed) | ~830 MB |
+| Cloudflare, 26.0 MB | 3.0.3 | 0.21 s | 0.36 s | 0.55 s | 3 (`allowReserved` where it isn't allowed) | ~830 MB |
 | GitHub, 13.0 MB | 3.1.1 | 0.11 s | 0.27 s | 0.24 s | 0 | ~400 MB |
 | Kubernetes, 4.5 MB | **2.0** | 0.12 s | 0.16 s | 0.13 s | 1 as published; **1,202 after upgrade** | ~330 MB |
 
@@ -51,6 +51,7 @@ Filed 2026-09-23 as WTR-104..111 (Backlog, `swaggerbot` only), with Linear "bloc
 | 6 | WTR-109 | `get_operation`: `GET /api/apis/{apiId}/operation` | 3, 4 | 4 |
 | 7 | WTR-110 | `list_vendor_apis`: `GET /api/vendors/{vendor}/apis` | 3, 4 | 4 |
 | 8 | WTR-111 | `scripts/formscheck.ts`: the acceptance check against a deployed URL | 5, 6, 7 | 5 |
+| 9 | WTR-112 | The Normalized Form drops `allowReserved` from parameters that aren't `query` (added 2026-09-23 after WTR-104: Cloudflare's 3 normalized findings) | 1 | 2 |
 
 #3 and #4 touch different files (`lookup.ts` and `outcome.ts`; routes and `src/server/`), so they run together. #5, #6 and #7 each add a route file, and TanStack's generated `src/routeTree.gen.ts` changes with each. That's a mechanical conflict, so wave 4 is merged one PR at a time, regenerating the route tree (`pnpm build`) on each rebase.
 
@@ -336,4 +337,25 @@ It paces its requests under the per-IP limit (60 a minute) and retries a 429 aft
   - A 429 is retried after `retry-after`.
   - The 5 operations are chosen as described.
 - In the PR description, as a manual check for the reviewer: a run against a local `pnpm start` with an Index that holds at least one Resolved API.
+- `pnpm check` and `pnpm build` green.
+
+---
+
+## 9. swaggerbot: the Normalized Form drops `allowReserved` from parameters that aren't `query`
+
+## Problem
+WTR-104's builder leaves Cloudflare's Normalized Form with `normalizedFindingCount` 3. All three are `allowReserved: true` on a `path` parameter (`object_key` on `GET`, `PUT` and `DELETE /accounts/{account_id}/r2/buckets/{bucket_name}/objects/{object_key}`). OpenAPI 3.0's schema tolerates `allowReserved` on any parameter, but its text says it "only applies to parameters with an `in` value of `query`" and is ignored elsewhere. OpenAPI 3.1's schema rejects it outside `query`. So the finding is a 3.0 → 3.1 difference the upgrader doesn't handle, and it counts as our defect under ADR 0004, not the Vendor's. Decided (Wes, 2026-09-23): strip it.
+
+## Change
+In `src/spec-forms/build.ts`, step 5 (`stripSwagger2Leftovers`, or a sibling function called in the same step) also deletes `allowReserved` from every Parameter Object whose `in` isn't `query`:
+- path-level `parameters` and operation-level `parameters`, inline;
+- `components.parameters` entries.
+
+Parameters that are `$ref`s are left alone (the referenced component is handled in `components.parameters`). `query` parameters keep `allowReserved`. The Published Form and the Validity Issues are unchanged: this touches only the Normalized Form.
+
+Name the rule beside `SWAGGER2_LEFTOVER_KEYS` (e.g. `QUERY_ONLY_PARAMETER_KEYS = ["allowReserved"]`), with a comment citing ADR 0004 and the 3.0/3.1 difference above.
+
+## Done when
+- `src/spec-forms/build.test.ts`: a 3.0 fixture with `allowReserved: true` on an inline `path` parameter, on a `header` parameter in `components.parameters`, and on a `query` parameter. The Normalized Form has no `allowReserved` on the first two, keeps it on the `query` one, and has `normalizedFindingCount` 0. The Published Form's Validity Issues are `[]`.
+- Manual check in the PR description: `pnpm tsx scripts/forms-bench.ts` on Cloudflare's Spec (`https://raw.githubusercontent.com/cloudflare/api-schemas/main/openapi.json`). Expected: `normalized findings 0` (it was 3), and the same path and operation counts as before (2,254 paths, 3,594 operations).
 - `pnpm check` and `pnpm build` green.
