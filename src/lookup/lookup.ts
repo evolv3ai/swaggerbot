@@ -96,6 +96,19 @@ export type Lookup = (
   options?: LookupOptions,
 ) => Promise<Outcome>;
 
+/**
+ * A Lookup that can also say whether the Index alone answers a request, as
+ * `POST /api/lookup` must know before it decides whether a key is needed.
+ */
+export type IndexedLookup = Lookup & {
+  /**
+   * The Lookup's step 1 on its own: the answer from the Index, or null when
+   * the Index has none or the request is `fresh`. A Stale answer queues its
+   * background Verification, as in the Lookup.
+   */
+  fromIndex(request: LookupRequest): Outcome | null;
+};
+
 export type LookupDeps = {
   db: Db;
   judge: Judge;
@@ -308,7 +321,7 @@ function copyLog(log: SourceLog): SourceLog {
  * A Judge, search or fetch error skips that step and is reported in
  * `diagnostics`; it never makes the Lookup throw.
  */
-export function createLookup(deps: LookupDeps): Lookup {
+export function createLookup(deps: LookupDeps): IndexedLookup {
   const { judge, fetcher, webSearch, apisGuru, github, githubSearch } = deps;
   const repo = createRepo(deps.db);
   const t: Thresholds = { ...DEFAULT_THRESHOLDS, ...deps.thresholds };
@@ -328,10 +341,10 @@ export function createLookup(deps: LookupDeps): Lookup {
     ((opts: { startUrl: string; vendor: VendorRef }) =>
       crawlForVendorApis({ ...opts, fetcher, judge }));
 
-  return async function lookup(
+  const lookup: Lookup = async (
     { name, apiVersion, allowCommunity = false, fresh = false },
     { skipIndex = false } = {},
-  ) {
+  ) => {
     const diagnostics: string[] = [];
     const { timed, timings } = stepTimer();
     const finish = (outcome: Outcome): Outcome => ({
@@ -343,12 +356,9 @@ export function createLookup(deps: LookupDeps): Lookup {
     // 1. The Index.
     if (!fresh && !skipIndex) {
       const indexed = await timed("Index", () =>
-        answerFromIndex(name, allowCommunity, apiVersion),
+        fromIndexWith({ name, apiVersion, allowCommunity }, diagnostics),
       );
-      if (indexed) {
-        if (isStale(indexed)) queueVerification(name, diagnostics);
-        return finish(indexed);
-      }
+      if (indexed) return finish(indexed);
     }
 
     // 2. APIs.guru.
@@ -433,6 +443,29 @@ export function createLookup(deps: LookupDeps): Lookup {
     );
     return finish(found.outcome);
   };
+
+  return Object.assign(lookup, {
+    fromIndex(request: LookupRequest): Outcome | null {
+      const diagnostics: string[] = [];
+      const indexed = fromIndexWith(request, diagnostics);
+      if (!indexed || diagnostics.length === 0) return indexed;
+      return { ...indexed, diagnostics };
+    },
+  });
+
+  /**
+   * Step 1: the answer from the Index, unless `fresh`. A Stale answer queues
+   * a background Verification of the name.
+   */
+  function fromIndexWith(
+    { name, apiVersion, allowCommunity = false, fresh = false }: LookupRequest,
+    diagnostics: string[],
+  ): Outcome | null {
+    if (fresh) return null;
+    const indexed = answerFromIndex(name, allowCommunity, apiVersion);
+    if (indexed && isStale(indexed)) queueVerification(name, diagnostics);
+    return indexed;
+  }
 
   /**
    * Fetches each portal Candidate's own page and moves the Candidate to the

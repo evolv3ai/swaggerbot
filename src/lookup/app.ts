@@ -1,11 +1,12 @@
 import { createFetcher } from "~/fetch/fetcher";
 import { openDb } from "~/index-store/db";
+import { createKeys, type Keys } from "~/index-store/keys";
 import { createJudge } from "~/judge";
 import { createApisGuru } from "~/sources/apis-guru";
 import { crawlForSpecs } from "~/sources/crawl";
 import { createGitHubCodeSearch, createGitHubRepos } from "~/sources/github";
 import { createWebSearch } from "~/sources/web-search";
-import { createLookup, type Lookup } from "./lookup";
+import { createLookup, type IndexedLookup, type Lookup } from "./lookup";
 import { DEFAULT_FRESHNESS_DAYS, SPEC_STEP_BUDGET_MS } from "./thresholds";
 import { createVerifier, type Verifier } from "./verify";
 
@@ -28,18 +29,19 @@ export function createAppLookup(env: NodeJS.ProcessEnv = process.env): Lookup {
 }
 
 /**
- * The app as the server runs it: `createAppLookup`'s Lookup, and the
- * background Verification worker over the same Lookup and Index, started.
- * Used by `POST /api/lookup`.
+ * The app as the server runs it: `createAppLookup`'s Lookup, the API keys
+ * in the same Index, and the background Verification worker over the same
+ * Lookup and Index, started. Used by `POST /api/lookup`.
  */
 export function createApp(env: NodeJS.ProcessEnv = process.env): {
-  lookup: Lookup;
+  lookup: IndexedLookup;
+  keys: Keys;
   verifier: Verifier;
 } {
   const { lookup, db, freshnessDays } = buildAppLookup(env);
   const verifier = createVerifier({ db, lookup, freshnessDays });
   verifier.start();
-  return { lookup, verifier };
+  return { lookup, keys: createKeys(db), verifier };
 }
 
 /** `FRESHNESS_DAYS`, a positive number of days; unset, the default. */

@@ -5,6 +5,7 @@ import { afterAll, describe, expect, it, vi } from "vitest";
 import { Outcome } from "~/domain/outcome";
 import { createFetcher } from "~/fetch/fetcher";
 import { openDb } from "~/index-store/db";
+import { createKeys } from "~/index-store/keys";
 import { FakeJudge } from "~/judge/fake";
 import { createLookup } from "~/lookup/lookup";
 import { Route } from "./lookup";
@@ -15,9 +16,15 @@ afterAll(() => rmSync(dir, { recursive: true, force: true }));
 // The route's real dependencies, faked: an empty APIs.guru, no web search.
 const createApp = vi.hoisted(() => vi.fn());
 vi.mock("~/lookup/app", () => ({ createApp }));
+const db = openDb(join(dir, "index.db"));
+const keys = createKeys(db);
+afterAll(() => db.$client.close());
+const { secret } = keys.createKey("route test");
+const auth = { authorization: `Bearer ${secret}` };
 createApp.mockImplementation(() => ({
+  keys,
   lookup: createLookup({
-    db: openDb(join(dir, "index.db")),
+    db,
     judge: new FakeJudge(),
     apisGuru: {
       findCandidates: async () => [],
@@ -28,14 +35,17 @@ createApp.mockImplementation(() => ({
   }),
 }));
 
-async function post(body: string): Promise<Response> {
+async function post(
+  body: string,
+  headers: Record<string, string> = auth,
+): Promise<Response> {
   const handlers = Route.options.server?.handlers;
   const handler = typeof handlers === "function" ? undefined : handlers?.POST;
   if (typeof handler !== "function") throw new Error("no POST handler");
   const response = await handler({
     request: new Request("http://localhost/api/lookup", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...headers },
       body,
     }),
   } as never);
@@ -77,9 +87,21 @@ describe("POST /api/lookup", () => {
     });
   });
 
+  it("answers 401 for Discovery without a key", async () => {
+    const response = await post(JSON.stringify({ name: "no such api" }), {});
+
+    expect(response.status).toBe(401);
+    expect(await response.json()).toMatchObject({
+      error: "Discovery needs an API key.",
+    });
+  });
+
   it("passes allowCommunity through to the Lookup", async () => {
-    const lookup = vi.fn(async () => ({ outcome: "Unknown", name: "fans" }));
-    createApp.mockImplementationOnce(() => ({ lookup }));
+    const lookup = Object.assign(
+      vi.fn(async () => ({ outcome: "Unknown", name: "fans" })),
+      { fromIndex: vi.fn(() => null) },
+    );
+    createApp.mockImplementationOnce(() => ({ lookup, keys }));
     vi.resetModules();
     const { Route: fresh } = await import("./lookup");
     const handlers = fresh.options.server?.handlers;
@@ -89,7 +111,7 @@ describe("POST /api/lookup", () => {
     await handler({
       request: new Request("http://localhost/api/lookup", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", ...auth },
         body: JSON.stringify({ name: "fans", allowCommunity: true }),
       }),
     } as never);

@@ -69,6 +69,21 @@ The Spec step's three Sources (known paths, the Developer Portal crawl, GitHub c
 
 Every answer says when its Spec was last verified (`verifiedAt`). An answer from the Index verified longer ago than the freshness window, `FRESHNESS_DAYS` (default 7), is Stale: it is still returned at once, and a background Verification of the name is queued in the Index (`verifications`) and run by the server, one at a time, as a Discovery that skips the Index. A Lookup with `fresh: true` skips the Index itself and waits for that live Verification instead.
 
+## Access
+
+`POST /api/lookup` takes `{ "name", "apiVersion"?, "allowCommunity"?, "fresh"? }`.
+
+- **Open to anyone:** a name the Index already answers, without `fresh`. It uses no key and no quota.
+- **Needs an API key:** Discovery (a name the Index can't answer) and `fresh: true`. Send the key as `Authorization: Bearer <secret>`. Each such Lookup uses one unit of the key's daily quota, counted per UTC day (see [API keys](#api-keys)); the response carries `X-Quota-Limit` and `X-Quota-Remaining`. A key sent with an Index answer is still checked, so a wrong one is never silently ignored, but no quota is used.
+- **Every request** counts against a per-IP rate limit, a token bucket of `RATE_LIMIT_PER_MINUTE` requests a minute (default 60), kept in memory. The client IP is the first address in the header named by `CLIENT_IP_HEADER` (default `x-forwarded-for`; `cf-connecting-ip` behind Cloudflare); without the header, all such requests share one bucket.
+
+| Status | When |
+|---|---|
+| 200 | The Outcome, from the Index or from a Lookup. |
+| 400 | The body isn't JSON or isn't a valid lookup request (`issues` says why). |
+| 401 | `Unknown or revoked API key.` (a key was sent that isn't live), or `Discovery needs an API key.` (none was sent and the Index can't answer, or `fresh: true`). |
+| 429 | `Rate limit exceeded.` for the IP, or `Daily quota used.` with `limit` and `used` for the key. `Retry-After` gives the seconds to wait: until a request is allowed again, or until UTC midnight. |
+
 ## API keys
 
 Discovery and `fresh` Lookups need an API key, each with a daily quota counted per UTC day. The operator issues keys by hand, in the Index at `DATABASE_PATH`:

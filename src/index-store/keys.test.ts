@@ -77,9 +77,9 @@ describe("keys", () => {
   it("lists keys without hashes or secrets, with the day's usage", () => {
     const a = keys.createKey("ada", 5);
     const b = keys.createKey("bob");
-    keys.useQuota(a.id, "2026-09-22", 5);
-    keys.useQuota(a.id, "2026-09-22", 5);
-    keys.useQuota(a.id, "2026-09-21", 5);
+    keys.takeQuota(a.id, "2026-09-22", 5);
+    keys.takeQuota(a.id, "2026-09-22", 5);
+    keys.takeQuota(a.id, "2026-09-21", 5);
 
     const list = keys.listKeys("2026-09-22");
     expect(list.map((k) => [k.id, k.owner, k.dailyQuota, k.used])).toEqual([
@@ -95,23 +95,23 @@ describe("keys", () => {
   it("allows exactly `limit` uses a day, then refuses, and starts a new day at zero", () => {
     const { id } = keys.createKey("ada");
 
-    const first = keys.useQuota(id, "2026-09-22", 3);
-    const second = keys.useQuota(id, "2026-09-22", 3);
-    const third = keys.useQuota(id, "2026-09-22", 3);
+    const first = keys.takeQuota(id, "2026-09-22", 3);
+    const second = keys.takeQuota(id, "2026-09-22", 3);
+    const third = keys.takeQuota(id, "2026-09-22", 3);
     expect([first, second, third]).toEqual([
       { allowed: true, used: 1, limit: 3 },
       { allowed: true, used: 2, limit: 3 },
       { allowed: true, used: 3, limit: 3 },
     ]);
-    expect(keys.useQuota(id, "2026-09-22", 3)).toEqual({
+    expect(keys.takeQuota(id, "2026-09-22", 3)).toEqual({
       allowed: false,
       used: 3,
       limit: 3,
     });
-    expect(keys.useQuota(id, "2026-09-22", 3).allowed).toBe(false);
+    expect(keys.takeQuota(id, "2026-09-22", 3).allowed).toBe(false);
     expect(keys.listKeys("2026-09-22")[0]?.used).toBe(3);
 
-    expect(keys.useQuota(id, "2026-09-23", 3)).toEqual({
+    expect(keys.takeQuota(id, "2026-09-23", 3)).toEqual({
       allowed: true,
       used: 1,
       limit: 3,
@@ -120,7 +120,7 @@ describe("keys", () => {
 
   it("refuses every use under a limit of zero", () => {
     const { id } = keys.createKey("ada");
-    expect(keys.useQuota(id, "2026-09-22", 0)).toEqual({
+    expect(keys.takeQuota(id, "2026-09-22", 0)).toEqual({
       allowed: false,
       used: 0,
       limit: 0,
@@ -211,7 +211,7 @@ describe("migration 0004", () => {
     const keys = createKeys(db);
     const { id, secret } = keys.createKey("ada");
     expect(keys.findKey(secret)?.id).toBe(id);
-    expect(keys.useQuota(id, "2026-09-22", 1).allowed).toBe(true);
+    expect(keys.takeQuota(id, "2026-09-22", 1).allowed).toBe(true);
     expect(
       db.$client.prepare("SELECT count(*) AS n FROM vendors").get(),
     ).toEqual({ n: 1 });
