@@ -1,3 +1,5 @@
+<img src="swaggerbot-logo-bw.svg" alt="swagger.bot logo" width="96" height="96">
+
 # swagger.bot
 
 swagger.bot turns the name of an API into a verified OpenAPI/Swagger Spec with its Provenance, or says honestly why it can't. It is a single TanStack Start app (HTTP API, MCP endpoint and web UI) with the Index in SQLite. See [`docs/PRD.md`](docs/PRD.md) for what it does and why, [`CONTEXT.md`](CONTEXT.md) for the glossary and [`docs/adr/`](docs/adr/) for the decisions behind it.
