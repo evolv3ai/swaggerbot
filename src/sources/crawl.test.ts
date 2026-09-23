@@ -468,6 +468,34 @@ describe("crawlForSpecs", () => {
     expect(requested("docs.machines.test", "/")).toBe(false);
   });
 
+  it("reports the GitHub orgs its pages link to, most-linked first, GitHub's own pages left out", async () => {
+    const o = server.origin("acme.test");
+    page(
+      "acme.test",
+      "/docs/",
+      `<a href="https://github.com/features/actions">Actions</a>
+       <a href="https://github.com/acme">Our org</a>
+       <a href="https://github.com/acme-examples/quickstart">Quickstart</a>
+       <a href="/docs/more">More</a>`,
+    );
+    page(
+      "acme.test",
+      "/docs/more",
+      `<a href="https://github.com/Acme-Examples/node">Node</a>
+       <a href='https://www.github.com/acme-examples/go#readme'>Go</a>
+       <a href="https://github.com/pricing">Pricing</a>`,
+    );
+
+    const { githubOrgs } = await crawlForSpecs({
+      startUrl: `${o}/docs/`,
+      api,
+      fetcher: fetcher(),
+      judge: judgeSaying({}),
+    });
+
+    expect(githubOrgs).toEqual(["acme-examples", "acme"]);
+  });
+
   describe("from a bare origin", () => {
     const probed = (host: string) =>
       server.requests
@@ -777,7 +805,7 @@ describe("crawlForSpecs", () => {
         fetcher: fetcher(),
         judge: new FakeJudge(),
       }),
-    ).resolves.toEqual({ hits: [], offHostHosts: [] });
+    ).resolves.toEqual({ hits: [], offHostHosts: [], githubOrgs: [] });
   });
 });
 

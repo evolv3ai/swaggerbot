@@ -121,6 +121,44 @@ describe("createGitHubRepos", () => {
   });
 });
 
+describe("orgWebsite", () => {
+  it("reads the website from the org's profile and caches it, whatever the case", async () => {
+    const fetchJson = answering(200, {
+      login: "slackapi",
+      blog: " https://slack.com ",
+    });
+    const github = createGitHubRepos({ fetchJson });
+
+    expect(await github.orgWebsite("slackapi")).toBe("https://slack.com");
+    expect(await github.orgWebsite("SlackAPI")).toBe("https://slack.com");
+    expect(fetchJson).toHaveBeenCalledTimes(1);
+    expect(fetchJson.mock.calls[0]?.[0]).toBe(
+      "https://api.github.com/users/slackapi",
+    );
+  });
+
+  it("is null for an org without a website, a missing org or a failure", async () => {
+    const warn = vi.fn();
+    expect(
+      await createGitHubRepos({
+        fetchJson: answering(200, { login: "acme", blog: "" }),
+      }).orgWebsite("acme"),
+    ).toBeNull();
+    expect(
+      await createGitHubRepos({ fetchJson: answering(404), warn }).orgWebsite(
+        "render",
+      ),
+    ).toBeNull();
+    expect(warn).not.toHaveBeenCalled();
+    expect(
+      await createGitHubRepos({ fetchJson: answering(403), warn }).orgWebsite(
+        "acme",
+      ),
+    ).toBeNull();
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+});
+
 const hit = (fullName: string, path: string) => ({
   name: path.split("/").pop(),
   path,
@@ -434,6 +472,37 @@ describe("searchSpecRepos", () => {
   });
 });
 
+describe("a search in an org that doesn't exist", () => {
+  const unsearchable = {
+    message: "Validation Failed",
+    errors: [
+      {
+        message:
+          "The listed users and repositories cannot be searched either because the resources do not exist or you do not have permission to view them.",
+      },
+    ],
+  };
+
+  it("is no hits on a 422, without a warning, and names the org missing", async () => {
+    const { search, warn } = codeSearch(answering(422, unsearchable));
+
+    expect(search.missingOrgs()).toEqual([]);
+    expect(await search.searchSpecRepos("Render", "Render API")).toEqual([]);
+    expect(await search.searchSpecs("render", "Render API")).toEqual([]);
+    expect(search.missingOrgs()).toEqual(["render"]);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("is still a failure on a 422 without an org, warning as before", async () => {
+    const { search, warn } = codeSearch(answering(422, unsearchable));
+
+    expect(await search.searchSpecs(null, "Render API")).toBeNull();
+    expect(search.missingOrgs()).toEqual([]);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0]?.[0]).toMatch(/HTTP 422/);
+  });
+});
+
 describe("specsInRepo", () => {
   const blob = (path: string) => ({ path, type: "blob" });
   const tree = (
@@ -455,7 +524,7 @@ describe("specsInRepo", () => {
     extra: Parameters<typeof createGitHubCodeSearch>[0] = {},
   ) =>
     codeSearch(fetchJson, {
-      repos: { repoInfo: async () => info },
+      repos: { repoInfo: async () => info, orgWebsite: async () => null },
       ...extra,
     });
 

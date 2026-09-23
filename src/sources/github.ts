@@ -15,6 +15,12 @@ export type RepoInfo = {
 export type GitHubRepos = {
   /** The repo's info, or `null` when GitHub can't say (missing, rate-limited, offline). */
   repoInfo(owner: string, repo: string): Promise<RepoInfo | null>;
+  /**
+   * The website on a GitHub org's (or user's) profile, as written there
+   * (`https://render.com`, `slack.com`); `null` when it has none or GitHub
+   * can't say.
+   */
+  orgWebsite(org: string): Promise<string | null>;
 };
 
 /** A JSON GET; the body is `null` when the response has none. */
@@ -37,6 +43,8 @@ const RepoResponse = z.object({
   archived: z.boolean(),
 });
 
+const ProfileResponse = z.object({ blog: z.string().nullish() });
+
 /** Follows redirects, so a moved repo answers with its new `full_name`. */
 async function defaultFetchJson(
   url: string,
@@ -56,9 +64,10 @@ function githubHeaders(token: string | undefined): Record<string, string> {
 }
 
 /**
- * GitHub's repo metadata, from `GET /repos/{owner}/{repo}`, cached in memory
- * for 24 h. Any failure is `null`; a rate limit (403/429), another error
- * status or a network error is also warned about, once per instance.
+ * GitHub's repo metadata, from `GET /repos/{owner}/{repo}`, and an org's
+ * website, from `GET /users/{org}`, cached in memory for 24 h. Any failure is
+ * `null`; a rate limit (403/429), another error status or a network error is
+ * also warned about, once per instance.
  */
 export function createGitHubRepos({
   fetchJson = defaultFetchJson,
@@ -68,6 +77,7 @@ export function createGitHubRepos({
 }: GitHubReposOptions = {}): GitHubRepos {
   const ttlMs = ttlHours * 3_600_000;
   const cache = new Map<string, { at: number; info: RepoInfo }>();
+  const websites = new Map<string, { at: number; website: string | null }>();
   let warned = false;
   const warnOnce = (message: string) => {
     if (warned) return;
@@ -79,29 +89,51 @@ export function createGitHubRepos({
 
   const headers = githubHeaders(token);
 
+  /** The 200 response's body, or `null`: a 404 quietly, anything else after warning. */
+  async function get(url: string): Promise<{ body: unknown } | null> {
+    let res: { status: number; body: unknown };
+    try {
+      res = await fetchJson(url, headers);
+    } catch (error) {
+      warnOnce(error instanceof Error ? error.message : String(error));
+      return null;
+    }
+    if (res.status === 404) return null;
+    if (res.status !== 200) {
+      warnOnce(
+        res.status === 403 || res.status === 429
+          ? `rate-limited (HTTP ${res.status})`
+          : `HTTP ${res.status}`,
+      );
+      return null;
+    }
+    return { body: res.body };
+  }
+
   return {
+    async orgWebsite(org) {
+      const key = org.toLowerCase();
+      const cached = websites.get(key);
+      if (cached && Date.now() - cached.at < ttlMs) return cached.website;
+
+      const res = await get(`${GITHUB_API}/users/${encodeURIComponent(org)}`);
+      if (!res) return null;
+      const parsed = ProfileResponse.safeParse(res.body);
+      if (!parsed.success) return null;
+      const website = parsed.data.blog?.trim() || null;
+      websites.set(key, { at: Date.now(), website });
+      return website;
+    },
+
     async repoInfo(owner, repo) {
       const key = `${owner}/${repo}`.toLowerCase();
       const cached = cache.get(key);
       if (cached && Date.now() - cached.at < ttlMs) return cached.info;
 
-      const url = `${GITHUB_API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
-      let res: { status: number; body: unknown };
-      try {
-        res = await fetchJson(url, headers);
-      } catch (error) {
-        warnOnce(error instanceof Error ? error.message : String(error));
-        return null;
-      }
-      if (res.status === 404) return null;
-      if (res.status !== 200) {
-        warnOnce(
-          res.status === 403 || res.status === 429
-            ? `rate-limited (HTTP ${res.status})`
-            : `HTTP ${res.status}`,
-        );
-        return null;
-      }
+      const res = await get(
+        `${GITHUB_API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
+      );
+      if (!res) return null;
       const parsed = RepoResponse.safeParse(res.body);
       if (!parsed.success) return null;
       const info: RepoInfo = {
@@ -135,6 +167,12 @@ export type GitHubCodeSearch = {
   searchSpecRepos(org: string, name: string): Promise<string[] | null>;
   /** Spec-looking files at the top of a repo, from its tree; `null` on failure. */
   specsInRepo(fullName: string): Promise<SpecHit[] | null>;
+  /**
+   * The orgs (lowercased) a search found don't exist: GitHub answers a search
+   * with an `org:` qualifier naming no org (or a user) with HTTP 422, which
+   * `searchSpecs` and `searchSpecRepos` return as no hits, `[]`.
+   */
+  missingOrgs(): string[];
 };
 
 export type GitHubCodeSearchOptions = {
@@ -191,6 +229,8 @@ const MAX_REPOS = 5;
 const MAX_TREE_DEPTH = 3;
 const SPEC_BASENAME = /openapi|swagger|api/i;
 const RATE_LIMIT_PAUSE_MS = 60_000;
+/** A search's answer when GitHub says its `org:` names no org (HTTP 422). */
+const NO_SUCH_ORG = Symbol("no such org");
 
 function looksLikeSpec(path: string): boolean {
   return (
@@ -229,7 +269,8 @@ type SearchLimit = {
  * Each search API is spaced on its own (`minIntervalMs`, `minRepoIntervalMs`),
  * and a rate limit (403/429) makes that API's searches `null` for the next
  * minute. Every failure is `null`, and the first is warned about, once per
- * instance.
+ * instance. An HTTP 422 on a search in an org is no failure: the org doesn't
+ * exist, so there are no hits, and `missingOrgs` names it.
  */
 export function createGitHubCodeSearch({
   fetchJson = defaultFetchJson,
@@ -251,6 +292,7 @@ export function createGitHubCodeSearch({
   };
 
   const headers = githubHeaders(token);
+  const missing = new Set<string>();
   const codeLimit: SearchLimit = {
     intervalMs: minIntervalMs,
     nextSlot: 0,
@@ -270,11 +312,15 @@ export function createGitHubCodeSearch({
     if (wait > 0) await sleep(wait);
   }
 
-  /** The 200 response's body, or `null` after warning; a rate limit also pauses `limit`. */
+  /**
+   * The 200 response's body, or `null` after warning; a rate limit also
+   * pauses `limit`. With `org`, a 422 is `NO_SUCH_ORG`, recorded, unwarned.
+   */
   async function get(
     url: string,
     limit: SearchLimit | null,
-  ): Promise<{ body: unknown } | null> {
+    org?: string,
+  ): Promise<{ body: unknown } | typeof NO_SUCH_ORG | null> {
     let res: { status: number; body: unknown };
     try {
       res = await fetchJson(url, headers);
@@ -287,6 +333,10 @@ export function createGitHubCodeSearch({
       warnOnce(`rate-limited (HTTP ${res.status})`);
       return null;
     }
+    if (res.status === 422 && org) {
+      missing.add(org.toLowerCase());
+      return NO_SUCH_ORG;
+    }
     if (res.status !== 200) {
       warnOnce(`HTTP ${res.status}`);
       return null;
@@ -294,20 +344,24 @@ export function createGitHubCodeSearch({
     return { body: res.body };
   }
 
-  /** A search's parsed body, or `null`: no token, paused, failed or unparsable. */
+  /**
+   * A search's parsed body, or `null`: no token, paused, failed or
+   * unparsable; `NO_SUCH_ORG` when GitHub says `org` doesn't exist.
+   */
   async function search<T>(
     url: string,
     limit: SearchLimit,
     schema: z.ZodType<T>,
-  ): Promise<T | null> {
+    org: string | null,
+  ): Promise<T | typeof NO_SUCH_ORG | null> {
     if (!token) {
       warnOnce("no GITHUB_TOKEN");
       return null;
     }
     if (now() < limit.blockedUntil) return null;
     await waitTurn(limit);
-    const res = await get(url, limit);
-    if (!res) return null;
+    const res = await get(url, limit, org ?? undefined);
+    if (!res || res === NO_SUCH_ORG) return res;
     const parsed = schema.safeParse(res.body);
     if (!parsed.success) {
       warnOnce("unexpected response body");
@@ -325,7 +379,9 @@ export function createGitHubCodeSearch({
         `${GITHUB_API}/search/code?q=${encodeURIComponent(query)}&per_page=${PER_PAGE}`,
         codeLimit,
         CodeSearchResponse,
+        org,
       );
+      if (data === NO_SUCH_ORG) return [];
       if (!data) return null;
       return data.items
         .filter((item) => looksLikeSpec(item.path))
@@ -339,7 +395,9 @@ export function createGitHubCodeSearch({
         `${GITHUB_API}/search/repositories?q=${encodeURIComponent(query)}&per_page=10`,
         repoLimit,
         RepoSearchResponse,
+        org,
       );
+      if (data === NO_SUCH_ORG) return [];
       if (!data) return null;
       return data.items.slice(0, MAX_REPOS).map((item) => item.full_name);
     },
@@ -352,7 +410,7 @@ export function createGitHubCodeSearch({
 
       const url = `${GITHUB_API}/repos/${info.fullName.split("/").map(encodeURIComponent).join("/")}/git/trees/${encodeURIComponent(info.defaultBranch)}?recursive=1`;
       const res = await get(url, null);
-      if (!res) return null;
+      if (!res || res === NO_SUCH_ORG) return null;
       const parsed = TreeResponse.safeParse(res.body);
       if (!parsed.success) {
         warnOnce("unexpected response body");
@@ -376,6 +434,10 @@ export function createGitHubCodeSearch({
       return [...paths.filter(named), ...paths.filter((path) => !named(path))]
         .slice(0, MAX_HITS)
         .map((path) => specHit(info.fullName, path));
+    },
+
+    missingOrgs() {
+      return [...missing];
     },
   };
 }
