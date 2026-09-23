@@ -1,4 +1,3 @@
-import { setTimeout as sleep } from "node:timers/promises";
 import { FetchError, type Fetcher, type FetchResult } from "./fetcher";
 import { type SniffResult, sniffSpec } from "./sniff";
 
@@ -34,6 +33,7 @@ export const KNOWN_PATHS = [
 
 const APIS_JSON_PATH = "/apis.json";
 const DEFAULT_BUDGET_MS = 25_000;
+export const DEFAULT_GRACE_AFTER_HIT_MS = 3_000;
 
 export type KnownPathHit = {
   /** Where the Spec was served from, after redirects. */
@@ -53,6 +53,14 @@ export type ProbeOptions = {
    * not finished by then stop fetching but keep the hits they already had.
    */
   budgetMs?: number;
+  /**
+   * Default 3 s. Once the first hit is collected, the probe stops at the
+   * earlier of the budget and this long after that hit, as the budget stops
+   * it. The window keeps a Spec on another host that answers a little later
+   * than a stale copy (WTR-42). `0` stops at the first hit; `Infinity` runs
+   * to the budget, or until every host finishes.
+   */
+  graceAfterHitMs?: number;
   /** Default `https`. Tests use `http` against the fixture server. */
   scheme?: "http" | "https";
   /**
@@ -68,7 +76,8 @@ export type ProbeOptions = {
  * on the domain and its `api.`, `developer.`, `developers.`, `docs.`, `app.`,
  * `api-docs.` and `spec.` hosts, plus the Specs an `apis.json` lists. Hosts
  * run in parallel and paths one after another per host, so the fetcher's
- * per-host spacing holds.
+ * per-host spacing holds. The first hit starts a short grace window
+ * (`graceAfterHitMs`), after which every host stops.
  */
 export async function probeKnownPaths(
   domain: string,
@@ -79,14 +88,37 @@ export async function probeKnownPaths(
   const scheme = opts.scheme ?? "https";
   const hosts = [...new Set(KNOWN_HOST_PREFIXES.map((p) => `${p}${domain}`))];
 
-  const stop = new AbortController();
-  const deadline = sleep(budgetMs, "timeout" as const, {
-    signal: stop.signal,
-  }).catch(() => "timeout" as const);
+  const graceAfterHitMs = opts.graceAfterHitMs ?? DEFAULT_GRACE_AFTER_HIT_MS;
 
-  // Hits are kept as they are found, so a host stopped by the budget keeps
+  // The deadline starts as the budget and is brought forward by the first
+  // hit. When it passes every host stops, as if the budget had run out.
+  const stop = new AbortController();
+  const endsAt = Date.now() + budgetMs;
+  let resolveDeadline: () => void = () => {};
+  const deadline = new Promise<void>((resolve) => {
+    resolveDeadline = resolve;
+  });
+  const end = () => {
+    stop.abort();
+    resolveDeadline();
+  };
+  let timer = setTimeout(end, budgetMs);
+  let graceStarted = false;
+
+  // Hits are kept as they are found, so a host stopped by the deadline keeps
   // everything it found before the stop; only its unfinished work is lost.
   const found = hosts.map(() => [] as KnownPathHit[]);
+  const collect = (i: number, hit: KnownPathHit) => {
+    if (stop.signal.aborted) return;
+    found[i]?.push(hit);
+    if (graceStarted) return;
+    graceStarted = true;
+    if (graceAfterHitMs <= 0) end();
+    else if (graceAfterHitMs < endsAt - Date.now()) {
+      clearTimeout(timer);
+      timer = setTimeout(end, graceAfterHitMs);
+    }
+  };
   await Promise.all(
     hosts.map((host, i) =>
       Promise.race([
@@ -95,12 +127,13 @@ export async function probeKnownPaths(
           fetcher,
           stop.signal,
           opts.allowBlanketRobots ?? false,
-          (hit) => found[i]?.push(hit),
+          (hit) => collect(i, hit),
         ),
         deadline,
       ]),
     ),
   );
+  clearTimeout(timer);
   stop.abort();
 
   const hits = new Map<string, KnownPathHit>();

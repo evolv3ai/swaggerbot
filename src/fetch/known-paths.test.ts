@@ -44,7 +44,13 @@ const spec = (title: string) =>
     paths: {},
   });
 
-describe("probeKnownPaths", () => {
+// The existing cases hold both with the default grace and with none.
+const graces = [
+  { name: "the default grace", opts: {} },
+  { name: "graceAfterHitMs: Infinity", opts: { graceAfterHitMs: Infinity } },
+];
+
+describe.each(graces)("probeKnownPaths with $name", ({ opts: g }) => {
   it("finds /v3/api-docs and an apis.json-listed Spec, and ignores an HTML 200", async () => {
     server.send(
       "vendor.test",
@@ -85,9 +91,7 @@ describe("probeKnownPaths", () => {
     const hits = await probeKnownPaths(
       `vendor.test:${server.port}`,
       fetcher(),
-      {
-        scheme: "http",
-      },
+      { ...g, scheme: "http" },
     );
 
     expect(
@@ -126,7 +130,7 @@ describe("probeKnownPaths", () => {
     const hits = await probeKnownPaths(
       `vendor.test:${server.port}`,
       slowFetcher(),
-      { scheme: "http", budgetMs: 300 },
+      { ...g, scheme: "http", budgetMs: 300 },
     );
 
     expect(Date.now() - started).toBeLessThan(2_000);
@@ -147,7 +151,7 @@ describe("probeKnownPaths", () => {
     const hits = await probeKnownPaths(
       `vendor.test:${server.port}`,
       slowFetcher(),
-      { scheme: "http", budgetMs: 300 },
+      { ...g, scheme: "http", budgetMs: 300 },
     );
 
     expect(hits.map((h) => h.url)).toEqual([
@@ -168,7 +172,7 @@ describe("probeKnownPaths", () => {
     const hits = await probeKnownPaths(
       `vendor.test:${server.port}`,
       fetcher(),
-      { scheme: "http" },
+      { ...g, scheme: "http" },
     );
 
     expect(hits.map((h) => h.sniff.extract.title)).toEqual([
@@ -196,7 +200,7 @@ describe("probeKnownPaths", () => {
     const hits = await probeKnownPaths(
       `vendor.test:${server.port}`,
       fetcher(),
-      { scheme: "http" },
+      { ...g, scheme: "http" },
     );
 
     expect(hits.map((h) => h.url)).toEqual([
@@ -218,7 +222,7 @@ describe("probeKnownPaths", () => {
       },
     };
 
-    await probeKnownPaths("vendor.test", deadFetcher);
+    await probeKnownPaths("vendor.test", deadFetcher, g);
 
     expect(asked.filter((u) => u.startsWith("https://docs."))).toEqual([
       "https://docs.vendor.test/openapi.json",
@@ -246,7 +250,7 @@ describe("probeKnownPaths", () => {
     const hits = await probeKnownPaths(
       `vendor.test:${server.port}`,
       fetcher(),
-      { scheme: "http" },
+      { ...g, scheme: "http" },
     );
 
     expect(hits.map((h) => h.url)).toEqual([
@@ -255,129 +259,263 @@ describe("probeKnownPaths", () => {
   });
 });
 
-describe("probeKnownPaths on a host whose robots.txt disallows it (ADR 0003)", () => {
-  const disallowAll = (host: string) =>
-    server.send(host, "/robots.txt", "User-agent: *\nDisallow: /\n", "");
+describe.each(graces)(
+  "probeKnownPaths on a host whose robots.txt disallows it (ADR 0003), with $name",
+  ({ opts: g }) => {
+    const disallowAll = (host: string) =>
+      server.send(host, "/robots.txt", "User-agent: *\nDisallow: /\n", "");
 
-  it("fetches the Spec once on a host that disallows everything", async () => {
-    // api.val.town's shape: `Disallow: /` for the whole app host.
-    disallowAll("api.vendor.test");
-    server.send(
-      "api.vendor.test",
-      "/openapi.json",
-      spec("Shut"),
-      "application/json",
-    );
+    it("fetches the Spec once on a host that disallows everything", async () => {
+      // api.val.town's shape: `Disallow: /` for the whole app host.
+      disallowAll("api.vendor.test");
+      server.send(
+        "api.vendor.test",
+        "/openapi.json",
+        spec("Shut"),
+        "application/json",
+      );
 
-    const hits = await probeKnownPaths(
-      `vendor.test:${server.port}`,
-      fetcher(),
-      { scheme: "http", allowBlanketRobots: true },
-    );
+      const hits = await probeKnownPaths(
+        `vendor.test:${server.port}`,
+        fetcher(),
+        { ...g, scheme: "http", allowBlanketRobots: true },
+      );
 
-    expect(
-      hits.map((h) => ({ url: h.url, robotsDisallowed: h.robotsDisallowed })),
-    ).toEqual([
-      {
-        url: `${server.origin("api.vendor.test")}/openapi.json`,
-        robotsDisallowed: true,
-      },
-    ]);
-  });
-
-  it("yields nothing from such a host by default", async () => {
-    disallowAll("api.vendor.test");
-    server.send(
-      "api.vendor.test",
-      "/openapi.json",
-      spec("Shut"),
-      "application/json",
-    );
-
-    const hits = await probeKnownPaths(
-      `vendor.test:${server.port}`,
-      fetcher(),
-      { scheme: "http" },
-    );
-
-    expect(hits).toEqual([]);
-    expect(
-      server.requests.filter(
-        (r) => r.host === "api.vendor.test" && r.path !== "/robots.txt",
-      ),
-    ).toEqual([]);
-  });
-
-  it("honours Codeberg's list of disallowed paths even with allowBlanketRobots", async () => {
-    // codeberg.org disallows /swagger.*.json and allows the site root;
-    // ADR 0003 keeps Codeberg as NoSpec.
-    server.send(
-      "vendor.test",
-      "/robots.txt",
-      "User-agent: *\nDisallow: /swagger.*.json\n",
-      "",
-    );
-    server.send(
-      "vendor.test",
-      "/swagger.v1.json",
-      spec("Codeberg"),
-      "application/json",
-    );
-    server.send(
-      "vendor.test",
-      "/apis.json",
-      JSON.stringify({
-        apis: [{ properties: [{ type: "Swagger", url: "/swagger.v1.json" }] }],
-      }),
-      "application/json",
-    );
-
-    const hits = await probeKnownPaths(
-      `vendor.test:${server.port}`,
-      fetcher(),
-      { scheme: "http", allowBlanketRobots: true },
-    );
-
-    expect(hits).toEqual([]);
-    expect(server.requests).not.toContainEqual(
-      expect.objectContaining({ path: "/swagger.v1.json" }),
-    );
-  });
-
-  it("retries a path at most once, and never on a dead host", async () => {
-    const asked: { url: string; ignoreRobots: boolean }[] = [];
-    const shutFetcher: Fetcher = {
-      async fetchUrl(url, opts) {
-        asked.push({ url, ignoreRobots: opts?.ignoreRobots ?? false });
-        if (new URL(url).hostname.startsWith("docs.")) {
-          throw new FetchError("network", url, "fake");
-        }
-        if (!opts?.ignoreRobots) {
-          throw new FetchError("robots-disallowed", url, "fake", {
-            blanket: true,
-          });
-        }
-        throw new FetchError("http-error", url, "fake", { status: 404 });
-      },
-    };
-
-    await probeKnownPaths("vendor.test", shutFetcher, {
-      allowBlanketRobots: true,
+      expect(
+        hits.map((h) => ({ url: h.url, robotsDisallowed: h.robotsDisallowed })),
+      ).toEqual([
+        {
+          url: `${server.origin("api.vendor.test")}/openapi.json`,
+          robotsDisallowed: true,
+        },
+      ]);
     });
 
-    const onApi = asked.filter((a) => a.url.startsWith("https://api.vendor."));
-    expect(onApi).toHaveLength(KNOWN_PATHS.length * 2);
-    for (const path of KNOWN_PATHS) {
+    it("yields nothing from such a host by default", async () => {
+      disallowAll("api.vendor.test");
+      server.send(
+        "api.vendor.test",
+        "/openapi.json",
+        spec("Shut"),
+        "application/json",
+      );
+
+      const hits = await probeKnownPaths(
+        `vendor.test:${server.port}`,
+        fetcher(),
+        { ...g, scheme: "http" },
+      );
+
+      expect(hits).toEqual([]);
       expect(
-        onApi.filter((a) => a.url === `https://api.vendor.test${path}`),
-      ).toEqual([
-        { url: `https://api.vendor.test${path}`, ignoreRobots: false },
-        { url: `https://api.vendor.test${path}`, ignoreRobots: true },
+        server.requests.filter(
+          (r) => r.host === "api.vendor.test" && r.path !== "/robots.txt",
+        ),
+      ).toEqual([]);
+    });
+
+    it("honours Codeberg's list of disallowed paths even with allowBlanketRobots", async () => {
+      // codeberg.org disallows /swagger.*.json and allows the site root;
+      // ADR 0003 keeps Codeberg as NoSpec.
+      server.send(
+        "vendor.test",
+        "/robots.txt",
+        "User-agent: *\nDisallow: /swagger.*.json\n",
+        "",
+      );
+      server.send(
+        "vendor.test",
+        "/swagger.v1.json",
+        spec("Codeberg"),
+        "application/json",
+      );
+      server.send(
+        "vendor.test",
+        "/apis.json",
+        JSON.stringify({
+          apis: [
+            { properties: [{ type: "Swagger", url: "/swagger.v1.json" }] },
+          ],
+        }),
+        "application/json",
+      );
+
+      const hits = await probeKnownPaths(
+        `vendor.test:${server.port}`,
+        fetcher(),
+        { ...g, scheme: "http", allowBlanketRobots: true },
+      );
+
+      expect(hits).toEqual([]);
+      expect(server.requests).not.toContainEqual(
+        expect.objectContaining({ path: "/swagger.v1.json" }),
+      );
+    });
+
+    it("retries a path at most once, and never on a dead host", async () => {
+      const asked: { url: string; ignoreRobots: boolean }[] = [];
+      const shutFetcher: Fetcher = {
+        async fetchUrl(url, opts) {
+          asked.push({ url, ignoreRobots: opts?.ignoreRobots ?? false });
+          if (new URL(url).hostname.startsWith("docs.")) {
+            throw new FetchError("network", url, "fake");
+          }
+          if (!opts?.ignoreRobots) {
+            throw new FetchError("robots-disallowed", url, "fake", {
+              blanket: true,
+            });
+          }
+          throw new FetchError("http-error", url, "fake", { status: 404 });
+        },
+      };
+
+      await probeKnownPaths("vendor.test", shutFetcher, {
+        ...g,
+        allowBlanketRobots: true,
+      });
+
+      const onApi = asked.filter((a) =>
+        a.url.startsWith("https://api.vendor."),
+      );
+      expect(onApi).toHaveLength(KNOWN_PATHS.length * 2);
+      for (const path of KNOWN_PATHS) {
+        expect(
+          onApi.filter((a) => a.url === `https://api.vendor.test${path}`),
+        ).toEqual([
+          { url: `https://api.vendor.test${path}`, ignoreRobots: false },
+          { url: `https://api.vendor.test${path}`, ignoreRobots: true },
+        ]);
+      }
+      expect(asked.filter((a) => a.url.startsWith("https://docs."))).toEqual([
+        { url: "https://docs.vendor.test/openapi.json", ignoreRobots: false },
       ]);
-    }
-    expect(asked.filter((a) => a.url.startsWith("https://docs."))).toEqual([
-      { url: "https://docs.vendor.test/openapi.json", ignoreRobots: false },
+    });
+  },
+);
+
+describe("probeKnownPaths after its first hit", () => {
+  const hang = (host: string) =>
+    server.route(host, "/openapi.json", () => {
+      // Never respond.
+    });
+  const sendAfter = (host: string, ms: number, title: string) =>
+    server.route(host, "/openapi.json", (_req, res) => {
+      setTimeout(() => {
+        res
+          .writeHead(200, { "content-type": "application/json" })
+          .end(spec(title));
+      }, ms);
+    });
+  const probe = (opts: { budgetMs: number; graceAfterHitMs?: number }) =>
+    probeKnownPaths(`vendor.test:${server.port}`, slowFetcher(), {
+      scheme: "http",
+      ...opts,
+    });
+
+  it("stops within the grace, not the budget, while another host hangs", async () => {
+    server.send(
+      "api.vendor.test",
+      "/openapi.json",
+      spec("First"),
+      "application/json",
+    );
+    hang("docs.vendor.test");
+
+    const started = Date.now();
+    const hits = await probe({ budgetMs: 5_000, graceAfterHitMs: 200 });
+
+    expect(Date.now() - started).toBeLessThan(1_500);
+    expect(hits.map((h) => h.sniff.extract.title)).toEqual(["First"]);
+  });
+
+  it("keeps a Spec another host serves inside the grace", async () => {
+    server.send(
+      "api.vendor.test",
+      "/openapi.json",
+      spec("First"),
+      "application/json",
+    );
+    sendAfter("developer.vendor.test", 50, "Second");
+    hang("docs.vendor.test");
+
+    const hits = await probe({ budgetMs: 5_000, graceAfterHitMs: 400 });
+
+    expect(hits.map((h) => h.sniff.extract.title).sort()).toEqual([
+      "First",
+      "Second",
     ]);
+  });
+
+  it("drops a Spec another host would only serve after the grace", async () => {
+    server.send(
+      "api.vendor.test",
+      "/openapi.json",
+      spec("First"),
+      "application/json",
+    );
+    sendAfter("developer.vendor.test", 800, "Late");
+    hang("docs.vendor.test");
+
+    const started = Date.now();
+    const hits = await probe({ budgetMs: 5_000, graceAfterHitMs: 200 });
+
+    expect(Date.now() - started).toBeLessThan(700);
+    expect(hits.map((h) => h.sniff.extract.title)).toEqual(["First"]);
+  });
+
+  it("keeps that late Spec with graceAfterHitMs: Infinity", async () => {
+    server.send(
+      "api.vendor.test",
+      "/openapi.json",
+      spec("First"),
+      "application/json",
+    );
+    sendAfter("developer.vendor.test", 300, "Late");
+    hang("docs.vendor.test");
+
+    const started = Date.now();
+    const hits = await probe({ budgetMs: 1_000, graceAfterHitMs: Infinity });
+
+    expect(Date.now() - started).toBeGreaterThanOrEqual(950);
+    expect(hits.map((h) => h.sniff.extract.title).sort()).toEqual([
+      "First",
+      "Late",
+    ]);
+  });
+
+  it("stops at the first hit with graceAfterHitMs: 0", async () => {
+    server.send(
+      "api.vendor.test",
+      "/openapi.json",
+      spec("First"),
+      "application/json",
+    );
+    sendAfter("developer.vendor.test", 100, "Second");
+    hang("docs.vendor.test");
+
+    const started = Date.now();
+    const hits = await probe({ budgetMs: 5_000, graceAfterHitMs: 0 });
+
+    expect(Date.now() - started).toBeLessThan(500);
+    expect(hits.map((h) => h.sniff.extract.title)).toEqual(["First"]);
+  });
+
+  it("runs to the budget when nothing is found", async () => {
+    hang("docs.vendor.test");
+
+    const started = Date.now();
+    const hits = await probe({ budgetMs: 600, graceAfterHitMs: 100 });
+
+    expect(Date.now() - started).toBeGreaterThanOrEqual(550);
+    expect(hits).toEqual([]);
+  });
+
+  it("finishes early when nothing is found and every host is done", async () => {
+    const started = Date.now();
+    const hits = await probe({ budgetMs: 5_000, graceAfterHitMs: 100 });
+
+    expect(Date.now() - started).toBeLessThan(2_000);
+    expect(hits).toEqual([]);
   });
 });
 
