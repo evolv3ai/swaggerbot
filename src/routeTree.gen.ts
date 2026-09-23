@@ -12,6 +12,8 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as ApiLookupRouteImport } from './routes/api/lookup'
+import { Route as ApiSpecsSpecIdNormalizedRouteImport } from './routes/api/specs/$specId/normalized'
+import { Route as ApiSpecsSpecIdPublishedRouteImport } from './routes/api/specs/$specId/published'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -28,35 +30,70 @@ const ApiLookupRoute = ApiLookupRouteImport.update({
   path: '/api/lookup',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiSpecsSpecIdNormalizedRoute =
+  ApiSpecsSpecIdNormalizedRouteImport.update({
+    id: '/api/specs/$specId/normalized',
+    path: '/api/specs/$specId/normalized',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiSpecsSpecIdPublishedRoute = ApiSpecsSpecIdPublishedRouteImport.update({
+  id: '/api/specs/$specId/published',
+  path: '/api/specs/$specId/published',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api/health': typeof ApiHealthRoute
   '/api/lookup': typeof ApiLookupRoute
+  '/api/specs/$specId/normalized': typeof ApiSpecsSpecIdNormalizedRoute
+  '/api/specs/$specId/published': typeof ApiSpecsSpecIdPublishedRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api/health': typeof ApiHealthRoute
   '/api/lookup': typeof ApiLookupRoute
+  '/api/specs/$specId/normalized': typeof ApiSpecsSpecIdNormalizedRoute
+  '/api/specs/$specId/published': typeof ApiSpecsSpecIdPublishedRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/api/health': typeof ApiHealthRoute
   '/api/lookup': typeof ApiLookupRoute
+  '/api/specs/$specId/normalized': typeof ApiSpecsSpecIdNormalizedRoute
+  '/api/specs/$specId/published': typeof ApiSpecsSpecIdPublishedRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/health' | '/api/lookup'
+  fullPaths:
+    | '/'
+    | '/api/health'
+    | '/api/lookup'
+    | '/api/specs/$specId/normalized'
+    | '/api/specs/$specId/published'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/health' | '/api/lookup'
-  id: '__root__' | '/' | '/api/health' | '/api/lookup'
+  to:
+    | '/'
+    | '/api/health'
+    | '/api/lookup'
+    | '/api/specs/$specId/normalized'
+    | '/api/specs/$specId/published'
+  id:
+    | '__root__'
+    | '/'
+    | '/api/health'
+    | '/api/lookup'
+    | '/api/specs/$specId/normalized'
+    | '/api/specs/$specId/published'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApiHealthRoute: typeof ApiHealthRoute
   ApiLookupRoute: typeof ApiLookupRoute
+  ApiSpecsSpecIdNormalizedRoute: typeof ApiSpecsSpecIdNormalizedRoute
+  ApiSpecsSpecIdPublishedRoute: typeof ApiSpecsSpecIdPublishedRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -82,6 +119,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiLookupRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/specs/$specId/normalized': {
+      id: '/api/specs/$specId/normalized'
+      path: '/api/specs/$specId/normalized'
+      fullPath: '/api/specs/$specId/normalized'
+      preLoaderRoute: typeof ApiSpecsSpecIdNormalizedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/specs/$specId/published': {
+      id: '/api/specs/$specId/published'
+      path: '/api/specs/$specId/published'
+      fullPath: '/api/specs/$specId/published'
+      preLoaderRoute: typeof ApiSpecsSpecIdPublishedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -89,6 +140,8 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiHealthRoute: ApiHealthRoute,
   ApiLookupRoute: ApiLookupRoute,
+  ApiSpecsSpecIdNormalizedRoute: ApiSpecsSpecIdNormalizedRoute,
+  ApiSpecsSpecIdPublishedRoute: ApiSpecsSpecIdPublishedRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
