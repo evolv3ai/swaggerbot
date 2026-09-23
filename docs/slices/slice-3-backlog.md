@@ -37,6 +37,7 @@ Filed 2026-09-22 as WTR-88..93 (Backlog, `swaggerbot` only), with Linear "blocke
 | 7a | WTR-94 | The known-path probe stops soon after its first hit | 1 | 5 |
 | 7bc | WTR-96 | The Spec step's sources run in parallel, within one deadline | 7a | 6 |
 | 9 | WTR-97 | Verification uses the Caller's spelling, not the normalised name | 4 | 5 |
+| 11 | | The add-on guard holds back only likely add-ons | 7bc | 7 |
 | 10 | WTR-98 | The keys CLI runs in the production image | 3 | 5 |
 | 8 | WTR-95 | Box: the full Spec sometimes never reaches the pool, and an add-on answers | — | 5 |
 
@@ -96,6 +97,18 @@ Box and Asana are Resolved again. But the yielding starves the probe on the craw
 - the probe's likeliest paths to go ahead of the crawl's requests, with only the rest yielding (the per-host politeness is unchanged);
 - a Judge-rejected hit not to start the probe's grace window;
 - the WTR-95 guard: a Lookup isn't settled while every confirmed Spec's URL names an API Version.
+
+**WTR-96 rework 2 (`50d78a6`), merged as `b7c880b`.** The probe's likeliest paths go ahead of the crawl on a shared host; a stub hit (under 5 paths) starts no grace window; a Lookup isn't settled while every confirmed Spec's URL names an API Version.
+
+| | p50 | p90 | max | FR | long-tail coverage |
+|---|---|---|---|---|---|
+| 9 s deadline, run 1 | 9.5 s | **14.6 s** | 15.3 s | **0/20** | 81.8% |
+| 9 s deadline, run 2 | 9.3 s | **14.4 s** | 15.8 s | **0/20** | 81.8% |
+| `Infinity` | 9.6 s | 30.5 s | 31.1 s | 0/22 | 100% |
+
+The probe wins are back: Supabase 5.8–6.2 s, Cloudflare 6.7–6.8 s, Neon 9.5–9.9 s. Box and Asana are Resolved. With the deadline, only Mux and Fly.io are lost (the accepted cost); without it, every entry answers as it did after WTR-94.
+
+**The known cost (issue 11):** the add-on guard also holds back legitimate Specs whose URL names a version. Twilio Verify (`…verify_v2.json`), DigitalOcean (`…public.v2.yaml`) and Jira (`swagger-v3.v3.json`) went from 1–2 s to about 10 s, and Plaid (`2020-09-14.yml`) from 6.5 s to 15.3 s.
 
 7a and 7b don't trade anything away. 7c is the only one that bounds the worst case, and it's the one that costs coverage. A rough estimate: 7a and 7b together bring p50 under 10 s but leave the p90 around 20–25 s, because of the NoSpec names. Reaching p90 < 15 s very likely needs 7c too.
 
@@ -431,4 +444,27 @@ The operator issues API keys with `scripts/keys.ts` (WTR-90). The production ima
 ## Done when
 - After `pnpm build`, `DATABASE_PATH=<tmp> node .output/cli/keys.mjs create x` then `list` works outside the repo's `node_modules` (e.g. copy `.output` elsewhere and run it there). Show it in the PR.
 - If Docker is available, the same inside the built image. Otherwise say so and the reviewer checks it on the server.
+- `pnpm check` and `pnpm build` green.
+
+---
+
+## 11. swaggerbot: the add-on guard holds back only likely add-ons
+
+## Problem
+WTR-96 added a guard (from WTR-95's proposal): a Lookup isn't settled while every confirmed Spec's URL names an API Version, because Box's per-version add-on (`openapi-v2025.0.json`, 24 paths) could otherwise answer before the full `box-openapi.json` (187 paths). The guard works for Box. But it also holds back full Specs whose URL just happens to name a version, so they wait out the whole 9 s Spec-step deadline. `pnpm bench --concurrency 1` on 2026-09-23, after WTR-94 and after WTR-96:
+- Twilio Verify, `…/twilio_verify_v2.json`: 1.0 s → 10.2 s
+- DigitalOcean, `…/DigitalOcean-public.v2.yaml`: 1.2 s → 10.2 s
+- Jira, `…/swagger-v3.v3.json`: 1.8 s → 10.7 s
+- Plaid, `…/2020-09-14.yml`: 6.5 s → 15.3 s (over the 15 s target on its own)
+
+## Change
+Narrow the guard in `src/lookup/lookup.ts` so that a confirmed Spec with a versioned URL counts as a **possible add-on** only when its shape says so, not its URL alone. Treat it as settled (as before WTR-96) unless one of these holds:
+- its path count is under `ADD_ON_MAX_PATHS` (new in `src/lookup/thresholds.ts`, default 40); Box's add-ons have 24 and 5 paths, while the four Specs above have hundreds;
+- or the same Source already listed, or the Index already holds for this API, a sibling Spec with many more paths.
+
+Keep everything else about WTR-96 unchanged. Explain the chosen threshold in the PR against the numbers above.
+
+## Done when
+- `src/lookup/lookup.test.ts`: a versioned-URL Spec with 300 paths settles at once (no waiting for later Sources). Box's shape (a 24-path versioned add-on from GitHub first, the full Spec from the crawl later) still answers the full Spec. The existing WTR-96 guard tests still pass.
+- In the PR description, as a manual check for the reviewer (who has keys): `pnpm bench --json --concurrency 1`. Twilio Verify, DigitalOcean and Jira are back to about 2 s, Plaid to about 7 s, Box is still Resolved to its full Spec, False Resolution < 2%, p90 < 15 s.
 - `pnpm check` and `pnpm build` green.
