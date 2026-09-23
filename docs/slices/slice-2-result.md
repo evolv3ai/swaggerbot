@@ -26,7 +26,8 @@ Index each:
 false resolution is **Loops → `app.loops.so/openapi.yaml`**, a label question: it is the
 same document as the labelled `openapi.json` (version 1.21.14, 43 paths, same server; the
 parsed documents differ only where a YAML reader turns unquoted dates into dates), the
-same case as Novu's `openapi.yaml`, accepted. If Wes accepts it, run 3 is **0/22**. Run
+same case as Novu's `openapi.yaml`, accepted. **Wes accepted it, 2026-09-22**, so run 3
+scores **0/22** under the current labels. Run
 4's is **Box → `box-openapi-v2025.0.json`** (2025.0, 24 paths, over the 187-path 2024.0
 Spec), a real intermittent defect: 2 of 4 Benchmark runs across two `main`s, 0 of 5 traced
 live Lookups, which all fetch the 187-path file first and answer 2024.0. Not diagnosed;
@@ -75,10 +76,11 @@ Agent cost this round about $10.50 (65 $1.14, 79 $0.79, 80 $0.55, 64 $2.09, 84 $
 
 ## Remaining failures, by cause (runs 3 and 4)
 
-- **Loops** (run 3): label question above.
+- **Loops** (run 3): label question above; accepted by Wes 2026-09-22, no longer a failure.
 - **Box** (run 4): intermittent, undiagnosed; WTR-85.
-- **Slack Web API** (Unconfirmed, both): its Spec is linked from no live page; WTR-83,
-  Wes's call.
+- **Slack Web API** (Unconfirmed, both): its Spec is linked from no live page. WTR-83:
+  Wes chose option 1 (2026-09-22): keep the label and accept it as a coverage miss.
+  Unconfirmed is not a False Resolution, so it doesn't touch the gate.
 - **Render API** (NoSpec, run 4): intermittent. The crawl finds the label from
   `render.com/docs/api` in every traced Lookup (10 of 10), but plain ones answer NoSpec
   about half the time; not explained yet. WTR-85's trace would show which step differs.
@@ -93,7 +95,8 @@ Cisco 0.56 for single Candidates) wants Ambiguous, which a lower `apiPick` would
 
 ## What to do next
 
-1. Wes: accept Loops' `openapi.yaml` (label question); decide WTR-83 (Slack).
+1. ~~Wes: accept Loops' `openapi.yaml`; decide WTR-83~~ Done 2026-09-22: Loops accepted,
+   Slack stays a coverage miss.
 2. Queue WTR-85 (Benchmark trace), then catch Box and Render failing with it.
 3. Then two more `pnpm bench` runs; with Loops accepted and Box fixed, the gate is met.
 4. Later: Atlassian, Cisco (single-Candidate umbrella names), Zoho, Intuit (crawl finds

@@ -192,9 +192,13 @@
     "group": "longtail",
     "expected": "Resolved",
     "apiId": "loops.so/loops-api",
-    "specSources": ["https://app.loops.so/openapi.json"],
+    "specSources": [
+      "https://app.loops.so/openapi.json",
+      "https://app.loops.so/openapi.yaml"
+    ],
     "evidenceUrl": "https://loops.so/docs/api-reference/intro",
-    "reviewed": true
+    "reviewed": true,
+    "notes": "app.loops.so/openapi.yaml is the same document as openapi.json (Loops API 1.21.14, 43 paths, server app.loops.so/api; identical once parsed, checked 2026-09-22); accepted as a Spec Source by Wes 2026-09-22, as Novu's openapi.yaml was."
   },
   {
     "name": "Novu",
