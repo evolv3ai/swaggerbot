@@ -39,6 +39,7 @@ import {
   type CrawlResult,
   crawlForSpecs,
   crawlForVendorApis,
+  type VendorApiCrawlResult,
   type VendorApiHit,
 } from "~/sources/crawl";
 import { registrableDomain } from "~/sources/domain";
@@ -107,7 +108,7 @@ export type LookupDeps = {
   vendorCrawl?: (opts: {
     startUrl: string;
     vendor: VendorRef;
-  }) => Promise<VendorApiHit[]>;
+  }) => Promise<VendorApiCrawlResult>;
   /**
    * Checks the repo behind a raw.githubusercontent.com origin URL: archived
    * repos are skipped, non-default branches rewritten. Absent, such URLs are
@@ -560,10 +561,13 @@ export function createLookup(deps: LookupDeps): Lookup {
       const startUrl = top.portalUrl ?? `https://${vendor.domain}`;
       let hits: VendorApiHit[] = [];
       try {
-        hits = await vendorCrawl({
+        const result = await vendorCrawl({
           startUrl,
           vendor: { id: vendor.id, name: vendor.name },
         });
+        hits = result.hits;
+        for (const { url, reason } of result.failed)
+          diagnostics.push(`Vendor API crawl fetch failed: ${url} (${reason})`);
       } catch (error) {
         diagnostics.push(`Vendor API crawl: ${message(error)}`);
       }
@@ -790,12 +794,19 @@ export function createLookup(deps: LookupDeps): Lookup {
     async function crawlStep() {
       const deadline = Date.now() + CRAWL_STEP_BUDGET_MS;
       const startUrl = choice.portalUrl ?? `https://${choice.vendor.domain}`;
-      let result: CrawlResult = { hits: [], offHostHosts: [], githubOrgs: [] };
+      let result: CrawlResult = {
+        hits: [],
+        failed: [],
+        offHostHosts: [],
+        githubOrgs: [],
+      };
       try {
         result = await crawl({ startUrl, api: ref });
       } catch (error) {
         diagnostics.push(`crawl: ${message(error)}`);
       }
+      for (const { url, reason } of result.failed)
+        diagnostics.push(`crawl fetch failed: ${url} (${reason})`);
       crawledGitHubOrgs = result.githubOrgs;
       checked.push(`crawl from ${startUrl} (${result.hits.length} found)`);
       const hits = [

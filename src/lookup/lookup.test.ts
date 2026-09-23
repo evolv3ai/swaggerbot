@@ -16,7 +16,12 @@ import { openDb } from "~/index-store/db";
 import { FakeJudge, type FakeJudgeScript } from "~/judge/fake";
 import { JudgeError, yesNo } from "~/judge/judge";
 import { type ApiCandidate, createApisGuru } from "~/sources/apis-guru";
-import type { CrawlHit, CrawlResult, VendorApiHit } from "~/sources/crawl";
+import type {
+  CrawlFailure,
+  CrawlHit,
+  CrawlResult,
+  VendorApiHit,
+} from "~/sources/crawl";
 import type {
   GitHubCodeSearch,
   GitHubRepos,
@@ -69,16 +74,25 @@ function fakeCrawl(result: Partial<CrawlResult> | Error = {}): {
     async crawl({ startUrl }) {
       starts.push(startUrl);
       if (result instanceof Error) throw result;
-      return { hits: [], offHostHosts: [], githubOrgs: [], ...result };
+      return {
+        hits: [],
+        failed: [],
+        offHostHosts: [],
+        githubOrgs: [],
+        ...result,
+      };
     },
   };
 }
 
 /**
- * A fake Vendor API crawl answering `hits` (or throwing, for an Error),
- * recording each start URL.
+ * A fake Vendor API crawl answering `hits` and `failed` (or throwing, for an
+ * Error), recording each start URL.
  */
-function fakeVendorCrawl(hits: VendorApiHit[] | Error = []): {
+function fakeVendorCrawl(
+  hits: VendorApiHit[] | Error = [],
+  failed: CrawlFailure[] = [],
+): {
   vendorCrawl: NonNullable<LookupDeps["vendorCrawl"]>;
   starts: string[];
 } {
@@ -88,7 +102,7 @@ function fakeVendorCrawl(hits: VendorApiHit[] | Error = []): {
     async vendorCrawl({ startUrl }) {
       starts.push(startUrl);
       if (hits instanceof Error) throw hits;
-      return hits;
+      return { hits, failed };
     },
   };
 }
@@ -1110,6 +1124,26 @@ describe("lookup with a Vendor's APIs from its Developer Portal", () => {
     expect(outcome).toMatchObject({ outcome: "Unknown", name: "mailco" });
     expect(outcome.diagnostics).toContain("Vendor API crawl: portal exploded");
   });
+
+  it("diagnoses each page the Vendor API crawl couldn't fetch", async () => {
+    const { lookup } = setup(
+      { isVendorName: vendorName },
+      portalSearch(),
+      undefined,
+      fakeCrawl(),
+      undefined,
+      fakeVendorCrawl(
+        [],
+        [{ url: "https://mailco.test/apis", reason: "http-error: HTTP 429" }],
+      ),
+    );
+
+    const outcome = await ask(lookup, "mailco");
+
+    expect(outcome.diagnostics).toContain(
+      "Vendor API crawl fetch failed: https://mailco.test/apis (http-error: HTTP 429)",
+    );
+  });
 });
 
 describe("lookup with an identified API whose name is the Vendor's", () => {
@@ -1619,6 +1653,23 @@ describe("lookup with the Developer Portal crawl", () => {
     expect(crawls).toEqual(["https://nospec.test"]);
     // Settled by the crawl: the mirror is never fetched.
     expect(server.requests.map((r) => r.host)).not.toContain("apis-guru.test");
+  });
+
+  it("diagnoses each Spec the crawl chose but couldn't fetch, without trace", async () => {
+    const url = "https://api-docs.nospec.test/openapi/public-api-1.json";
+    const { lookup } = setup(
+      script,
+      undefined,
+      undefined,
+      fakeCrawl({ failed: [{ url, reason: "http-error: HTTP 429" }] }),
+    );
+
+    const outcome = await ask(lookup, "nospec");
+
+    expect(outcome).toMatchObject({ outcome: "NoSpec" });
+    expect(outcome.diagnostics).toContain(
+      `crawl fetch failed: ${url} (http-error: HTTP 429)`,
+    );
   });
 
   it("does not crawl once the known-path probe has settled the answer", async () => {

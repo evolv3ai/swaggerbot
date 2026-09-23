@@ -11,6 +11,7 @@ import {
   FetchError,
   type FetcherOptions,
   isPrivateAddress,
+  retryAfterMs,
   USER_AGENT,
 } from "./fetcher";
 
@@ -558,5 +559,21 @@ describe("private addresses", () => {
     for (const address of ["93.184.216.34", "2606:4700::1111", "8.8.8.8"]) {
       expect(isPrivateAddress(address), address).toBe(false);
     }
+  });
+});
+
+describe("retryAfterMs", () => {
+  const now = Date.parse("2026-09-22T12:00:00Z");
+
+  it.each([
+    ["5", 5000],
+    [" 0 ", 0],
+    ["Tue, 22 Sep 2026 12:00:03 GMT", 3000],
+    ["Tue, 22 Sep 2026 11:59:00 GMT", 0],
+    ["soon", undefined],
+    ["", undefined],
+    [null, undefined],
+  ])("%s → %s", (value, expected) => {
+    expect(retryAfterMs(value, now)).toBe(expected);
   });
 });

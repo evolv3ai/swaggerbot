@@ -805,7 +805,130 @@ describe("crawlForSpecs", () => {
         fetcher: fetcher(),
         judge: new FakeJudge(),
       }),
-    ).resolves.toEqual({ hits: [], offHostHosts: [], githubOrgs: [] });
+    ).resolves.toEqual({
+      hits: [],
+      failed: [],
+      offHostHosts: [],
+      githubOrgs: [],
+    });
+  });
+
+  describe("a Spec fetch that fails (WTR-86)", () => {
+    /** Answers `statuses` in turn, then the Spec, with `headers` on each error. */
+    const flaky = (
+      host: string,
+      path: string,
+      statuses: number[],
+      headers: Record<string, string> = {},
+    ) => {
+      const left = [...statuses];
+      server.route(host, path, (_req, res) => {
+        const status = left.shift();
+        if (status !== undefined) {
+          res.writeHead(status, { "content-type": "text/plain", ...headers });
+          res.end("slow down");
+          return;
+        }
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(spec("Acme"));
+      });
+    };
+    const specRequests = (host: string, path: string) =>
+      server.requests.filter((r) => r.host === host && r.path === path);
+
+    it("retries once after a 429 and finds the Spec, waiting 1 s without Retry-After", async () => {
+      const o = server.origin("docs.acme.test");
+      page("docs.acme.test", "/api", `<a href="/openapi.json">Spec</a>`);
+      flaky("docs.acme.test", "/openapi.json", [429]);
+
+      const { hits, failed } = await crawlForSpecs({
+        startUrl: `${o}/api`,
+        api,
+        fetcher: fetcher(),
+        judge: judgeSaying({ [`${o}/openapi.json`]: 0.9 }),
+      });
+
+      expect(hits.map((h) => h.url)).toEqual([`${o}/openapi.json`]);
+      expect(failed).toEqual([]);
+      const [first, second] = specRequests("docs.acme.test", "/openapi.json");
+      expect((second?.at ?? 0) - (first?.at ?? 0)).toBeGreaterThanOrEqual(900);
+    });
+
+    it("retries a 5xx after its Retry-After", async () => {
+      const o = server.origin("docs.acme.test");
+      page("docs.acme.test", "/api", `<a href="/openapi.json">Spec</a>`);
+      flaky("docs.acme.test", "/openapi.json", [503], { "retry-after": "0" });
+
+      const { hits } = await crawlForSpecs({
+        startUrl: `${o}/api`,
+        api,
+        fetcher: fetcher(),
+        judge: judgeSaying({ [`${o}/openapi.json`]: 0.9 }),
+      });
+
+      expect(hits.map((h) => h.url)).toEqual([`${o}/openapi.json`]);
+    });
+
+    it("reports a Spec that still answers 429 after the retry in failed", async () => {
+      const o = server.origin("docs.acme.test");
+      page("docs.acme.test", "/api", `<a href="/openapi.json">Spec</a>`);
+      flaky("docs.acme.test", "/openapi.json", [429, 429, 429], {
+        "retry-after": "0",
+      });
+
+      const { hits, failed } = await crawlForSpecs({
+        startUrl: `${o}/api`,
+        api,
+        fetcher: fetcher(),
+        judge: judgeSaying({ [`${o}/openapi.json`]: 0.9 }),
+      });
+
+      expect(hits).toEqual([]);
+      expect(failed).toEqual([
+        { url: `${o}/openapi.json`, reason: "http-error: HTTP 429" },
+      ]);
+      expect(specRequests("docs.acme.test", "/openapi.json")).toHaveLength(2);
+    });
+
+    it("doesn't wait out a Retry-After the budget can't cover", async () => {
+      const o = server.origin("docs.acme.test");
+      page("docs.acme.test", "/api", `<a href="/openapi.json">Spec</a>`);
+      flaky("docs.acme.test", "/openapi.json", [429], { "retry-after": "30" });
+
+      const began = Date.now();
+      const { hits, failed } = await crawlForSpecs({
+        startUrl: `${o}/api`,
+        api,
+        fetcher: fetcher(),
+        judge: judgeSaying({ [`${o}/openapi.json`]: 0.9 }),
+        budgetMs: 2000,
+      });
+
+      expect(hits).toEqual([]);
+      expect(failed).toEqual([
+        { url: `${o}/openapi.json`, reason: "http-error: HTTP 429" },
+      ]);
+      expect(specRequests("docs.acme.test", "/openapi.json")).toHaveLength(1);
+      expect(Date.now() - began).toBeLessThan(1000);
+    });
+
+    it("doesn't retry a 404, and reports it", async () => {
+      const o = server.origin("docs.acme.test");
+      page("docs.acme.test", "/api", `<a href="/openapi.json">Spec</a>`);
+      flaky("docs.acme.test", "/openapi.json", [404]);
+
+      const { failed } = await crawlForSpecs({
+        startUrl: `${o}/api`,
+        api,
+        fetcher: fetcher(),
+        judge: judgeSaying({ [`${o}/openapi.json`]: 0.9 }),
+      });
+
+      expect(failed).toEqual([
+        { url: `${o}/openapi.json`, reason: "http-error: HTTP 404" },
+      ]);
+      expect(specRequests("docs.acme.test", "/openapi.json")).toHaveLength(1);
+    });
   });
 });
 
@@ -838,7 +961,7 @@ describe("crawlForVendorApis", () => {
       [`${o}/books`]: 0.8,
       [`${o}/guides`]: 0.5,
     });
-    const hits = await crawlForVendorApis({
+    const { hits } = await crawlForVendorApis({
       startUrl: `${o}/`,
       vendor,
       fetcher: fetcher(),
@@ -863,7 +986,7 @@ describe("crawlForVendorApis", () => {
        <a href="/mail-overview">Mail</a> <a href="/crm">CRM API</a>`,
     );
 
-    const hits = await crawlForVendorApis({
+    const { hits } = await crawlForVendorApis({
       startUrl: `${o}/`,
       vendor,
       fetcher: fetcher(),
@@ -891,7 +1014,7 @@ describe("crawlForVendorApis", () => {
     );
     page("developer.acme.test", "/sms", `<a href="/fax">Fax API</a>`);
 
-    const hits = await crawlForVendorApis({
+    const { hits } = await crawlForVendorApis({
       startUrl: `${o}/`,
       vendor,
       fetcher: fetcher(),
@@ -916,7 +1039,7 @@ describe("crawlForVendorApis", () => {
     );
     const judge = apiJudge({ [other]: 0.9, [`${o}/crm`]: 0.9 });
 
-    const hits = await crawlForVendorApis({
+    const { hits } = await crawlForVendorApis({
       startUrl: `${o}/`,
       vendor,
       fetcher: fetcher(),
@@ -941,7 +1064,7 @@ describe("crawlForVendorApis", () => {
     );
     for (const p of paths) page("developer.acme.test", p, "");
 
-    const hits = await crawlForVendorApis({
+    const { hits } = await crawlForVendorApis({
       startUrl: `${o}/`,
       vendor,
       fetcher: fetcher(),
@@ -970,7 +1093,7 @@ describe("crawlForVendorApis", () => {
     });
 
     const began = Date.now();
-    const hits = await crawlForVendorApis({
+    const { hits } = await crawlForVendorApis({
       startUrl: `${o}/`,
       vendor,
       fetcher: fetcher(),
@@ -980,6 +1103,46 @@ describe("crawlForVendorApis", () => {
 
     expect(hits).toEqual([{ name: "Slow API", url: `${o}/slow` }]);
     expect(Date.now() - began).toBeLessThan(900);
+  });
+
+  it("retries a page that answers 429 once, and reports one that keeps failing", async () => {
+    const o = server.origin("developer.acme.test");
+    page(
+      "developer.acme.test",
+      "/",
+      `<a href="/mail">Mail API</a> <a href="/crm">CRM API</a>`,
+    );
+    let mailAsked = 0;
+    server.route("developer.acme.test", "/mail", (_req, res) => {
+      mailAsked++;
+      if (mailAsked === 1) {
+        res.writeHead(429, { "retry-after": "0" });
+        res.end();
+        return;
+      }
+      res.writeHead(200, { "content-type": "text/html" });
+      res.end(html(`<a href="/sms">SMS API</a>`));
+    });
+    server.route("developer.acme.test", "/crm", (_req, res) => {
+      res.writeHead(502, { "retry-after": "0" });
+      res.end();
+    });
+
+    const { hits, failed } = await crawlForVendorApis({
+      startUrl: `${o}/`,
+      vendor,
+      fetcher: fetcher(),
+      judge: apiJudge({
+        [`${o}/mail`]: 0.9,
+        [`${o}/crm`]: 0.8,
+        [`${o}/sms`]: 0.7,
+      }),
+    });
+
+    expect(hits.map((h) => h.name)).toEqual(["Mail API", "CRM API", "SMS API"]);
+    expect(failed).toEqual([
+      { url: `${o}/crm`, reason: "http-error: HTTP 502" },
+    ]);
   });
 
   it("never throws: an unreachable portal or a failing Judge is nothing found", async () => {
@@ -996,7 +1159,7 @@ describe("crawlForVendorApis", () => {
         fetcher: fetcher(),
         judge: failing,
       }),
-    ).resolves.toEqual([]);
+    ).resolves.toMatchObject({ hits: [] });
     await expect(
       crawlForVendorApis({
         startUrl: "not a url",
@@ -1004,7 +1167,7 @@ describe("crawlForVendorApis", () => {
         fetcher: fetcher(),
         judge: apiJudge({}),
       }),
-    ).resolves.toEqual([]);
+    ).resolves.toMatchObject({ hits: [] });
   });
 });
 
