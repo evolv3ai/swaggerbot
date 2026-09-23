@@ -1,7 +1,8 @@
 /**
  * Run the Benchmark:
  * `pnpm bench [--only-reviewed] [--json] [--search brave|tavily] [--index <path> | --keep-index]`.
- * Prints a table (or the report as JSON) and exits 1 when the
+ * Prints a table (or the report as JSON, with each entry's Outcome traced
+ * under `answers`) and exits 1 when the
  * False Resolution rate is at or above the 2% release gate. `--search` sets
  * `SEARCH_PROVIDER` for this run, so portal finding can be compared.
  *
@@ -46,6 +47,9 @@ const index: BenchIndex = tempDir
 try {
   // Set before the Lookup is built: `openDb` reads it at call time.
   process.env.DATABASE_PATH = index.path;
+  // Each answer's `diagnostics` then keep what its Spec step checked and
+  // found, so an intermittent failure can be read from the JSON report.
+  process.env.LOOKUP_TRACE = "1";
   const appLookup = createAppLookup();
   const lookup: BenchmarkLookup = (name) => appLookup({ name });
 

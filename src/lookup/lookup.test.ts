@@ -129,6 +129,8 @@ function setup(
   vendorCrawl = fakeVendorCrawl(),
   /** Wraps the fixture fetcher, e.g. to fake answers for `https://` URLs. */
   wrapFetcher: (fetcher: Fetcher) => Fetcher = (f) => f,
+  /** Any other dependency, e.g. `trace`. */
+  extra: Partial<LookupDeps> = {},
 ) {
   const judge = new FakeJudge(script);
   const fetcher = wrapFetcher(
@@ -160,6 +162,7 @@ function setup(
     vendorCrawl: vendorCrawl.vendorCrawl,
     ...(github ? { github } : {}),
     ...(githubSearch ? { githubSearch } : {}),
+    ...extra,
   });
   return {
     judge,
@@ -226,6 +229,54 @@ describe("lookup", () => {
       "isVendorName",
       "specDescribesApi",
     ]);
+  });
+
+  describe("with trace", () => {
+    const payco = (trace: boolean) => {
+      server.send(
+        "developer.payco.test",
+        "/openapi.json",
+        spec("PayCo API"),
+        "application/json",
+      );
+      const { lookup } = setup(
+        {
+          whichApi: {
+            payco: {
+              probabilities: { "payco.test/payco-api": 0.9, none: 0.1 },
+              confidence: 0.9,
+            },
+          },
+          specDescribesApi: { "PayCo API": yes },
+        },
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { trace },
+      );
+      return ask(lookup, "payco");
+    };
+    const url = () => `${server.origin("developer.payco.test")}/openapi.json`;
+
+    it("adds what was checked and the pool to a Resolved outcome", async () => {
+      const outcome = await payco(true);
+
+      expect(outcome.outcome).toBe("Resolved");
+      expect(outcome.diagnostics).toEqual([
+        `checked: ${url()}`,
+        `pool: ${url()} (API Version 1, 1 paths, Judge 0.95, Official)`,
+      ]);
+    });
+
+    it("adds nothing without it", async () => {
+      const outcome = await payco(false);
+
+      expect(outcome.outcome).toBe("Resolved");
+      expect(outcome.diagnostics).toBeUndefined();
+    });
   });
 
   it("answers a second Lookup of the same name from the Index without the Judge", async () => {

@@ -307,6 +307,25 @@ describe("runBenchmark", () => {
     expect(report.outcomeAccuracy).toBe(1);
   });
 
+  it("reports each entry's Outcome, diagnostics included, and its time", async () => {
+    const outcome = {
+      ...unknown("Reviewed"),
+      diagnostics: ["checked: https://example.com/openapi.json"],
+    };
+    const report = await runBenchmark({
+      entries: [entries[0] as BenchmarkEntry],
+      lookup: async () => outcome,
+    });
+    expect(report.answers).toEqual([
+      {
+        name: "Reviewed",
+        expected: "Resolved",
+        outcome,
+        ms: expect.any(Number),
+      },
+    ]);
+  });
+
   it("never runs more Lookups at once than concurrency", async () => {
     let running = 0;
     let peak = 0;

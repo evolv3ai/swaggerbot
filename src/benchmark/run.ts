@@ -16,6 +16,7 @@ export type RunBenchmarkOptions = {
 /**
  * Run `lookup` on every entry, `concurrency` at a time, then `score`.
  * A Lookup that throws counts as an Unknown answer and is listed as an error.
+ * Each answer is timed.
  */
 export async function runBenchmark({
   lookup,
@@ -31,13 +32,17 @@ export async function runBenchmark({
     while (next < selected.length) {
       const i = next++;
       const { name } = selected[i] as BenchmarkEntry;
+      const start = performance.now();
+      const ms = () => Math.round(performance.now() - start);
       try {
-        answers[i] = { name, outcome: await lookup(name) };
+        const outcome = await lookup(name);
+        answers[i] = { name, outcome, ms: ms() };
       } catch (err) {
         answers[i] = {
           name,
           outcome: { outcome: "Unknown", name },
           error: err instanceof Error ? err.message : String(err),
+          ms: ms(),
         };
       }
     }
