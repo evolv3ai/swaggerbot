@@ -85,6 +85,18 @@ What had to change:
 
 The rework note asks for sources to be judged in precedence order as each finishes (stopping once one settles), for GitHub not to wait on the crawl, and for a fix to Mux's crawl.
 
+**WTR-96 rework 1 (`03682ef`), sent back again.** Sources are now judged as they finish, GitHub no longer waits on the crawl, and the probe yields to the crawl on a shared host.
+
+| | p50 | p90 | max | FR | long-tail coverage |
+|---|---|---|---|---|---|
+| 9 s deadline | 8.9 s | **14.5 s** | 15.3 s | **1/18** (Box, via GitHub's add-on) | 72.7% |
+| `Infinity` | 9.2 s | 29.7 s | 31.2 s | 0/20 | 90.9% |
+
+Box and Asana are Resolved again. But the yielding starves the probe on the crawl's own host: Cloudflare answered NoSpec in both runs, and Supabase with the deadline. Rework 2 asks for:
+- the probe's likeliest paths to go ahead of the crawl's requests, with only the rest yielding (the per-host politeness is unchanged);
+- a Judge-rejected hit not to start the probe's grace window;
+- the WTR-95 guard: a Lookup isn't settled while every confirmed Spec's URL names an API Version.
+
 7a and 7b don't trade anything away. 7c is the only one that bounds the worst case, and it's the one that costs coverage. A rough estimate: 7a and 7b together bring p50 under 10 s but leave the p90 around 20–25 s, because of the NoSpec names. Reaching p90 < 15 s very likely needs 7c too.
 
 
