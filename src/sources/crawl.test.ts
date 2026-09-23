@@ -724,6 +724,26 @@ describe("crawlForSpecs", () => {
     expect(hits[0]).toMatchObject({ linkedFrom: `${o}/api`, offHost: false });
   });
 
+  it("finds a Spec named only in a code block on the start page", async () => {
+    const o = server.origin("docs.acme.test");
+    page(
+      "docs.acme.test",
+      "/docs/api",
+      `<a href="/guide">Guide</a><pre><code><span class="token plain">${o}/openapi/public-api-1.json</span></code></pre>`,
+    );
+    specAt("docs.acme.test", "/openapi/public-api-1.json");
+
+    const { hits } = await crawlForSpecs({
+      startUrl: `${o}/docs/api`,
+      api,
+      fetcher: fetcher(),
+      judge: judgeSaying({ [`${o}/openapi/public-api-1.json`]: 0.9 }),
+    });
+
+    expect(hits.map((h) => h.url)).toEqual([`${o}/openapi/public-api-1.json`]);
+    expect(hits[0]?.linkedFrom).toBe(`${o}/docs/api`);
+  });
+
   it("makes one candidate of a Spec URL that is both an anchor and in a script", async () => {
     const o = server.origin("docs.acme.test");
     page(
@@ -1047,6 +1067,41 @@ describe("extractEmbeddedSpecUrls", () => {
       "https://docs.acme.test/api-reference/v2-openapi.json",
       "https://docs.acme.test/specs/swagger.yml",
       "https://app.acme.test/api/docs/json",
+    ]);
+  });
+
+  it("finds a Spec URL in a code block, its highlighting spans stripped", () => {
+    const html = `<pre class="prism-code"><code><span class="token-line"><span class="token plain">https://api-docs.example.com/openapi/public-api-1.json</span></span></code></pre>`;
+    expect(extractEmbeddedSpecUrls(html, base)).toEqual([
+      "https://api-docs.example.com/openapi/public-api-1.json",
+    ]);
+  });
+
+  it("finds a Spec whose directory, not file name, names openapi in a script's escaped JSON", () => {
+    const html = `<script>self.__next_f.push([1,"curl https:\\/\\/api-docs.example.com\\/openapi\\/public-api-1.json\\n"])</script>`;
+    expect(extractEmbeddedSpecUrls(html, base)).toEqual([
+      "https://api-docs.example.com/openapi/public-api-1.json",
+    ]);
+  });
+
+  it("finds a swagger directory path in code, decoding entities", () => {
+    const html = `<code>GET /swagger/v1/api.yaml</code><pre>https:&#x2F;&#x2F;x.test&#47;openapi&#47;v2.yml?a=1&amp;b=2</pre>`;
+    expect(extractEmbeddedSpecUrls(html, base)).toEqual([
+      "https://docs.acme.test/swagger/v1/api.yaml",
+      "https://x.test/openapi/v2.yml",
+    ]);
+  });
+
+  it("ignores a .json URL with no openapi or swagger segment", () => {
+    const html = `<script>a="/assets/app.json";b="https://openapi.x.test/app.json"</script><pre>https://x.test/assets/app.json</pre>`;
+    expect(extractEmbeddedSpecUrls(html, base)).toEqual([]);
+  });
+
+  it("puts script matches ahead of code matches, deduplicated", () => {
+    const html = `<pre>/openapi/a.json /openapi/b.json</pre><script>x="/openapi/b.json"</script>`;
+    expect(extractEmbeddedSpecUrls(html, base)).toEqual([
+      "https://docs.acme.test/openapi/b.json",
+      "https://docs.acme.test/openapi/a.json",
     ]);
   });
 

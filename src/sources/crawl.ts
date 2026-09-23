@@ -568,21 +568,27 @@ export function extractLinks(html: string, baseUrl: string): SpecLink[] {
 }
 
 const SCRIPT = /<script\b[^>]*>([\s\S]*?)<\/script\s*>/gi;
+const CODE = /<(pre|code)\b[^>]*>([\s\S]*?)<\/\1\s*>/gi;
 /**
- * A Spec-looking URL in script text: absolute, or a site path with or without
- * its leading slash, whose last segment names `openapi` or `swagger` and ends
- * in `.json`, `.yaml` or `.yml`, or that ends in `/api/docs/json`.
+ * A Spec-looking URL in script or code text: absolute, or a site path with or
+ * without its leading slash, that ends in `.json`, `.yaml` or `.yml` and names
+ * `openapi` or `swagger` in any path segment, a directory
+ * (`/openapi/public-api-1.json`) or the file name (`v2-openapi.json`); or
+ * that ends in `/api/docs/json`.
  */
 const EMBEDDED_SPEC =
-  /(?<![\w.~%/:@-])(?:https?:\/\/[\w.-]+(?::\d+)?)?\/?(?:[\w.~%@-]+\/)*?(?:[\w.~%-]*(?:openapi|swagger)[\w.~%-]*\.(?:json|ya?ml)|api\/docs\/json)(?![\w.~%/-])/gi;
+  /(?<![\w.~%/:@-])(?:https?:\/\/[\w.-]+(?::\d+)?)?\/?(?:[\w.~%@-]+\/)*?(?:[\w.~%@-]*(?:openapi|swagger)[\w.~%@-]*\/(?:[\w.~%@-]+\/)*[\w.~%-]*\.(?:json|ya?ml)|[\w.~%-]*(?:openapi|swagger)[\w.~%-]*\.(?:json|ya?ml)|api\/docs\/json)(?![\w.~%/-])/gi;
 
 /**
- * Spec URLs a page names outside its anchors, in its inline `<script>`
+ * Spec URLs a page names outside its anchors: first in its inline `<script>`
  * bodies and JSON, as documentation sites built from a Spec (Mintlify,
- * Scalar) do: `"api-reference/v2-openapi.json"` in a config, never in an
- * `<a href>`. Resolved against `baseUrl`; a path without a leading slash
- * resolves from the site root, as those configs mean it. In document order,
- * deduplicated, at most 10.
+ * Scalar) do (`"api-reference/v2-openapi.json"` in a config, never in an
+ * `<a href>`); then in the text of its `<pre>` and `<code>` elements, where
+ * docs show a Spec URL to copy, with the tags inside (syntax-highlighting
+ * spans) stripped and `&amp;`, `&#x2F;` and `&#47;` decoded. Resolved against
+ * `baseUrl`; a path without a leading slash resolves from the site root, as
+ * those configs mean it. Script matches first, then code matches, each in
+ * document order; deduplicated, at most 10.
  */
 export function extractEmbeddedSpecUrls(
   html: string,
@@ -595,12 +601,23 @@ export function extractEmbeddedSpecUrls(
   } catch {
     return urls;
   }
+  const texts: string[] = [];
   for (const script of html.matchAll(SCRIPT)) {
-    // JSON inside a string escapes its slashes: `https:\/\/…`, `\u002F`.
-    const body = (script[1] ?? "")
-      .replace(/\\+\//g, "/")
-      .replace(/\\u002f/gi, "/");
-    for (const match of body.matchAll(EMBEDDED_SPEC)) {
+    // JSON inside a string escapes its slashes: `https:\/\/…`, `/`.
+    texts.push(
+      (script[1] ?? "").replace(/\\+\//g, "/").replace(/\\u002f/gi, "/"),
+    );
+  }
+  for (const code of html.matchAll(CODE)) {
+    texts.push(
+      (code[2] ?? "")
+        .replace(/<[^>]*>/g, "")
+        .replace(/&#x2f;|&#47;/gi, "/")
+        .replace(/&amp;/gi, "&"),
+    );
+  }
+  for (const text of texts) {
+    for (const match of text.matchAll(EMBEDDED_SPEC)) {
       const ref = match[0];
       let url: URL;
       try {
@@ -619,9 +636,9 @@ export function extractEmbeddedSpecUrls(
 }
 
 /**
- * A page's anchors with the Spec URLs its scripts name put first: they name
- * a Spec outright, so at an equal score they are fetched ahead of an
- * ordinary link. A URL that is also an anchor is one candidate, carrying the
+ * A page's anchors with the Spec URLs its scripts and code blocks name put
+ * first: they name a Spec outright, so at an equal score they are fetched
+ * ahead of an ordinary link. A URL that is also an anchor is one candidate, carrying the
  * anchor's text.
  */
 function withEmbeddedSpecs(
