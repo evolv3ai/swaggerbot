@@ -37,6 +37,7 @@ Filed 2026-09-22 as WTR-88..93 (Backlog, `swaggerbot` only), with Linear "blocke
 | 7a | WTR-94 | The known-path probe stops soon after its first hit | 1 | 5 |
 | 7bc | WTR-96 | The Spec step's sources run in parallel, within one deadline | 7a | 6 |
 | 9 | | Verification uses the Caller's spelling, not the normalised name | 4 | 5 |
+| 10 | | The keys CLI runs in the production image | 3 | 5 |
 | 8 | WTR-95 | Box: the full Spec sometimes never reaches the pool, and an add-on answers | — | 5 |
 
 #3 and #4 both add a Drizzle migration, so #4 waits for #3 to avoid two `0004_*` files. #4 and #5 both touch the Lookup's entry point (`lookup.ts`, `http.ts`), so they're queued in waves, not together.
@@ -386,4 +387,21 @@ Wes decided (2026-09-23) to run these three sources in parallel **and** to bound
   - **GitHub orgs from the crawl:** an org reported by a crawl that finishes before the deadline is searched.
   - The existing Box (WTR-95), PagerDuty and Mux/Fly-style tests still pass. Where one depends on sequential early stopping, adapt it and say why in the PR.
 - In the PR description, describe as a manual check for the reviewer (who has keys) two `pnpm bench --json --concurrency 1` runs, one with the default and one with `SPEC_STEP_BUDGET_MS=Infinity`. Expected with the default: p90 < 15 s, False Resolution < 2%, long-tail coverage ≥ 60%. Mux and Fly.io may become NoSpec.
+- `pnpm check` and `pnpm build` green.
+
+---
+
+## 10. swaggerbot: the keys CLI runs in the production image
+
+## Problem
+The operator issues API keys with `scripts/keys.ts` (WTR-90). The production image (WTR-89's `Dockerfile`) ships only `.output/`, `drizzle/` and `docker/`: there's no `scripts/`, no `src/` and no `tsx`. So `docker exec <container> pnpm tsx scripts/keys.ts …` can't run. The first production key (2026-09-23) had to be inserted with hand-written SQL (`docs/deploy.md`, O4). Keys must be issued against the live Index on the container's volume, so the CLI has to run inside the container.
+
+## Change
+- Build the keys CLI into a standalone ESM file during `pnpm build`, e.g. `.output/cli/keys.mjs`. One way is an extra Vite/Rollup entry, or a small `tsup`/`esbuild` step if that's simpler (a dev dependency is fine). It should use the same `src/index-store/keys.ts` and `keys-cli.ts` code, with `better-sqlite3` resolved from `.output/server/node_modules` (or bundled so it resolves at run time).
+- Copy it into the runtime image, so this works: `docker exec <container> node .output/cli/keys.mjs create <owner> [--quota N]`, plus `list` and `revoke`. It opens `DATABASE_PATH`, which the image sets.
+- `README.md` ("API keys") and `docs/deploy.md`: the production command.
+
+## Done when
+- After `pnpm build`, `DATABASE_PATH=<tmp> node .output/cli/keys.mjs create x` then `list` works outside the repo's `node_modules` (e.g. copy `.output` elsewhere and run it there). Show it in the PR.
+- If Docker is available, the same inside the built image. Otherwise say so and the reviewer checks it on the server.
 - `pnpm check` and `pnpm build` green.
