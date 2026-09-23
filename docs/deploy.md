@@ -15,7 +15,7 @@ The operator runbook for the live service ([Slice 3](slices/slice-3-backlog.md),
 | B2 key | application key `swaggerbot-litestream`, restricted to that bucket (listBuckets, listFiles, readFiles, writeFiles, deleteFiles). Its secret exists only in Coolify's env vars. |
 | DNS | `swaggerbot.dev` is registered at Namecheap, with nameservers moved to Cloudflare (`ashley`/`kyle.ns.cloudflare.com`) and proxied. Cloudflare's SSL mode must be **Full or Full (strict)**: Flexible would loop against Traefik's HTTPS redirect. |
 
-**Environment variables set in Coolify** (values in Coolify only): `LITESTREAM_BUCKET`, `LITESTREAM_PATH`, `LITESTREAM_ENDPOINT` (the full `https://` URL), `LITESTREAM_ACCESS_KEY_ID`, `LITESTREAM_SECRET_ACCESS_KEY`, `TYPESAFE_API_KEY`, `BRAVE_API_KEY`, `TAVILY_API_KEY` `GITHUB_SEARCH_TOKEN`, and `CLIENT_IP_HEADER=cf-connecting-ip` (the proxy is Cloudflare; read once WTR-92 lands). The app keys were copied from the repo's local `.env` and `.env.local`. `DATABASE_PATH` comes from the Dockerfile (`/app/data/swaggerbot.db`). Coolify keeps a preview copy of each variable; preview deployments are off.
+**Environment variables set in Coolify** (values in Coolify only): `LITESTREAM_BUCKET`, `LITESTREAM_PATH`, `LITESTREAM_ENDPOINT` (the full `https://` URL), `LITESTREAM_ACCESS_KEY_ID`, `LITESTREAM_SECRET_ACCESS_KEY`, `TYPESAFE_API_KEY`, `BRAVE_API_KEY`, `TAVILY_API_KEY`, `GITHUB_SEARCH_TOKEN` and `CLIENT_IP_HEADER=cf-connecting-ip` (the proxy is Cloudflare; read once WTR-92 lands). The app keys were copied from the repo's local `.env` and `.env.local`. `DATABASE_PATH` comes from the Dockerfile (`/app/data/swaggerbot.db`). Coolify keeps a preview copy of each variable; preview deployments are off.
 
 ## Steps
 
@@ -34,7 +34,6 @@ The operator runbook for the live service ([Slice 3](slices/slice-3-backlog.md),
 - Coolify's application health check runs `curl`/`wget` **inside** the container. An image without them is rolled back as unhealthy, even when its own Docker `HEALTHCHECK` passes.
 - A deploy log can't be read with a token lacking `read:sensitive`. Read it on the server instead: `docker exec coolify php artisan tinker` → `ApplicationDeploymentQueue::where('deployment_uuid', …)->first()->logs`.
 - Env values come back redacted without `read:sensitive`. To use them on the server, have tinker write them to a root-only file and shred it afterwards; they never need to leave the box.
-
 - Cloudflare in front of `coolify.8gnc.com` rejects Python's default `urllib` User-Agent with **error 1010**. Send a normal User-Agent (curl's works) when scripting the API.
 - The Coolify API rejects a project description containing `:` (422). It allows only letters, digits, spaces and `- _ . , ! ? ( ) ' " + = * / @ &`.
 - The `coolify` CLI's `app get --format json` printed nothing here. Use the REST API (`/api/v1/applications/<uuid>`) to read an app back.
