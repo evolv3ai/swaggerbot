@@ -6,7 +6,7 @@ import { crawlForSpecs } from "~/sources/crawl";
 import { createGitHubCodeSearch, createGitHubRepos } from "~/sources/github";
 import { createWebSearch } from "~/sources/web-search";
 import { createLookup, type Lookup } from "./lookup";
-import { DEFAULT_FRESHNESS_DAYS } from "./thresholds";
+import { DEFAULT_FRESHNESS_DAYS, SPEC_STEP_BUDGET_MS } from "./thresholds";
 import { createVerifier, type Verifier } from "./verify";
 
 /**
@@ -17,7 +17,9 @@ import { createVerifier, type Verifier } from "./verify";
  * optional; code search is skipped without it), and the Developer Portal
  * crawl over the same fetcher and Judge; `LOOKUP_TRACE=1` adds the Spec
  * step's trace to `diagnostics` and each step's time as `timings`; Stale
- * answers are those verified more than `FRESHNESS_DAYS` ago (default 7).
+ * answers are those verified more than `FRESHNESS_DAYS` ago (default 7);
+ * the Spec step's parallel Sources stop after `SPEC_STEP_BUDGET_MS`
+ * (default 9000, `Infinity` for none).
  * Used by `pnpm bench` and the scripts: it queues the Verifications of Stale
  * answers but starts no worker to run them (see `createApp`).
  */
@@ -52,6 +54,18 @@ export function freshnessDaysOf(env: NodeJS.ProcessEnv): number {
   return days;
 }
 
+/** `SPEC_STEP_BUDGET_MS`, a positive number of milliseconds or `Infinity`; unset, the default. */
+export function specStepBudgetMsOf(env: NodeJS.ProcessEnv): number {
+  const raw = env.SPEC_STEP_BUDGET_MS?.trim();
+  if (!raw) return SPEC_STEP_BUDGET_MS;
+  const ms = Number(raw);
+  if (Number.isNaN(ms) || ms <= 0)
+    throw new Error(
+      `SPEC_STEP_BUDGET_MS must be a positive number of milliseconds or Infinity, not "${raw}"`,
+    );
+  return ms;
+}
+
 function buildAppLookup(env: NodeJS.ProcessEnv) {
   const judge = createJudge(env);
   const fetcher = createFetcher();
@@ -75,6 +89,7 @@ function buildAppLookup(env: NodeJS.ProcessEnv) {
     crawl: (opts) => crawlForSpecs({ ...opts, fetcher, judge }),
     trace: env.LOOKUP_TRACE === "1",
     freshnessDays,
+    specStepBudgetMs: specStepBudgetMsOf(env),
   });
   return { lookup, db, freshnessDays };
 }
