@@ -23,14 +23,16 @@ Slice 2 is accepted (`69392d9`): False Resolution 0/22 and 0/21, long-tail cover
 
 ## Order
 
+Filed 2026-09-22 as WTR-88..93 (Backlog, `swaggerbot` only), with Linear "blocked by" relations mirroring this table.
+
 | # | Linear | Issue | Depends on | Wave |
 |---|---|---|---|---|
-| 1 | | Time each Lookup step, and report latency percentiles in the Benchmark | — | 1 |
-| 2 | | A production server and container: Nitro, Dockerfile, Litestream to B2 | — | 1 |
-| 3 | | API keys: table, hashing and `scripts/keys.ts` | — | 1 |
-| 4 | | Stale entries, background Verification and `fresh: true` | 3 (migration order) | 2 |
-| 5 | | The HTTP gate: per-IP rate limit, API keys for Discovery, daily quotas | 3, 4 | 3 |
-| 6 | | `scripts/loadcheck.ts`: p90 against a deployed URL | 1, 5 | 4 |
+| 1 | WTR-88 | Time each Lookup step, and report latency percentiles in the Benchmark | — | 1 |
+| 2 | WTR-89 | A production server and container: Nitro, Dockerfile, Litestream to B2 | — | 1 |
+| 3 | WTR-90 | API keys: table, hashing and `scripts/keys.ts` | — | 1 |
+| 4 | WTR-91 | Stale entries, background Verification and `fresh: true` | 3 (migration order) | 2 |
+| 5 | WTR-92 | The HTTP gate: per-IP rate limit, API keys for Discovery, daily quotas | 3, 4 | 3 |
+| 6 | WTR-93 | `scripts/loadcheck.ts`: p90 against a deployed URL | 1, 5 | 4 |
 | 7 | — | Speed up Discovery | 1 | filed after #1's numbers |
 
 #3 and #4 both add a Drizzle migration, so #4 waits for #3 to avoid two `0004_*` files. #4 and #5 both touch the Lookup's entry point (`lookup.ts`, `http.ts`), so they're queued in waves, not together.
@@ -41,8 +43,8 @@ Slice 2 is accepted (`69392d9`): False Resolution 0/22 and 0/21, long-tail cover
 
 These are done by hand with Wes's OK, following `docs/deploy.md`, which is written as they're done:
 
-- **O1.** Create a private B2 bucket `swaggerbot-litestream`, plus an application key restricted to that bucket.
-- **O2.** Create a Coolify app on `coolify.8gnc.com` from `evolv3ai/swaggerbot`, built from the Dockerfile (#2). Give it a persistent local volume at `/app/data`, and put the env vars in Coolify's secrets.
+- **O1.** (done 2026-09-23) Create a private B2 bucket `swaggerbot-litestream`, plus an application key restricted to that bucket.
+- **O2.** (done 2026-09-23, not deployed) Create a Coolify app on `coolify.8gnc.com` from `evolv3ai/swaggerbot`, built from the Dockerfile (#2). Give it a persistent local volume at `/app/data`, and put the env vars in Coolify's secrets.
 - **O3.** Point `swaggerbot.dev` at the Coolify server and have the app answer there with TLS.
 - **O4.** Do the first deploy, check `/api/health`, and issue one key for the load check.
 - **O5.** **Rehearse a restore.** Restore the B2 replica into a scratch path, compare row counts and a Lookup answer against the live database, then restore into a fresh volume and boot the app from it. Record it in `docs/deploy.md`.
