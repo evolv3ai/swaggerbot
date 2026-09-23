@@ -35,6 +35,7 @@ Filed 2026-09-22 as WTR-88..93 (Backlog, `swaggerbot` only), with Linear "blocke
 | 6 | WTR-93 | `scripts/loadcheck.ts`: p90 against a deployed URL | 1, 5 | 4 |
 | 7 | — | Speed up Discovery | 1 | filed after #1's numbers |
 | 7a | WTR-94 | The known-path probe stops soon after its first hit | 1 | 5 |
+| 7bc | | The Spec step's sources run in parallel, within one deadline | 7a | 6 |
 | 9 | | Verification uses the Caller's spelling, not the normalised name | 4 | 5 |
 | 8 | WTR-95 | Box: the full Spec sometimes never reaches the pool, and an add-on answers | — | 5 |
 
@@ -60,6 +61,8 @@ Seconds summed over the run, by step: known paths 431 s (22 Lookups, mean 19.6 s
 - **7d. Less politeness spacing for known-path probes only** (for example 250 ms instead of 1 s). The PRD asks for a rate limit per host, not a number. This is the bluntest lever.
 
 **Wes, 2026-09-23: 7a now** (issue 7a below). **7b, 7c and 7d are to be decided after 7a is measured.** He also asked for Box's intermittent False Resolution to be filed now (issue 8).
+
+**Wes, 2026-09-23 (after 7a): 7b + 7c, keeping 15 s.** They're filed as one issue (7bc below), because both reshape the same code. The deadline is a setting, and `Infinity` gives 7b alone, so one build can be measured both ways.
 
 **7a measured (WTR-94, merged `b900308`; bench on its branch, concurrency 1, 2026-09-23):** Discovery **p50 19.4 s → 7.1 s**; p90 46.3 s → 45.8 s; max 59.6 s. False Resolution 0/22, long-tail coverage 100%, Outcome accuracy 85%. The six probe wins now spend 4.0–4.8 s in the probe (were 15–25 s): Supabase 27.9 → 6.3 s total, Cloudflare 27.8 → 7.1 s, Neon 21.1 → 9.8 s. **14 of 40 Lookups are still over 15 s**, and they are the NoSpec names and the late finds: Mailchimp 59.6 s, Codeberg 53.5 s, Asana 49.4 s, Mux 46.3 s, Zoho 45.8 s, Slack 45.4 s, Dropbox 42.4 s, Reddit 40.0 s, Fly.io 34.1 s and Intuit 32.2 s. Each of them pays the probe's 25 s budget with no hit, **plus** the crawl's 20 s, plus GitHub. To reach p90 < 15 s, at most 4 of 40 may be over.
 
@@ -342,4 +345,45 @@ WTR-91 keys the `verifications` queue on `name_normalized`, and the worker runs 
 ## Done when
 - `src/lookup/verify.test.ts`: enqueueing `"PayCo API"` makes the worker run the Lookup with `"PayCo API"`. A second enqueue with another spelling of the same normalised name updates the stored spelling and doesn't add a row.
 - The migration applies to an Index that already has queued rows.
+- `pnpm check` and `pnpm build` green.
+
+---
+
+## 7bc. swaggerbot: the Spec step's sources run in parallel, within one deadline
+
+## Problem
+Discovery must answer in p90 < 15 s (PRD, Slice 3). After WTR-94, `pnpm bench --concurrency 1` gives p50 7.1 s but p90 45.8 s: 14 of 40 Lookups take over 15 s (see "Where Discovery's time goes" and "7a measured" in `docs/slices/slice-3-backlog.md`). They're the names where the Spec step's sources in `findSpec` (`src/lookup/lookup.ts`) all run to the end, **one after another**:
+
+```
+if (!settled()) await timed("known paths", knownPathsStep);          // up to 25 s
+if (!settled()) await timed("Developer Portal crawl", crawlStep);    // up to 20 s
+if (!settled() && githubSearch) await timed("GitHub code search", …); // 2–15 s
+```
+
+For example, Codeberg takes 15 + 20 + 15 s, Mailchimp 25 + 20 + 8 s, Asana 25 + 20 + 2 s, and Mux 25 + 16 s.
+
+Wes decided (2026-09-23) to run these three sources in parallel **and** to bound them with one deadline, keeping the 15 s target. He accepts that a Spec found only after the deadline is lost; Mux and Fly.io are the known cases.
+
+## Change
+**Split each source into gathering and judging.** Today each step fetches and calls `consider` (Judge) in one loop, and stops early with `settled()`/`goOn`. Change the three steps so each first **gathers** its candidate Specs (URL, bytes, sniff, provenance and the `consider` options it passes today, e.g. `offHost`, `robotsDisallowed`) without judging them, then run the three gathers **concurrently**. Once they're all done, or the deadline passes, **judge in today's order**: known-path hits, then crawl hits (on-host before off-host, as now), then GitHub hits (in their `areSpecLinks` ranking). Apply today's per-source rules unchanged while judging: known-path and crawl hits are all considered (WTR-42, WTR-95), and `goOn` applies where it applies today. The precedence, and so the Current Spec, must come out the same as today whenever a source finishes in time.
+- **The Spec fetch step** (APIs.guru origin URLs) stays **first and sequential**, as now. It's fast and often settles the Lookup (Stripe, GitHub, OpenAI). The parallel sources start only if it didn't. The APIs.guru mirror fallback stays last.
+- **Known paths:** `probe(choice.vendor.domain, { allowBlanketRobots: true, budgetMs })`, with the remaining time as the budget.
+- **Crawl:** `crawl({ startUrl, api })` bounded by the remaining time (pass a budget or signal into `crawlForSpecs` if it needs one; today its own cap is 20 s). Its off-host known-path probes run inside the crawl's gather, within the same deadline. They can no longer stop on `settled()` (nothing is judged yet), so probe every off-host host in parallel rather than one by one.
+- **GitHub:** it starts at once with the orgs it knows without the crawl. When the crawl's gather ends before the deadline and reports `githubOrgs` it hasn't searched, it searches those too. After `areSpecLinks`, it fetches at most the top `MAX_GITHUB_SPEC_FETCHES` (3) ranked hits during the gather, since it can no longer stop at the first that settles.
+
+**The deadline.** `SPEC_STEP_BUDGET_MS`, default **9000**, in `src/lookup/thresholds.ts`, overridable by the `SPEC_STEP_BUDGET_MS` env var (read in `createAppLookup`/`createApp`) and by `LookupDeps`. It bounds the three gathers together, from the moment they start. What each source has gathered by then is judged, and the rest is dropped. Leave the diagnostic `spec step deadline: <sources still running> stopped after <ms> ms`. `Infinity` means no deadline, which is 7b alone, so a reviewer can measure both. Judging after the deadline isn't bounded, since it's cheap (about 0.2–0.3 s a call).
+
+**Timings.** WTR-88's `timings` keep one entry per source, now each source's gather time, plus a new `Spec judging` step for the judging phase.
+
+`README.md`: a line on `SPEC_STEP_BUDGET_MS` in the configuration section.
+
+## Done when
+- `src/lookup/lookup.test.ts`, with fakes:
+  - **Parallel:** a fake probe, crawl and GitHub search that each take 300 ms finish the Spec step in well under 900 ms. Assert on elapsed time with a generous margin, or use fake timers.
+  - **Precedence:** when known paths and GitHub both offer a confirmed Spec, the answer is the same as today's sequential order would give.
+  - **Deadline:** a crawl that would return its Spec after the deadline is dropped, the answer is the known-path hit (or NoSpec), and the `spec step deadline` diagnostic names the crawl.
+  - **`Infinity`:** the late crawl hit is kept.
+  - **GitHub orgs from the crawl:** an org reported by a crawl that finishes before the deadline is searched.
+  - The existing Box (WTR-95), PagerDuty and Mux/Fly-style tests still pass. Where one depends on sequential early stopping, adapt it and say why in the PR.
+- In the PR description, describe as a manual check for the reviewer (who has keys) two `pnpm bench --json --concurrency 1` runs, one with the default and one with `SPEC_STEP_BUDGET_MS=Infinity`. Expected with the default: p90 < 15 s, False Resolution < 2%, long-tail coverage ≥ 60%. Mux and Fly.io may become NoSpec.
 - `pnpm check` and `pnpm build` green.
