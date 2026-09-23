@@ -37,7 +37,7 @@ Filed 2026-09-22 as WTR-88..93 (Backlog, `swaggerbot` only), with Linear "blocke
 | 7a | WTR-94 | The known-path probe stops soon after its first hit | 1 | 5 |
 | 7bc | WTR-96 | The Spec step's sources run in parallel, within one deadline | 7a | 6 |
 | 9 | WTR-97 | Verification uses the Caller's spelling, not the normalised name | 4 | 5 |
-| 10 | | The keys CLI runs in the production image | 3 | 5 |
+| 10 | WTR-98 | The keys CLI runs in the production image | 3 | 5 |
 | 8 | WTR-95 | Box: the full Spec sometimes never reaches the pool, and an add-on answers | — | 5 |
 
 #3 and #4 both add a Drizzle migration, so #4 waits for #3 to avoid two `0004_*` files. #4 and #5 both touch the Lookup's entry point (`lookup.ts`, `http.ts`), so they're queued in waves, not together.
