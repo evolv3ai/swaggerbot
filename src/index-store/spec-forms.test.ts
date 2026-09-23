@@ -93,6 +93,18 @@ describe("createSpecForms", () => {
     expect(forms.nextToBuild()).toBe(newer);
   });
 
+  it("picks a Spec not yet tried before an older one being retried", () => {
+    const older = putSpec('{"n":1}', "2026-09-21T00:00:00.000Z");
+    forms.markBuilding(older, AT);
+    forms.saveFailure(older, new Error("boom"), AT);
+    const newer = putSpec('{"n":2}', "2026-09-22T00:00:00.000Z");
+
+    expect(forms.nextToBuild()).toBe(newer);
+    forms.markBuilding(newer, AT);
+    forms.saveFailure(newer, new Error("boom"), AT);
+    expect(forms.nextToBuild()).toBe(older);
+  });
+
   it("is ready after saveBuilt, and getForms returns what was saved", () => {
     const id = putSpec("{}", AT);
     forms.markBuilding(id, AT);
