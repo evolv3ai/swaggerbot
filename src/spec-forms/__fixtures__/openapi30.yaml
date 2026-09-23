@@ -1,0 +1,72 @@
+openapi: 3.0.3
+info:
+  title: Library
+  version: 2.0.0
+servers:
+  - url: https://library.example.com/api
+  - url: https://staging.library.example.com/api
+tags:
+  - name: books
+  - name: authors
+  - name: unused
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+    key:
+      type: apiKey
+      name: api_key
+      in: query
+  schemas:
+    Category:
+      type: object
+      properties:
+        name:
+          type: string
+        parent:
+          $ref: "#/components/schemas/Category"
+security:
+  - bearer: []
+paths:
+  /books:
+    get:
+      operationId: listBooks
+      summary: List books
+      tags: [books]
+      responses:
+        "200":
+          description: The books
+    post:
+      operationId: createBook
+      tags: [books]
+      deprecated: true
+      responses:
+        "201":
+          description: Created
+  /authors/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getAuthor
+      summary: Get an author
+      tags: [authors, people]
+      responses:
+        "200":
+          description: The author
+  /categories:
+    get:
+      summary: List categories
+      responses:
+        "200":
+          description: The categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Category"

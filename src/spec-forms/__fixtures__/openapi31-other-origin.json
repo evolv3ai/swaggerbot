@@ -1,0 +1,22 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "Borrowed", "version": "1.0.0" },
+  "paths": {
+    "/gadgets": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "The gadgets",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.other.example/gadget.json#/Gadget"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

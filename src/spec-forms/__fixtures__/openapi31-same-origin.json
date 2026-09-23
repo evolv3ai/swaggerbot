@@ -1,0 +1,20 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "Split", "version": "1.0.0" },
+  "paths": {
+    "/widgets": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "The widgets",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "schemas/widget.json#/Widget" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
