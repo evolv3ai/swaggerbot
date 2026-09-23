@@ -290,6 +290,23 @@ describe("lookup", () => {
 
       expect(outcome.outcome).toBe("Resolved");
       expect(outcome.diagnostics).toBeUndefined();
+      expect(outcome).not.toHaveProperty("timings");
+    });
+
+    it("times each step of a Discovery through APIs.guru", async () => {
+      const outcome = await payco(true);
+
+      expect(outcome.outcome).toBe("Resolved");
+      expect(outcome.timings).toMatchObject({
+        Index: expect.any(Number),
+        "APIs.guru": expect.any(Number),
+        "Judge whichApi": expect.any(Number),
+        "Spec fetch": expect.any(Number),
+      });
+      // Settled by the origin: no later step ran.
+      expect(outcome.timings).not.toHaveProperty("known paths");
+      for (const ms of Object.values(outcome.timings ?? {}))
+        expect(Number.isInteger(ms) && ms >= 0).toBe(true);
     });
   });
 

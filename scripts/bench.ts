@@ -1,8 +1,9 @@
 /**
  * Run the Benchmark:
- * `pnpm bench [--only-reviewed] [--json] [--search brave|tavily] [--index <path> | --keep-index]`.
- * Prints a table (or the report as JSON, with each entry's Outcome traced
- * under `answers`) and exits 1 when the
+ * `pnpm bench [--only-reviewed] [--json] [--search brave|tavily] [--index <path> | --keep-index] [--concurrency <n>]`.
+ * Prints a table with a latency line (or the report as JSON, with each
+ * entry's Outcome traced under `answers`, its step `timings` included) and
+ * exits 1 when the
  * False Resolution rate is at or above the 2% release gate. `--search` sets
  * `SEARCH_PROVIDER` for this run, so portal finding can be compared.
  *
@@ -10,6 +11,8 @@
  * the run ends, so the Benchmark measures Discovery rather than Index replay.
  * `--index <path>` uses that Index instead and never deletes it;
  * `--keep-index` keeps the temporary one and prints its path.
+ * `--concurrency <n>` runs n Lookups at once (default 4); 1 measures latency
+ * without Lookups sharing the fetcher's per-host spacing.
  */
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -17,6 +20,7 @@ import { join } from "node:path";
 import {
   type BenchIndex,
   indexLabel,
+  latencyLine,
   parseBenchArgs,
   withIndex,
 } from "~/benchmark/cli";
@@ -48,7 +52,8 @@ try {
   // Set before the Lookup is built: `openDb` reads it at call time.
   process.env.DATABASE_PATH = index.path;
   // Each answer's `diagnostics` then keep what its Spec step checked and
-  // found, so an intermittent failure can be read from the JSON report.
+  // found, so an intermittent failure can be read from the JSON report, and
+  // each answer carries its step `timings`.
   process.env.LOOKUP_TRACE = "1";
   const appLookup = createAppLookup();
   const lookup: BenchmarkLookup = (name) => appLookup({ name });
@@ -63,6 +68,7 @@ try {
       lookup,
       entries,
       onlyReviewed: options.onlyReviewed,
+      concurrency: options.concurrency,
     }),
     index,
   );
@@ -86,6 +92,7 @@ function table(r: BenchmarkReport): string {
   const lines = [
     `Benchmark: ${r.entries} entries${options.onlyReviewed ? " (reviewed only)" : ""}${provider ? `, search: ${provider}` : ""}`,
     indexLabel(index),
+    latencyLine(r),
     "",
     `False Resolution rate  ${pct(r.falseResolutionRate).padStart(6)}  (${r.falseResolutions}/${r.resolved} Resolved, gate < ${pct(FALSE_RESOLUTION_GATE)}: ${gate})`,
     `Long-tail coverage     ${pct(r.longtailCoverage).padStart(6)}`,

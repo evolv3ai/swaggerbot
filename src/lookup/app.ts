@@ -14,7 +14,7 @@ import { createLookup, type Lookup } from "./lookup";
  * its key), GitHub's repo metadata and code search (`GITHUB_SEARCH_TOKEN`,
  * optional; code search is skipped without it), and the Developer Portal
  * crawl over the same fetcher and Judge; `LOOKUP_TRACE=1` adds the Spec
- * step's trace to `diagnostics`. Used by
+ * step's trace to `diagnostics` and each step's time as `timings`. Used by
  * `POST /api/lookup` and `pnpm bench`.
  */
 export function createAppLookup(env: NodeJS.ProcessEnv = process.env): Lookup {

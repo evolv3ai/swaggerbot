@@ -23,7 +23,7 @@ pnpm build   # production build into dist/
 ## Benchmark
 
 ```sh
-pnpm bench [--only-reviewed] [--json] [--search brave|tavily]
+pnpm bench [--only-reviewed] [--json] [--search brave|tavily] [--concurrency <n>]
 ```
 
 Runs every Benchmark entry through the live Lookup and prints the False Resolution rate, long-tail coverage and Outcome accuracy; it exits 1 when the False Resolution rate reaches the 2% gate. It needs the same keys as a Lookup (`TYPESAFE_API_KEY`, plus a search key for portal finding).
@@ -34,6 +34,8 @@ A run uses a throwaway Index by default: a fresh, empty database in a temporary 
 - `--keep-index` keeps the temporary Index and prints its path.
 
 They can't be used together. The report names the Index it used (`indexPath` and `indexFresh` in `--json`).
+
+Under the header a latency line gives the p50, p90 and max time per answer, e.g. `Latency (Discovery): p50 9.8 s · p90 31.2 s · max 57.5 s (n=40)` (`latency` in `--json`, in ms). With a fresh Index every answer is a Discovery; with `--index`, some came from the Index, and the line says so. `--concurrency <n>` runs n Lookups at once (default 4); `--concurrency 1` measures latency without Lookups competing for the fetcher's per-host spacing. The run traces each Lookup (`LOOKUP_TRACE=1`), so in `--json` every answer's Outcome carries `timings`: milliseconds per Lookup step (`APIs.guru`, `Judge whichApi`, `Developer Portal search`, `known paths`, `Developer Portal crawl`, `GitHub code search`, `Spec fetch` and so on), a step that ran more than once adding up.
 
 ## Crawling etiquette
 
