@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
+    "start": "node .output/server/index.mjs",
     "lint": "biome check .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -21,6 +22,7 @@
     "@typesafe-ai/sdk": "^0.6.0",
     "better-sqlite3": "^13.0.3",
     "drizzle-orm": "^0.45.3",
+    "nitro": "3.0.260903-beta",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "robots-parser": "^3.0.1",

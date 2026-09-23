@@ -17,8 +17,34 @@ The Index database lives at `DATABASE_PATH` (default `./data/swaggerbot.db`); it
 
 ```sh
 pnpm dev     # dev server; GET /api/health returns {"ok":true}
-pnpm build   # production build into dist/
+pnpm build   # production build into .output/
 ```
+
+## Running in production
+
+`pnpm build` produces a Node server in `.output/` (TanStack Start on [Nitro](https://nitro.build)); `pnpm start` runs it. It listens on `PORT` (default 3000) and opens the Index at start-up, applying migrations from `./drizzle`, so start it from the repository root (or anywhere with `drizzle/` beside `.output/`).
+
+```sh
+pnpm build && pnpm start
+```
+
+In production it runs as one container ([ADR 0002](docs/adr/0002-single-instance-tanstack-start-with-sqlite.md), [`docs/deploy.md`](docs/deploy.md)):
+
+```sh
+docker build -t swaggerbot .
+docker run -p 3000:3000 -v swaggerbot-data:/app/data --env-file .env swaggerbot
+```
+
+The image keeps the Index at `DATABASE_PATH=/app/data/swaggerbot.db` on the `/app/data` volume and checks `GET /api/health`. [Litestream](https://litestream.io) replicates the Index continuously to Backblaze B2 through its S3-compatible API (`docker/litestream.yml`), configured by these env vars:
+
+| Variable | Meaning |
+|---|---|
+| `LITESTREAM_BUCKET` | The B2 bucket. Without it, replication is off: the container says so in one line and runs the app alone. |
+| `LITESTREAM_PATH` | The replica's path in the bucket (default `swaggerbot`). |
+| `LITESTREAM_ENDPOINT` | B2's S3 endpoint, `s3.<region>.backblazeb2.com`. |
+| `LITESTREAM_ACCESS_KEY_ID` / `LITESTREAM_SECRET_ACCESS_KEY` | A B2 application key restricted to the bucket. |
+
+With `LITESTREAM_BUCKET` set, the entrypoint (`docker/entrypoint.sh`) first restores the Index from the replica when the volume has no database yet, then runs the app under `litestream replicate`, which stops when the app stops. The app's own keys (`TYPESAFE_API_KEY` and the rest in `.env.example`) are passed the same way.
 
 ## Benchmark
 

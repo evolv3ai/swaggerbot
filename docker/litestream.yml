@@ -1,0 +1,13 @@
+# Litestream replicates the Index to Backblaze B2 through its S3-compatible
+# API (ADR 0002). Litestream expands ${VAR} from the environment; the
+# entrypoint sets LITESTREAM_PATH to `swaggerbot` when it is unset.
+dbs:
+  - path: ${DATABASE_PATH}
+    replica:
+      type: s3
+      bucket: ${LITESTREAM_BUCKET}
+      path: ${LITESTREAM_PATH}
+      # B2's is s3.<region>.backblazeb2.com (with or without https://).
+      endpoint: ${LITESTREAM_ENDPOINT}
+      access-key-id: ${LITESTREAM_ACCESS_KEY_ID}
+      secret-access-key: ${LITESTREAM_SECRET_ACCESS_KEY}
