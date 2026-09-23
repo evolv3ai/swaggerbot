@@ -262,6 +262,8 @@ type Gathered = {
   sniff: SniffResult;
   provenance: Provenance;
   found: Pick<SpecCandidate, "offHost" | "robotsDisallowed" | "apisGuruMirror">;
+  /** The GitHub org its repo is in now, after a move, when fetched as an origin. */
+  githubOrg?: string;
 };
 
 /** What the crawl gathered: its hits, then each off-host host's probe hits. */
@@ -917,6 +919,7 @@ export function createLookup(deps: LookupDeps): IndexedLookup {
           sniff,
           provenance,
           found: mirror ? { apisGuruMirror: true } : {},
+          ...(githubOrg ? { githubOrg } : {}),
         };
       } catch (error) {
         log.checked.push(`${url} (unreachable)`);
@@ -1124,15 +1127,14 @@ export function createLookup(deps: LookupDeps): IndexedLookup {
 
     /**
      * Searches GitHub for Spec files in the Vendor's orgs: at once in the
-     * Vendor id's first label, as APIs.guru names no org, then, once the
-     * crawl has ended, in the orgs it found linked (`verifiedOrgs`) not
-     * searched yet. Across GitHub by the API's name when they have none. The
-     * trees of each org's Spec repos (those with hits, or found by repo
-     * search) add the files code search can't index. An org GitHub says
-     * doesn't exist gets a diagnostic of its own, not a failed search's. The
-     * Judge ranks the hits as links first; the likeliest few likely enough
-     * are fetched as origins, so archived repos are skipped and `HEAD`
-     * becomes the default branch, into `out` in rank order.
+     * Vendor id's first label, as APIs.guru names no org, or across GitHub
+     * by the API's name when it has none, and fetches the likeliest; then,
+     * as an extra once the crawl has reported them, in the orgs it found
+     * linked (`verifiedOrgs`) not searched yet. The trees of each org's Spec
+     * repos (those with hits, or found by repo search) add the files code
+     * search can't index. An org GitHub says doesn't exist gets a diagnostic
+     * of its own, not a failed search's. Hits are fetched as origins, so
+     * archived repos are skipped and `HEAD` becomes the default branch.
      */
     async function gatherGitHub(
       search: GitHubCodeSearch,
@@ -1193,90 +1195,102 @@ export function createLookup(deps: LookupDeps): IndexedLookup {
         return files;
       };
 
-      let hits: SpecHit[] = [];
       const seen = new Set<string>();
-      const add = (found: SpecHit[]) => {
-        for (const hit of found) {
-          if (seen.has(hit.url)) continue;
-          seen.add(hit.url);
-          hits.push(hit);
-        }
-      };
+      /** The hits not gathered before, recorded as gathered. */
+      const unseen = (found: SpecHit[]) =>
+        found.filter((hit) => !seen.has(hit.url) && seen.add(hit.url));
       const searched = new Set<string>();
-      /** Searches each org not searched yet; `false` when a search can't run. */
+      /**
+       * Each org's hits and its Spec repos' tree files, for the orgs not
+       * searched yet; `null` when a search can't run.
+       */
       const searchOrgs = async (orgs: string[]) => {
+        const hits: SpecHit[] = [];
         for (const org of orgs) {
           if (searched.has(org.toLowerCase())) continue;
           searched.add(org.toLowerCase());
           const orgHits = await searchSpecs(org);
-          if (orgHits === null) return false;
+          if (orgHits === null) return null;
           log.checked.push(
             `GitHub code search in org ${org} (${orgHits.length} hits)`,
           );
-          add(orgHits);
+          hits.push(...unseen(orgHits));
           // Code search leaves out files it can't index (over its size limit),
           // so the trees of the org's Spec repos are listed as well.
           const repos = (await reposToList(org, orgHits)).slice(
             0,
             MAX_REPO_TREES_LISTED,
           );
-          for (const fullName of repos) add(await specsInRepo(fullName));
+          for (const fullName of repos)
+            hits.push(...unseen(await specsInRepo(fullName)));
           if (search.missingOrgs().includes(org.toLowerCase()))
             log.diagnostics.push(`GitHub org ${org}: no such org (HTTP 422)`);
         }
-        return true;
+        return hits;
       };
-      if (!(await searchOrgs([vendorLabel(choice.vendor)]))) return;
-      const linked = await crawledGitHubOrgs;
-      if (!(await searchOrgs(await verifiedOrgs(linked, log)))) return;
+      /**
+       * The Judge ranks the hits as links, and the likeliest few likely
+       * enough are fetched at once, as origins, into `out` after those
+       * already there, in rank order: a repo tree lists the right Spec after
+       * code search's wrong ones (PagerDuty's Events Specs before its REST
+       * Spec). Nothing is judged yet to stop at, hence only a few.
+       */
+      const fetchRanked = async (hits: SpecHit[]) => {
+        if (hits.length === 0) return;
+        const links: SpecLink[] = hits.map((hit) => ({
+          url: hit.url,
+          text: hit.path,
+          context: hit.fullName,
+        }));
+        let probabilities: number[];
+        try {
+          probabilities = (await judge.areSpecLinks(ref, links)).map(
+            (j) => j.probability,
+          );
+        } catch (error) {
+          log.diagnostics.push(`Judge areSpecLinks: ${message(error)}`);
+          return;
+        }
+        const slots: GitHubGathered[] = hits
+          .map((hit, i) => ({ hit, p: probabilities[i] ?? 0 }))
+          .filter(({ p }) => p >= t.specLink)
+          .sort((a, b) => b.p - a.p)
+          .slice(0, MAX_GITHUB_SPEC_FETCHES)
+          .map(({ hit }) => ({ hitUrl: hit.url }));
+        out.push(...slots);
+        await Promise.all(
+          slots.map(async (slot) => {
+            const spec = await fetchOrigin(slot.hitUrl, log);
+            if (spec) slot.spec = spec;
+          }),
+        );
+      };
+
+      // The org known up front, without waiting for the crawl.
+      let hits = await searchOrgs([vendorLabel(choice.vendor)]);
+      if (hits === null) return;
       if (hits.length === 0) {
         const global = await searchSpecs(null);
         if (global === null) return;
         log.checked.push(
           `GitHub code search for "${choice.api.name}" (${global.length} hits)`,
         );
-        hits = global;
+        hits = unseen(global);
       }
-      if (hits.length === 0) return;
+      await fetchRanked(hits);
 
-      const links: SpecLink[] = hits.map((hit) => ({
-        url: hit.url,
-        text: hit.path,
-        context: hit.fullName,
-      }));
-      let probabilities: number[];
-      try {
-        probabilities = (await judge.areSpecLinks(ref, links)).map(
-          (j) => j.probability,
-        );
-      } catch (error) {
-        log.diagnostics.push(`Judge areSpecLinks: ${message(error)}`);
-        return;
-      }
-      // Likeliest first, as they are judged: a repo tree lists the right Spec
-      // after code search's wrong ones (PagerDuty's Events Specs before its
-      // REST Spec). Nothing is judged yet to stop at, so only the likeliest
-      // few are fetched, all at once.
-      const ranked = hits
-        .map((hit, i) => ({ hit, p: probabilities[i] ?? 0 }))
-        .filter(({ p }) => p >= t.specLink)
-        .sort((a, b) => b.p - a.p)
-        .slice(0, MAX_GITHUB_SPEC_FETCHES);
-      out.push(...ranked.map(({ hit }) => ({ hitUrl: hit.url })));
-      await Promise.all(
-        ranked.map(async ({ hit }, i) => {
-          const spec = await fetchOrigin(hit.url, log);
-          const slot = out[i];
-          if (spec && slot) slot.spec = spec;
-        }),
-      );
+      // The orgs the crawl found, an extra when it reports them in time.
+      const linked = await crawledGitHubOrgs;
+      const extra = await searchOrgs(await verifiedOrgs(linked, log));
+      if (extra) await fetchRanked(extra);
     }
 
     /**
      * The known-path probe, the crawl and GitHub code search, gathering at
-     * once within the Spec step's deadline, then judged in the order they
-     * ran in one after another: what each had gathered by the deadline is
-     * judged, the rest is dropped.
+     * once within the Spec step's deadline, each judged as soon as it and
+     * those before it have ended, in the order they ran in one after another.
+     * Once settled, the Sources after are not waited for. What a Source had
+     * gathered by the deadline is judged, the rest is dropped.
      */
     async function gatherAndJudge() {
       const startedAt = Date.now();
@@ -1304,87 +1318,142 @@ export function createLookup(deps: LookupDeps): IndexedLookup {
         orgsFound = resolve;
       });
 
-      const sources: [LookupStep, SourceLog, () => Promise<void>][] = [
-        [
-          "known paths",
-          known.log,
-          () => gatherKnownPaths(known.log, known.out, budget()),
-        ],
-        [
-          "Developer Portal crawl",
-          crawled.log,
-          () => gatherCrawl(crawled.log, crawled.out, budget, orgsFound),
-        ],
-      ];
-      if (githubSearch)
-        sources.push([
-          "GitHub code search",
-          githubHits.log,
-          () =>
+      const running = new Set<LookupStep>();
+      /** When the deadline passed, in ms from the start. */
+      let deadlineAfter: number | undefined;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const deadline = new Promise<void>((resolve) => {
+        if (!Number.isFinite(endsAt)) return;
+        timer = setTimeout(() => {
+          deadlineAfter = Date.now() - startedAt;
+          resolve();
+        }, specStepBudgetMs);
+      });
+      /** Resolves once the Spec step stops waiting on the Sources. */
+      let stopWaiting: () => void = () => {};
+      const stopped = new Promise<void>((resolve) => {
+        stopWaiting = resolve;
+      });
+      /**
+       * Starts a Source's gather, timed until it ends, the deadline passes
+       * or the Spec step stops waiting; a Source's error is its diagnostic.
+       */
+      const start = (
+        step: LookupStep,
+        log: SourceLog,
+        gather: () => Promise<void>,
+      ) => {
+        running.add(step);
+        const done = gather()
+          .catch((error) => {
+            log.diagnostics.push(`${step}: ${message(error)}`);
+          })
+          .finally(() => running.delete(step));
+        return timed(step, () => Promise.race([done, deadline, stopped]));
+      };
+
+      const knownDone = start("known paths", known.log, () =>
+        gatherKnownPaths(known.log, known.out, budget()),
+      );
+      const crawlDone = start("Developer Portal crawl", crawled.log, () =>
+        gatherCrawl(crawled.log, crawled.out, budget, orgsFound),
+      );
+      const githubDone = githubSearch
+        ? start("GitHub code search", githubHits.log, () =>
             gatherGitHub(
               githubSearch,
               githubHits.log,
               githubHits.out,
               crawledGitHubOrgs,
             ),
-        ]);
+          )
+        : undefined;
 
-      const running = new Set<LookupStep>(sources.map(([step]) => step));
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      const deadline = new Promise<void>((resolve) => {
-        if (Number.isFinite(endsAt))
-          timer = setTimeout(resolve, specStepBudgetMs);
-      });
-      await Promise.all(
-        sources.map(([step, log, gather]) =>
-          timed(step, () =>
-            Promise.race([
-              gather()
-                .catch((error) => {
-                  log.diagnostics.push(`${step}: ${message(error)}`);
-                })
-                .finally(() => running.delete(step)),
-              deadline,
-            ]),
-          ),
-        ),
-      );
-      clearTimeout(timer);
-
-      // Taken now: a Source still running writes on, to nothing read.
-      const logs = [known.log, crawled.log, githubHits.log].map(copyLog);
-      const knownHits = [...known.out];
-      const crawlHits = [...crawled.out.hits];
-      const offHostHits = crawled.out.offHost.map((hits) => [...hits]);
-      const githubSpecs = githubHits.out.map((slot) => ({ ...slot }));
-      if (running.size > 0)
-        diagnostics.push(
-          `spec step deadline: ${[...running].join(", ")} stopped after ${Date.now() - startedAt} ms`,
-        );
-      for (const log of logs) {
+      /** The Sources the deadline stopped while they were waited for. */
+      const cut: LookupStep[] = [];
+      /**
+       * Waits for a Source, then takes what it gathered and its log: a
+       * Source still running writes on, to nothing read.
+       */
+      const wait = async <T>(
+        step: LookupStep,
+        done: Promise<unknown>,
+        source: { log: SourceLog; out: T },
+        copy: (out: T) => T,
+      ): Promise<T> => {
+        await done;
+        if (running.has(step)) cut.push(step);
+        const log = copyLog(source.log);
         checked.push(...log.checked);
         diagnostics.push(...log.diagnostics);
         for (const [url, specId] of log.served) served.set(url, specId);
-      }
+        return copy(source.out);
+      };
+      const judging = <T>(fn: () => Promise<T>) => timed("Spec judging", fn);
 
-      await timed("Spec judging", async () => {
+      try {
+        const knownHits = await wait("known paths", knownDone, known, (o) => [
+          ...o,
+        ]);
         // Every hit, even once settled: the bytes are in hand, and a stale
         // copy on one host (docs.) may answer before the current Spec on
         // another.
-        for (const g of knownHits) await judgeGathered(g);
+        await judging(async () => {
+          for (const g of knownHits) await judgeGathered(g);
+        });
         if (settled()) return;
-        // Every crawl hit too: the Judge's link scores, which set the order,
-        // vary between calls. Skipped once settled, a full Spec after its
-        // per-version add-on never reached the pool (WTR-95).
-        for (const g of crawlHits) await judgeGathered(g);
-        for (const hits of offHostHits) {
-          if (settled()) return;
-          for (const g of hits) if (goOn(g.url)) await judgeGathered(g);
-        }
-        if (settled()) return;
-        for (const { hitUrl, spec } of githubSpecs)
-          if (spec && goOn(hitUrl)) await judgeGathered(spec);
-      });
+
+        const crawl = await wait(
+          "Developer Portal crawl",
+          crawlDone,
+          crawled,
+          (o) => ({
+            hits: [...o.hits],
+            offHost: o.offHost.map((hits) => [...hits]),
+          }),
+        );
+        await judging(async () => {
+          // Every crawl hit too: the Judge's link scores, which set the
+          // order, vary between calls. Skipped once settled, a full Spec
+          // after its per-version add-on never reached the pool (WTR-95).
+          for (const g of crawl.hits) await judgeGathered(g);
+          for (const hits of crawl.offHost) {
+            if (settled()) return;
+            for (const g of hits) if (goOn(g.url)) await judgeGathered(g);
+          }
+        });
+        if (settled() || !githubDone) return;
+
+        const slots = await wait(
+          "GitHub code search",
+          githubDone,
+          githubHits,
+          (o) => o.map((slot) => ({ ...slot })),
+        );
+        await judging(async () => {
+          // Its Provenance as of now: an org the crawl reported may have
+          // been verified as the Vendor's after the hit was fetched.
+          for (const { hitUrl, spec } of slots)
+            if (spec && goOn(hitUrl))
+              await judgeGathered({
+                ...spec,
+                provenance: provenanceOf(
+                  spec.url,
+                  choice.vendor,
+                  false,
+                  spec.githubOrg,
+                  vendorOrgs,
+                ),
+              });
+        });
+      } finally {
+        stopWaiting();
+        clearTimeout(timer);
+        if (cut.length > 0)
+          diagnostics.push(
+            `spec step deadline: ${cut.join(", ")} stopped after ${deadlineAfter ?? Date.now() - startedAt} ms`,
+          );
+      }
     }
 
     /**

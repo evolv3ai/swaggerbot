@@ -544,3 +544,24 @@ describe("apisJsonSpecUrls", () => {
     ).toEqual([]);
   });
 });
+
+describe("probeKnownPaths beside the crawl", () => {
+  it("makes every request in the background, to yield to the crawl's", async () => {
+    server.send("vendor.test", "/apis.json", "{}", "application/json");
+    const inner = fetcher();
+    const background: (boolean | undefined)[] = [];
+    const spy: Fetcher = {
+      fetchUrl(url, opts) {
+        background.push(opts?.background);
+        return inner.fetchUrl(url, opts);
+      },
+    };
+
+    await probeKnownPaths(`vendor.test:${server.port}`, spy, {
+      scheme: "http",
+    });
+
+    expect(background.length).toBeGreaterThan(0);
+    expect(new Set(background)).toEqual(new Set([true]));
+  });
+});

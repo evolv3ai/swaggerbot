@@ -63,7 +63,7 @@ They can't be used together. The report names the Index it used (`indexPath` and
 
 Under the header a latency line gives the p50, p90 and max time per answer, e.g. `Latency (Discovery): p50 9.8 s · p90 31.2 s · max 57.5 s (n=40)` (`latency` in `--json`, in ms). With a fresh Index every answer is a Discovery; with `--index`, some came from the Index, and the line says so. `--concurrency <n>` runs n Lookups at once (default 4); `--concurrency 1` measures latency without Lookups competing for the fetcher's per-host spacing. The run traces each Lookup (`LOOKUP_TRACE=1`), so in `--json` every answer's Outcome carries `timings`: milliseconds per Lookup step (`APIs.guru`, `Judge whichApi`, `Developer Portal search`, `known paths`, `Developer Portal crawl`, `GitHub code search`, `Spec fetch`, `Spec judging` and so on), a step that ran more than once adding up.
 
-The Spec step's three Sources (known paths, the Developer Portal crawl, GitHub code search) gather at once, and what they have found after `SPEC_STEP_BUDGET_MS` (default 9000 ms) is judged, the rest dropped with a `spec step deadline` diagnostic. `SPEC_STEP_BUDGET_MS=Infinity` turns the deadline off, to measure what it costs.
+The Spec step's three Sources (known paths, the Developer Portal crawl, GitHub code search) gather at once and are judged in that order as each ends, so a known-path Spec answers without waiting for the others. What a Source hasn't gathered after `SPEC_STEP_BUDGET_MS` (default 9000 ms) is dropped, with a `spec step deadline` diagnostic. `SPEC_STEP_BUDGET_MS=Infinity` turns the deadline off, to measure what it costs.
 
 ## Freshness and Verification
 

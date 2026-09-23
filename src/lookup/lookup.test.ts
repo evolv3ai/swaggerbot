@@ -2223,30 +2223,90 @@ describe("lookup with the Spec step's Sources at once", () => {
     );
   });
 
-  it("keeps the known-path Spec when the crawl misses the deadline", async () => {
+  it("answers a known-path Spec as soon as the probe ends, without waiting for the others", async () => {
+    // Neon: the probe had its Spec at 3.6 s, but the Lookup waited on the
+    // crawl and GitHub code search.
     const known = `${server.origin("api.nospec.test")}/openapi.json`;
     const { probe } = slowProbe(0, [found(known, "NoSpec API (known path)")]);
+    const { search } = slowSearch(1500);
     const { lookup } = setup(
-      { ...script, specDescribesApi: { "NoSpec API (known path)": yes } },
+      script,
       undefined,
       undefined,
-      slowCrawl(500, {
+      slowCrawl(1500, {
         hits: [crawlHitAt(`${server.origin("docs.nospec.test")}/openapi.json`)],
       }),
+      search,
       undefined,
       undefined,
+      { probe, trace: true },
+    );
+
+    const start = performance.now();
+    const outcome = await ask(lookup, "nospec");
+
+    expect(performance.now() - start).toBeLessThan(1000);
+    expect(outcome).toMatchObject({
+      outcome: "Resolved",
+      sources: [{ url: known }],
+    });
+    expect(outcome.diagnostics?.join("\n")).not.toMatch(/deadline/);
+    // The abandoned Sources are timed until the answer.
+    expect(outcome.timings?.["Developer Portal crawl"]).toBeLessThan(1000);
+  });
+
+  it("judges the crawl's Spec as soon as it ends, without waiting for GitHub", async () => {
+    const url = `${server.origin("docs.nospec.test")}/openapi.json`;
+    const { probe } = slowProbe(0);
+    const { search } = slowSearch(1500);
+    const { lookup } = setup(
+      script,
       undefined,
-      { probe, specStepBudgetMs: 150 },
+      undefined,
+      slowCrawl(0, { hits: [crawlHitAt(url)] }),
+      search,
+      undefined,
+      undefined,
+      { probe },
+    );
+
+    const start = performance.now();
+    expect(await ask(lookup, "nospec")).toMatchObject({
+      outcome: "Resolved",
+      sources: [{ url }],
+    });
+    expect(performance.now() - start).toBeLessThan(1000);
+  });
+
+  it("resolves from GitHub's known org within the deadline while the crawl runs on", async () => {
+    // Box and Asana: GitHub waited on the crawl for orgs, and the deadline
+    // cut it off.
+    const hit = githubHit("nospec/openapi", "NoSpec API (GitHub)");
+    const { probe } = slowProbe(0);
+    const { search } = slowSearch(0, { nospec: [hit] });
+    const { lookup } = setup(
+      script,
+      undefined,
+      undefined,
+      slowCrawl(2000, { githubOrgs: ["nospecinc"] }),
+      search,
+      undefined,
+      undefined,
+      { probe, specStepBudgetMs: 300 },
     );
 
     const outcome = await ask(lookup, "nospec");
 
     expect(outcome).toMatchObject({
       outcome: "Resolved",
-      sources: [{ url: known }],
+      provenance: "Official",
+      sources: [{ url: hit.url }],
     });
-    expect(outcome.diagnostics?.join("\n")).toMatch(
-      /spec step deadline: Developer Portal crawl stopped/,
+    // GitHub's extra, the crawl's orgs, is what the deadline stopped.
+    expect(outcome.diagnostics).toContainEqual(
+      expect.stringMatching(
+        /^spec step deadline: Developer Portal crawl, GitHub code search stopped after \d+ ms$/,
+      ),
     );
   });
 
@@ -2299,8 +2359,9 @@ describe("lookup with the Spec step's Sources at once", () => {
 
     const outcome = await ask(lookup, "nospec");
 
-    // The id's first label at once; the crawl's org once it has ended.
-    expect(calls).toEqual(["nospec", "nospecinc"]);
+    // The id's first label, then across GitHub, at once; the crawl's org
+    // once it has ended.
+    expect(calls).toEqual(["nospec", null, "nospecinc"]);
     expect(outcome).toMatchObject({
       outcome: "Resolved",
       provenance: "Official",
@@ -2998,11 +3059,12 @@ describe("lookup with GitHub code search", () => {
       await ask(lookup, "nospec");
 
       expect(asked).toEqual(["nospec-examples", "nospecinc"]);
-      // The id's first label at once, the verified org once the crawl ends.
+      // The id's first label at once, and across GitHub as it had nothing,
+      // without waiting for the crawl; the verified org once it reports it.
       expect(calls).toEqual([
         ["nospec", "NoSpec API"],
-        ["nospecinc", "NoSpec API"],
         [null, "NoSpec API"],
+        ["nospecinc", "NoSpec API"],
       ]);
     });
 

@@ -1,8 +1,9 @@
 /**
  * The steps of a Lookup that are timed, by the names its comments and
  * diagnostics use. "known paths", "Developer Portal crawl" and "GitHub code
- * search" gather their Specs at once, so they overlap, each timed up to the
- * Spec step's deadline; "Spec judging" is the Judge weighing what they
+ * search" gather their Specs at once, so they overlap, each timed until it
+ * ends, the Spec step's deadline passes or the Lookup stops waiting on it
+ * once settled; "Spec judging" is the Judge weighing what they
  * gathered, and "Spec fetch" is the APIs.guru origin URLs and mirror, fetched
  * and judged.
  */

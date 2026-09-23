@@ -76,7 +76,8 @@ export type ProbeOptions = {
  * on the domain and its `api.`, `developer.`, `developers.`, `docs.`, `app.`,
  * `api-docs.` and `spec.` hosts, plus the Specs an `apis.json` lists. Hosts
  * run in parallel and paths one after another per host, so the fetcher's
- * per-host spacing holds. The first hit starts a short grace window
+ * per-host spacing holds; its requests yield to others on the same host
+ * (`background`), so a crawl beside it keeps its pace. The first hit starts a short grace window
  * (`graceAfterHitMs`), after which every host stops.
  */
 export async function probeKnownPaths(
@@ -155,7 +156,7 @@ async function probeHost(
     const url = `${origin}${path}`;
     let res: FetchResult;
     try {
-      res = await fetcher.fetchUrl(url, { signal });
+      res = await fetcher.fetchUrl(url, { signal, background: true });
     } catch (error) {
       if (!(error instanceof FetchError)) continue;
       // A host that can't be reached won't answer on another path either.
@@ -169,7 +170,11 @@ async function probeHost(
       )
         continue;
       try {
-        res = await fetcher.fetchUrl(url, { signal, ignoreRobots: true });
+        res = await fetcher.fetchUrl(url, {
+          signal,
+          ignoreRobots: true,
+          background: true,
+        });
       } catch (retryError) {
         if (retryError instanceof FetchError && isHostDead(retryError)) break;
         continue;
@@ -200,7 +205,7 @@ async function fetchSpec(
   signal: AbortSignal,
 ): Promise<KnownPathHit | null> {
   try {
-    const res = await fetcher.fetchUrl(url, { signal });
+    const res = await fetcher.fetchUrl(url, { signal, background: true });
     const sniff = sniffSpec(res.bytes, res.contentType);
     return sniff
       ? {
