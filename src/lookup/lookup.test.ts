@@ -1139,12 +1139,105 @@ describe("lookup with APIs.guru duplicates", () => {
       outcome: "NoSpec",
       api: { id: "ghub.test/ghub-v3-rest-api", name: TITLE },
     });
-    // The group's origin URLs, in order, at most eight.
+    // The representative's origin URL, then the group's, at most eight.
     expect(
       server.requests
         .filter((r) => r.host === "api.ghub.test" && r.path !== "/robots.txt")
         .map((r) => r.path),
-    ).toEqual(Array.from({ length: 8 }, (_, i) => `/v${i}.json`));
+    ).toEqual([3, 0, 1, 2, 4, 5, 6, 7].map((i) => `/v${i}.json`));
+  });
+
+  /** `key`'s Candidate with these origin paths on `api.ghub.test`. */
+  function withOrigins(key: string, paths: string[]): ApiCandidate {
+    return {
+      ...candidate(key, TITLE, 0),
+      originUrls: paths.map((p) => `${server.origin("api.ghub.test")}${p}`),
+    };
+  }
+
+  const picksGhub: FakeJudgeScript["whichApi"] = {
+    ghub: {
+      probabilities: { "ghub.test/ghub-v3-rest-api": 0.9, none: 0.1 },
+      confidence: 0.9,
+    },
+  };
+
+  /** The paths fetched on `api.ghub.test`, in order. */
+  const originsFetched = () =>
+    server.requests
+      .filter((r) => r.host === "api.ghub.test" && r.path !== "/robots.txt")
+      .map((r) => r.path);
+
+  const DOTCOM = "/descriptions/api.ghub.test/api.ghub.test.json";
+  const DOTCOM_DATED =
+    "/descriptions/api.ghub.test/api.ghub.test.2022-11-28.json";
+
+  it("merges only the group's origin URLs in the representative's directory", async () => {
+    const { lookup } = setupGuru(
+      [
+        withOrigins("ghub.test:ghec", ["/descriptions/ghec/ghec.json"]),
+        withOrigins("ghub.test:api.ghub.test", [DOTCOM_DATED]),
+        withOrigins("ghub.test:ghes-3.8", [
+          "/descriptions/ghes-3.8/ghes-3.8.json",
+        ]),
+        withOrigins("ghub.test", [DOTCOM]),
+      ],
+      { whichApi: picksGhub },
+    );
+
+    expect(await ask(lookup, "ghub")).toMatchObject({ outcome: "NoSpec" });
+    expect(originsFetched()).toEqual([DOTCOM, DOTCOM_DATED]);
+  });
+
+  it("merges only the representative's origin URLs when no member shares its directory", async () => {
+    const { lookup } = setupGuru(
+      [
+        withOrigins("ghub.test:ghec", ["/descriptions/ghec/ghec.json"]),
+        withOrigins("ghub.test", [DOTCOM]),
+      ],
+      { whichApi: picksGhub },
+    );
+
+    await ask(lookup, "ghub");
+
+    expect(originsFetched()).toEqual([DOTCOM]);
+  });
+
+  it("makes the earliest origin URL's Spec Current among Specs of one API Version", async () => {
+    const versioned = (title: string) =>
+      JSON.stringify({
+        openapi: "3.0.3",
+        info: { title, version: "1.1.4" },
+        paths: { "/things": { get: { tags: ["things"] } } },
+      });
+    server.send("api.ghub.test", DOTCOM, versioned("GHub"), "application/json");
+    server.send(
+      "api.ghub.test",
+      DOTCOM_DATED,
+      versioned("GHub 2022-11-28"),
+      "application/json",
+    );
+    const { lookup } = setupGuru(
+      [
+        withOrigins("ghub.test:api.ghub.test", [DOTCOM_DATED]),
+        withOrigins("ghub.test", [DOTCOM]),
+      ],
+      {
+        whichApi: picksGhub,
+        // The Judge likes the second origin's Spec better.
+        specDescribesApi: { GHub: yesNo(0.9), "GHub 2022-11-28": yesNo(0.99) },
+      },
+    );
+
+    const outcome = await ask(lookup, "ghub");
+
+    expect(originsFetched()).toEqual([DOTCOM, DOTCOM_DATED]);
+    expect(outcome).toMatchObject({
+      outcome: "Resolved",
+      currentSpec: { apiVersion: "1.1.4" },
+      sources: [{ url: `${server.origin("api.ghub.test")}${DOTCOM}` }],
+      alternateSpecs: [],
+    });
   });
 
   it("keeps one Vendor's entries with different titles apart", async () => {
