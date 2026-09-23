@@ -43,12 +43,22 @@ export class FetchError extends Error {
    * including when robots.txt could not be fetched (5xx or unreachable).
    */
   readonly blanket: boolean;
+  /**
+   * For `http-error`: how long the server's `Retry-After` header asks us to
+   * wait, in milliseconds, when it gives a usable one.
+   */
+  readonly retryAfterMs?: number;
 
   constructor(
     kind: FetchErrorKind,
     url: string,
     message: string,
-    opts: { status?: number; blanket?: boolean; cause?: unknown } = {},
+    opts: {
+      status?: number;
+      blanket?: boolean;
+      retryAfterMs?: number;
+      cause?: unknown;
+    } = {},
   ) {
     super(`${kind}: ${message} (${url})`, { cause: opts.cause });
     this.name = "FetchError";
@@ -56,6 +66,7 @@ export class FetchError extends Error {
     this.url = url;
     this.status = opts.status;
     this.blanket = opts.blanket ?? false;
+    this.retryAfterMs = opts.retryAfterMs;
   }
 }
 
@@ -121,6 +132,7 @@ type RawResponse = {
   status: number;
   location: string | null;
   contentType: string | null;
+  retryAfter: string | null;
   bytes: Uint8Array;
 };
 
@@ -193,13 +205,21 @@ export function createFetcher(opts: FetcherOptions = {}): Fetcher {
           const status = res.statusCode ?? 0;
           const location = headerValue(res.headers.location);
           const contentType = headerValue(res.headers["content-type"]);
+          const retryAfter = headerValue(res.headers["retry-after"]);
           if (REDIRECT_STATUSES.has(status) && location) {
             res.resume();
-            resolve({ status, location, contentType, bytes: new Uint8Array() });
+            resolve({
+              status,
+              location,
+              contentType,
+              retryAfter,
+              bytes: new Uint8Array(),
+            });
             return;
           }
           readBody(res, limit, url.href).then(
-            (bytes) => resolve({ status, location, contentType, bytes }),
+            (bytes) =>
+              resolve({ status, location, contentType, retryAfter, bytes }),
             reject,
           );
         });
@@ -336,10 +356,26 @@ export function createFetcher(opts: FetcherOptions = {}): Fetcher {
         }
         throw new FetchError("http-error", url.href, `HTTP ${res.status}`, {
           status: res.status,
+          retryAfterMs: retryAfterMs(res.retryAfter),
         });
       }
     },
   };
+}
+
+/**
+ * A `Retry-After` value in milliseconds: delay-seconds, or an HTTP-date from
+ * now (0 once past). `undefined` when absent or unreadable.
+ */
+export function retryAfterMs(
+  value: string | null,
+  now = Date.now(),
+): number | undefined {
+  const raw = value?.trim();
+  if (!raw) return undefined;
+  if (/^\d+$/.test(raw)) return Number(raw) * 1000;
+  const at = Date.parse(raw);
+  return Number.isNaN(at) ? undefined : Math.max(0, at - now);
 }
 
 /** `MAX_SPEC_BYTES` when it is a positive integer, else the default. */

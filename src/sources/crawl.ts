@@ -1,3 +1,4 @@
+import { setTimeout as sleep } from "node:timers/promises";
 import { FetchError, type Fetcher, type FetchResult } from "~/fetch/fetcher";
 import { type SniffResult, sniffSpec } from "~/fetch/sniff";
 import type {
@@ -22,8 +23,20 @@ export type CrawlHit = {
   robotsDisallowed: boolean;
 };
 
+/** A URL a crawl chose to fetch but couldn't, and why. */
+export type CrawlFailure = {
+  url: string;
+  /** The fetch error, without its URL: `http-error: HTTP 429`. */
+  reason: string;
+};
+
 export type CrawlResult = {
   hits: CrawlHit[];
+  /**
+   * The Spec candidates the crawl chose but couldn't fetch, after the retry
+   * (WTR-86), in the order it tried them. The Lookup reports each one.
+   */
+  failed: CrawlFailure[];
   /**
    * Registrable domains linked from a crawled page but not crawled, since
    * the crawl stays on the start URL's: first seen first, at most 3. The
@@ -118,6 +131,8 @@ export const DOCS_PATHS = [
 ];
 /** Documentation paths fetched at most, each counted against `maxPages`. */
 const MAX_DOCS_PROBES = 4;
+/** The wait before retrying a fetch whose answer gave no `Retry-After`. */
+const RETRY_WAIT_MS = 1000;
 
 /**
  * `fetchUrl` with the ADR 0003 exception (WTR-44): `ignoreRobots` skips the
@@ -143,7 +158,9 @@ type Page = {
  * look like the API's Spec, fetches the likely ones and follows the pages on
  * the same registrable domain, documentation-looking ones first, up to `maxPages` pages, two links
  * deep, inside `budgetMs`, and reports the other registrable domains it saw
- * linked. Never throws: failures skip a link or a page.
+ * linked. Never throws: failures skip a link or a page. A Spec candidate's
+ * fetch is retried once on `HTTP 429`, a 5xx or a timeout, and one that still
+ * fails is reported in `failed`.
  *
  * Started at a bare origin, it first looks for the documentation at the
  * usual paths (`/docs`, `/developers`, …) and crawls from the first that
@@ -153,11 +170,14 @@ type Page = {
 export async function crawlForSpecs(opts: CrawlOptions): Promise<CrawlResult> {
   const threshold = opts.threshold ?? DEFAULT_THRESHOLD;
   const maxPages = opts.maxPages ?? DEFAULT_MAX_PAGES;
-  const signal = AbortSignal.timeout(opts.budgetMs ?? DEFAULT_BUDGET_MS);
+  const budgetMs = opts.budgetMs ?? DEFAULT_BUDGET_MS;
+  const signal = AbortSignal.timeout(budgetMs);
+  const deadline = Date.now() + budgetMs;
   const { api, fetcher, judge } = opts;
   const home = registrableDomain(opts.startUrl);
 
   const hits: CrawlHit[] = [];
+  const failed: CrawlFailure[] = [];
   const offHostHosts: string[] = [];
   /** Links per GitHub org, in first-seen order. */
   const githubLinks = new Map<string, number>();
@@ -282,8 +302,10 @@ export async function crawlForSpecs(opts: CrawlOptions): Promise<CrawlResult> {
       for (const link of likely) {
         if (signal.aborted) break;
         seen.add(normalize(link.url));
-        const hit = await fetchSpec(link.url, fetcher, signal);
-        if (hit && !hits.some((h) => h.url === hit.url)) {
+        const hit = await fetchSpec(link.url, fetcher, signal, deadline);
+        if (hit && "reason" in hit) {
+          failed.push({ url: link.url, reason: hit.reason });
+        } else if (hit && !hits.some((h) => h.url === hit.url)) {
           hits.push({
             ...hit,
             linkedFrom: res.finalUrl,
@@ -318,7 +340,7 @@ export async function crawlForSpecs(opts: CrawlOptions): Promise<CrawlResult> {
     .sort((a, b) => b[1] - a[1])
     .slice(0, MAX_GITHUB_ORGS)
     .map(([org]) => org);
-  return { hits, offHostHosts, githubOrgs };
+  return { hits, failed, offHostHosts, githubOrgs };
 }
 
 /**
@@ -354,6 +376,12 @@ export type VendorApiHit = {
   url: string;
 };
 
+export type VendorApiCrawlResult = {
+  hits: VendorApiHit[];
+  /** The pages the crawl couldn't fetch, after the retry (WTR-86). */
+  failed: CrawlFailure[];
+};
+
 const VENDOR_APIS_MAX_PAGES = 4;
 const VENDOR_APIS_BUDGET_MS = 15_000;
 const MAX_VENDOR_APIS = 10;
@@ -366,7 +394,9 @@ const VENDOR_APIS_MAX_DEPTH = 1;
  * (`areVendorApiLinks`); the ones it takes for an API are kept and, best
  * first, read in turn for their own links (a portal's API page often lists
  * its siblings), one link deep, up to `maxPages` pages inside `budgetMs`.
- * Returns at most 10 hits in score order, one per API name. Never throws.
+ * Returns at most 10 hits in score order, one per API name, and the pages it
+ * couldn't fetch, each retried once as `crawlForSpecs` retries a Spec. Never
+ * throws.
  */
 export async function crawlForVendorApis(opts: {
   startUrl: string;
@@ -379,10 +409,12 @@ export async function crawlForVendorApis(opts: {
   budgetMs?: number;
   /** Default 0.6. */
   threshold?: number;
-}): Promise<VendorApiHit[]> {
+}): Promise<VendorApiCrawlResult> {
   const threshold = opts.threshold ?? DEFAULT_THRESHOLD;
   const maxPages = opts.maxPages ?? VENDOR_APIS_MAX_PAGES;
-  const signal = AbortSignal.timeout(opts.budgetMs ?? VENDOR_APIS_BUDGET_MS);
+  const budgetMs = opts.budgetMs ?? VENDOR_APIS_BUDGET_MS;
+  const signal = AbortSignal.timeout(budgetMs);
+  const deadline = Date.now() + budgetMs;
   const { vendor, fetcher, judge } = opts;
   const home = registrableDomain(opts.startUrl);
 
@@ -390,6 +422,7 @@ export async function crawlForVendorApis(opts: {
   const best = new Map<string, { hit: VendorApiHit; p: number }>();
   const seen = new Set<string>([normalize(opts.startUrl)]);
   const queue: Page[] = [{ url: opts.startUrl, depth: 0, from: opts.startUrl }];
+  const failed: CrawlFailure[] = [];
   let pagesFetched = 0;
 
   while (queue.length > 0 && pagesFetched < maxPages && !signal.aborted) {
@@ -397,8 +430,13 @@ export async function crawlForVendorApis(opts: {
     pagesFetched++;
     let res: FetchResult;
     try {
-      res = await fetcher.fetchUrl(page.url, { signal });
-    } catch {
+      res = await retryOnce(
+        () => fetcher.fetchUrl(page.url, { signal }),
+        signal,
+        deadline,
+      );
+    } catch (error) {
+      failed.push({ url: page.url, reason: failureReason(error) });
       continue;
     }
     if (!isHtml(res.contentType)) continue;
@@ -448,10 +486,11 @@ export async function crawlForVendorApis(opts: {
       }
     }
   }
-  return [...best.values()]
+  const hits = [...best.values()]
     .sort((a, b) => b.p - a.p)
     .slice(0, MAX_VENDOR_APIS)
     .map(({ hit }) => hit);
+  return { hits, failed };
 }
 
 /** An API name for deduplication: case, spacing and a trailing "API" ignored. */
@@ -460,28 +499,40 @@ function apiNameKey(name: string): string {
 }
 
 /**
- * Fetches a Spec candidate and sniffs it. A candidate its host's robots.txt
- * disallows is retried once under the ADR 0003 exception: it was linked from
- * a page we were allowed to read, and it is a single document we never crawl
- * on from.
+ * Fetches a Spec candidate and sniffs it: a hit, `null` when what came back
+ * isn't a Spec, or the reason it couldn't be fetched. A candidate its host's
+ * robots.txt disallows is retried once under the ADR 0003 exception: it was
+ * linked from a page we were allowed to read, and it is a single document we
+ * never crawl on from. A 429, 5xx or timeout is retried once (`retryOnce`).
  */
 async function fetchSpec(
   url: string,
   fetcher: Fetcher,
   signal: AbortSignal,
-): Promise<Omit<CrawlHit, "linkedFrom" | "offHost"> | null> {
+  deadline: number,
+): Promise<
+  Omit<CrawlHit, "linkedFrom" | "offHost"> | { reason: string } | null
+> {
   let res: FetchResult & { robotsDisallowed?: boolean };
   try {
-    res = await fetcher.fetchUrl(url, { signal });
+    res = await retryOnce(
+      () => fetcher.fetchUrl(url, { signal }),
+      signal,
+      deadline,
+    );
   } catch (error) {
     if (!(error instanceof FetchError) || error.kind !== "robots-disallowed") {
-      return null;
+      return { reason: failureReason(error) };
     }
     try {
       const fetchUrl = fetcher.fetchUrl as RobotsExceptionFetch;
-      res = await fetchUrl.call(fetcher, url, { signal, ignoreRobots: true });
-    } catch {
-      return null;
+      res = await retryOnce(
+        () => fetchUrl.call(fetcher, url, { signal, ignoreRobots: true }),
+        signal,
+        deadline,
+      );
+    } catch (error) {
+      return { reason: failureReason(error) };
     }
   }
   const sniff = sniffSpec(res.bytes, res.contentType);
@@ -492,6 +543,47 @@ async function fetchSpec(
     sniff,
     robotsDisallowed: res.robotsDisallowed === true,
   };
+}
+
+/**
+ * Runs `attempt`, and once more if it fails with `HTTP 429`, a 5xx or a
+ * timeout: after the answer's `Retry-After`, else 1 s. A wait that would end
+ * past `deadline` (the crawl's budget) isn't made, and the first error stands.
+ */
+async function retryOnce<T>(
+  attempt: () => Promise<T>,
+  signal: AbortSignal,
+  deadline: number,
+): Promise<T> {
+  try {
+    return await attempt();
+  } catch (error) {
+    if (!isTransient(error) || signal.aborted) throw error;
+    const wait = error.retryAfterMs ?? RETRY_WAIT_MS;
+    if (Date.now() + wait >= deadline) throw error;
+    try {
+      await sleep(wait, undefined, { signal });
+    } catch {
+      throw error;
+    }
+    return attempt();
+  }
+}
+
+function isTransient(error: unknown): error is FetchError {
+  if (!(error instanceof FetchError)) return false;
+  if (error.kind === "timeout") return true;
+  const status = error.status ?? 0;
+  return error.kind === "http-error" && (status === 429 || status >= 500);
+}
+
+/** A fetch error as a `CrawlFailure` reason: `http-error: HTTP 429`. */
+function failureReason(error: unknown): string {
+  if (!(error instanceof FetchError)) return String(error);
+  const suffix = ` (${error.url})`;
+  return error.message.endsWith(suffix)
+    ? error.message.slice(0, -suffix.length)
+    : error.message;
 }
 
 /** Rejects as soon as `signal` aborts, so a slow Judge can't outlast the budget. */
