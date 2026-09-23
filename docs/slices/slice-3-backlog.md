@@ -35,7 +35,7 @@ Filed 2026-09-22 as WTR-88..93 (Backlog, `swaggerbot` only), with Linear "blocke
 | 6 | WTR-93 | `scripts/loadcheck.ts`: p90 against a deployed URL | 1, 5 | 4 |
 | 7 | — | Speed up Discovery | 1 | filed after #1's numbers |
 | 7a | WTR-94 | The known-path probe stops soon after its first hit | 1 | 5 |
-| 7bc | | The Spec step's sources run in parallel, within one deadline | 7a | 6 |
+| 7bc | WTR-96 | The Spec step's sources run in parallel, within one deadline | 7a | 6 |
 | 9 | | Verification uses the Caller's spelling, not the normalised name | 4 | 5 |
 | 8 | WTR-95 | Box: the full Spec sometimes never reaches the pool, and an add-on answers | — | 5 |
 
