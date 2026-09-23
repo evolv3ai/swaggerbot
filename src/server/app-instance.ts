@@ -9,8 +9,9 @@ import {
 
 export type App = ReturnType<typeof createApp>;
 
-// Built on the first request that needs it, which also starts the background
-// Verification and forms workers. One per server: every route shares its
+// Built when the server starts (`src/server/open-index.ts`), which also starts
+// the background Verification and forms workers, or, if that failed, on the
+// first request that needs it. One per server: every route shares its
 // database connection and workers.
 let app: App | undefined;
 

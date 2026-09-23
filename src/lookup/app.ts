@@ -36,8 +36,8 @@ export function createAppLookup(env: NodeJS.ProcessEnv = process.env): Lookup {
  * in the same Index, the background Verification worker over the same
  * Lookup and Index, and the worker that builds each Spec's forms over the
  * same Index and fetcher (ADR 0004), both started; and the Index itself,
- * which the download routes read. Built once per server by `getApp` in
- * `src/server/app-instance.ts`.
+ * which the download routes read. Built once per server, when it starts,
+ * by `getApp` in `src/server/app-instance.ts`.
  */
 export function createApp(env: NodeJS.ProcessEnv = process.env): {
   db: Db;
