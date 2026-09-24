@@ -229,11 +229,11 @@ function Home() {
                 every result small enough for its context.
               </p>
               <p>
-                Discovery needs a key: add{" "}
+                Discovery and <code>fresh</code> need a key: add{" "}
                 <code>--header "Authorization: Bearer …"</code>.
               </p>
             </div>
-            <figure className="exchange">
+            <figure className="exchange exchange-command">
               <pre>
                 <code>
                   <span className="prompt">$ </span>
