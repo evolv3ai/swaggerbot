@@ -6,6 +6,9 @@ import {
 import type { Gate, LookupApp } from "~/lookup/http";
 import type { VendorApisApp } from "~/server/vendor-apis";
 import type { OutlineApp } from "~/spec-forms/http";
+import type { NormalizedCache } from "~/spec-forms/operation-http";
+import { registerGetOperation } from "./tools/get-operation";
+import { registerGetSchema } from "./tools/get-schema";
 import { registerGetSpecOutline } from "./tools/get-spec-outline";
 import { registerListVendorApis } from "./tools/list-vendor-apis";
 import { registerLookupApi } from "./tools/lookup-api";
@@ -19,6 +22,8 @@ export type McpDeps = {
   gate: Pick<Gate, "dailyQuota" | "now">;
   /** The public base URL download links are made absolute with, if any. */
   baseUrl?: string;
+  /** The parsed Normalized Form, shared with the HTTP API; the server's own by default. */
+  cache?: NormalizedCache;
 };
 
 /** Registers one tool on a fresh server. */
@@ -29,6 +34,8 @@ export const MCP_TOOLS: McpTool[] = [
   registerLookupApi,
   registerListVendorApis,
   registerGetSpecOutline,
+  registerGetOperation,
+  registerGetSchema,
 ];
 
 /**

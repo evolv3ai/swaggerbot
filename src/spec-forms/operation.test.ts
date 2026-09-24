@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { expandOperation, MAX_OPERATION_BYTES } from "./operation";
+import {
+  expandOperation,
+  MAX_OPERATION_BYTES,
+  schemaNames,
+  schemaOf,
+  truncatedReferences,
+} from "./operation";
 
 const doc = {
   openapi: "3.1.0",
@@ -284,5 +290,143 @@ describe("expandOperation", () => {
     expect(refs).toContain(
       '{"$ref":"#/components/schemas/Leaf24","x-truncated":true}',
     );
+  });
+});
+
+describe("schemaOf", () => {
+  const schemas = {
+    openapi: "3.1.0",
+    components: {
+      schemas: {
+        Address: {
+          type: "object",
+          properties: {
+            city: { type: "string" },
+            geo: { $ref: "#/components/schemas/Geo" },
+          },
+        },
+        Geo: { type: "object", properties: { lat: { type: "number" } } },
+        Alias: { $ref: "#/components/schemas/Geo" },
+        Tree: {
+          type: "object",
+          properties: {
+            children: {
+              type: "array",
+              items: { $ref: "#/components/schemas/Tree" },
+            },
+          },
+        },
+        "a/b~c": { type: "string" },
+      },
+    },
+  };
+
+  it("expands a schema by its bare name or its whole reference", () => {
+    const expected = {
+      name: "Address",
+      schema: {
+        type: "object",
+        properties: {
+          city: { type: "string" },
+          geo: { type: "object", properties: { lat: { type: "number" } } },
+        },
+      },
+      circular: {},
+      truncated: false,
+    };
+    expect(schemaOf(schemas, "Address")).toEqual(expected);
+    expect(schemaOf(schemas, "#/components/schemas/Address")).toEqual(expected);
+  });
+
+  it("follows a reference to a reference, in an operation too", () => {
+    const withPath = {
+      ...schemas,
+      paths: {
+        "/geo": {
+          get: {
+            responses: {
+              "200": {
+                description: "ok",
+                content: {
+                  "application/json": {
+                    schema: { $ref: "#/components/schemas/Alias" },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    };
+    const expanded = expandOperation(withPath, "get", "/geo");
+    expect(expanded?.operation).toEqual({
+      responses: {
+        "200": {
+          description: "ok",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: { lat: { type: "number" } },
+              },
+            },
+          },
+        },
+      },
+    });
+  });
+
+  it("follows a schema that is only a reference", () => {
+    expect(schemaOf(schemas, "Alias")?.schema).toEqual({
+      type: "object",
+      properties: { lat: { type: "number" } },
+    });
+  });
+
+  it("finds a name with a slash or a tilde, bare or pointer-escaped", () => {
+    expect(schemaOf(schemas, "a/b~c")?.schema).toEqual({ type: "string" });
+    expect(schemaOf(schemas, "#/components/schemas/a~1b~0c")?.name).toBe(
+      "a/b~c",
+    );
+  });
+
+  it("keeps a schema that recurs within itself as x-circular, listed once", () => {
+    const tree = schemaOf(schemas, "Tree");
+    expect(tree?.schema).toEqual({
+      type: "object",
+      properties: {
+        children: {
+          type: "array",
+          items: { $ref: "#/components/schemas/Tree", "x-circular": true },
+        },
+      },
+    });
+    expect(Object.keys(tree?.circular ?? {})).toEqual(["Tree"]);
+  });
+
+  it("stops at maxBytes, leaving the deepest references truncated", () => {
+    const whole = Buffer.byteLength(
+      JSON.stringify(schemaOf(schemas, "Address")),
+    );
+    const address = schemaOf(schemas, "Address", { maxBytes: whole - 1 });
+    expect(address?.truncated).toBe(true);
+    expect(Buffer.byteLength(JSON.stringify(address))).toBeLessThan(whole);
+    expect(address?.schema).toMatchObject({
+      properties: { city: { type: "string" } },
+    });
+    expect(truncatedReferences(address)).toEqual(["#/components/schemas/Geo"]);
+  });
+
+  it("is undefined for a name that isn't a schema", () => {
+    expect(schemaOf(schemas, "Nope")).toBeUndefined();
+    expect(schemaOf(schemas, "#/components/responses/Address")).toBeUndefined();
+    expect(schemaOf({}, "Address")).toBeUndefined();
+    expect(schemaNames(schemas)).toEqual([
+      "Address",
+      "Geo",
+      "Alias",
+      "Tree",
+      "a/b~c",
+    ]);
   });
 });

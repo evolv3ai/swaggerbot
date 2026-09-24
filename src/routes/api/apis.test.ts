@@ -63,6 +63,7 @@ createSpecForms(db).saveBuilt(
             post: { responses: { "200": { description: "Created" } } },
           },
         },
+        components: { schemas: { customer: { type: "object" } } },
       }),
     ),
     normalizedSpecVersion: "3.1.1",
@@ -122,6 +123,19 @@ describe("GET /api/apis/{apiId}/operation", () => {
       method: "post",
       path: "/v1/customers",
       operation: { responses: { "200": { description: "Created" } } },
+    });
+  });
+});
+
+describe("GET /api/apis/{apiId}/schema", () => {
+  it("resolves an API id with a slash through the splat", async () => {
+    const response = await get("stripe.com/stripe-api/schema", "name=customer");
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      apiId: "stripe.com/stripe-api",
+      specId,
+      name: "customer",
+      schema: { type: "object" },
     });
   });
 });

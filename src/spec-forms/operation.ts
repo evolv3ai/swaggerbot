@@ -100,20 +100,116 @@ export function expandOperation(
   const security = found.security ?? doc.security;
   if (security !== undefined) merged.security = security;
 
-  const maxBytes = options.maxBytes ?? MAX_OPERATION_BYTES;
   const queue: Slot[] = [];
-  let next = 0;
-  const none = new Set<string>();
-
-  const operation = copy(merged, none, queue) as Obj;
+  const operation = copy(merged, new Set(), queue) as Obj;
   const securitySchemes = schemesOf(doc, security, queue);
-  const circular: Record<string, unknown> = {};
-  const result: ExpandedOperation = {
-    operation,
-    circular,
-    securitySchemes,
+  return inlineQueued(
+    doc,
+    { operation, circular: {}, securitySchemes, truncated: false },
+    queue,
+    options.maxBytes ?? MAX_OPERATION_BYTES,
+  );
+}
+
+/** A component schema with its references inlined (`schemaOf`). */
+export type ExpandedSchema = {
+  /** The schema's name: `X` for `#/components/schemas/X`. */
+  name: string;
+  /** The schema, every reference it reaches inlined. */
+  schema: unknown;
+  /** As `ExpandedOperation.circular`; the schema itself when it recurs. */
+  circular: Record<string, unknown>;
+  /** As `ExpandedOperation.truncated`. */
+  truncated: boolean;
+};
+
+/**
+ * `components.schemas[name]` of the Normalized Form `doc`, expanded as
+ * `expandOperation` expands an operation: breadth-first, a schema that
+ * recurs within itself as `{ $ref, "x-circular": true }` and listed in
+ * `circular`, inlining stopped at `maxBytes`. `name` is the bare name or
+ * the whole `#/components/schemas/<name>` reference. `undefined` when the
+ * Spec has no such schema.
+ */
+export function schemaOf(
+  doc: unknown,
+  name: string,
+  options: ExpandOptions = {},
+): ExpandedSchema | undefined {
+  if (!isObj(doc)) return undefined;
+  const bare = schemaNameOf(name);
+  const schemas = componentSchemas(doc);
+  if (!Object.hasOwn(schemas, bare)) return undefined;
+  const ref = `#/components/schemas/${encodePointer(bare)}`;
+  const result: ExpandedSchema = {
+    name: bare,
+    schema: marker(ref, "x-truncated"),
+    circular: {},
     truncated: false,
   };
+  // The schema itself is the first reference inlined, so one that refers
+  // to itself is circular, and one that is only a reference is followed.
+  const queue: Slot[] = [
+    {
+      parent: result as Obj,
+      key: "schema",
+      ref,
+      siblings: {},
+      above: new Set(),
+    },
+  ];
+  return inlineQueued(
+    doc,
+    result,
+    queue,
+    options.maxBytes ?? MAX_OPERATION_BYTES,
+  );
+}
+
+/** The names of the Normalized Form's `components.schemas`, in document order. */
+export function schemaNames(doc: unknown): string[] {
+  return isObj(doc) ? Object.keys(componentSchemas(doc)) : [];
+}
+
+/** `X` for `#/components/schemas/X` (pointer-decoded); any other string as it is. */
+export function schemaNameOf(nameOrRef: string): string {
+  const segments = pointerSegments(nameOrRef);
+  return segments?.length === 3 &&
+    segments[0] === "components" &&
+    segments[1] === "schemas"
+    ? (segments[2] as string)
+    : nameOrRef;
+}
+
+/**
+ * The distinct references an expansion left as
+ * `{ $ref, "x-truncated": true }`, in the order they are met.
+ */
+export function truncatedReferences(expanded: unknown): string[] {
+  const found = new Set<string>();
+  const walk = (node: unknown): void => {
+    if (Array.isArray(node)) node.forEach(walk);
+    else if (isObj(node)) {
+      if (typeof node.$ref === "string" && node["x-truncated"] === true)
+        found.add(node.$ref);
+      else Object.values(node).forEach(walk);
+    }
+  };
+  walk(expanded);
+  return [...found];
+}
+
+/**
+ * Inlines each queued reference into `result`, breadth-first, until the
+ * queue is empty or the next would take the serialized result past
+ * `maxBytes`. `result.circular` lists each reference found within itself.
+ */
+function inlineQueued<
+  R extends { circular: Record<string, unknown>; truncated: boolean },
+>(doc: Obj, result: R, queue: Slot[], maxBytes: number): R {
+  const { circular } = result;
+  const none = new Set<string>();
+  let next = 0;
   // The serialized size, with every pending reference as its marker.
   let size = bytes(result);
 
@@ -155,6 +251,24 @@ export function expandOperation(
       continue;
     }
     const above = new Set(slot.above).add(slot.ref);
+    if (
+      isObj(target) &&
+      typeof target.$ref === "string" &&
+      target.$ref.startsWith("#")
+    ) {
+      // A reference to a reference: follow it in the same place.
+      const { $ref: ref, ...siblings } = target;
+      const followed = marker(ref, "x-truncated");
+      size += bytes(followed) - bytes(marker(slot.ref, "x-truncated"));
+      set(slot, followed);
+      queue.push({
+        ...slot,
+        ref,
+        siblings: { ...siblings, ...slot.siblings },
+        above,
+      });
+      continue;
+    }
     const pending = queue.length;
     const inlined = copy(
       isObj(target) ? { ...target, ...slot.siblings } : target,
@@ -273,12 +387,17 @@ function marker(ref: string, flag: "x-circular" | "x-truncated"): Obj {
 
 /** `X` for `#/components/schemas/X`, else the whole reference. */
 function circularName(ref: string): string {
-  const segments = pointerSegments(ref);
-  return segments?.length === 3 &&
-    segments[0] === "components" &&
-    segments[1] === "schemas"
-    ? (segments[2] as string)
-    : ref;
+  return schemaNameOf(ref);
+}
+
+function componentSchemas(doc: Obj): Obj {
+  const components = isObj(doc.components) ? doc.components : {};
+  return isObj(components.schemas) ? components.schemas : {};
+}
+
+/** `name` as one JSON pointer segment of a reference. */
+function encodePointer(name: string): string {
+  return encodeURI(name.replaceAll("~", "~0").replaceAll("/", "~1"));
 }
 
 /** `node`, or what it refers to when it is an internal reference (followed through chains). */

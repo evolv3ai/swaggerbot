@@ -5,13 +5,15 @@ import { outlineResponse } from "~/spec-forms/http";
 import {
   normalizedCache,
   operationResponse,
+  schemaResponse,
 } from "~/spec-forms/operation-http";
 import { publicBaseUrlOf } from "~/spec-forms/outcome";
 
 /**
  * `GET /api/apis/{apiId}/…`. An API id holds a slash
  * (`stripe.com/stripe-api`), so the route takes the rest of the path and
- * splits the API id from the resource after it: `outline` or `operation`.
+ * splits the API id from the resource after it: `outline`, `operation` or
+ * `schema`.
  */
 export const Route = createFileRoute("/api/apis/$")({
   server: {
@@ -32,6 +34,14 @@ export const Route = createFileRoute("/api/apis/$")({
             case "operation": {
               const { db, lookup } = getApp();
               return operationResponse(new URL(request.url), apiId, {
+                db,
+                lookup,
+                cache: normalizedCache,
+              });
+            }
+            case "schema": {
+              const { db, lookup } = getApp();
+              return schemaResponse(new URL(request.url), apiId, {
                 db,
                 lookup,
                 cache: normalizedCache,

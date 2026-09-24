@@ -155,6 +155,8 @@ describe("/mcp", () => {
       "lookup_api",
       "list_vendor_apis",
       "get_spec_outline",
+      "get_operation",
+      "get_schema",
     ]);
     const [tool] = tools;
     expect(tool.description).toContain("get_spec_outline");
