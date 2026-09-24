@@ -559,6 +559,59 @@ describe("lookup", () => {
     ]);
   });
 
+  it("keeps the search domain when a portal redirects to the Vendor's API-docs domain", async () => {
+    // dropbox.test redirects to docs.dropboxapi.test, as dropbox.com does to
+    // docs.dropboxapi.com.
+    const docs = `${server.origin("docs.dropboxapi.test")}/dropbox-api/docs/get-started/welcome`;
+    server.route(
+      "www.dropbox.test",
+      "/developers/documentation",
+      (_req, res) => {
+        res.writeHead(301, { location: docs }).end();
+      },
+    );
+    server.send(
+      "docs.dropboxapi.test",
+      "/dropbox-api/docs/get-started/welcome",
+      "<html>Dropbox API</html>",
+      "text/html",
+    );
+    const search = new FakeWebSearch([
+      {
+        url: `${server.origin("www.dropbox.test")}/developers/documentation`,
+        title: "Dropbox API documentation",
+        snippet: "The Dropbox API.",
+      },
+    ]);
+    const crawl = fakeCrawl();
+    const { lookup, judge } = setup(
+      {
+        whichApi: {
+          dropbox: {
+            probabilities: { "dropbox.test/api": 0.9, none: 0.1 },
+            confidence: 0.9,
+          },
+        },
+      },
+      search,
+      undefined,
+      crawl,
+    );
+
+    const outcome = await ask(lookup, "dropbox");
+
+    expect(
+      judge.calls[0]?.judgment === "whichApi" &&
+        judge.calls[0].candidates.map((c) => [c.id, c.name]),
+    ).toEqual([["dropbox.test/api", "Dropbox API"]]);
+    expect(outcome).toMatchObject({
+      outcome: "NoSpec",
+      vendor: { id: "dropbox.test", domain: "dropbox.test" },
+    });
+    // The crawl starts on the docs site the portal redirected to.
+    expect(crawl.starts).toEqual([docs]);
+  });
+
   it("re-homes a portal Candidate from its origin when its page can't be fetched", async () => {
     // The page drops the connection; the origin redirects to neon.test.
     server.route("www.neon-tech.test", "/neon-api-reference", (req) => {
