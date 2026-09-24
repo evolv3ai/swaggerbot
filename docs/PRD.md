@@ -145,6 +145,7 @@ Each slice is usable end to end and demonstrable. Later slices don't start until
 ### Slice 6 — Web UI
 - `/impeccable init` → `PRODUCT.md`, then the screens listed above, built with `shape` → `craft` → `polish`.
 - **Accept when:** `/impeccable audit` is clean, and the UI is keyboard-navigable and meets WCAG AA.
+- Until then, `/` is a static landing page (#81, 2026-09-24: what the service does, a real Lookup, the HTTP API) in the UX spec's colours and type. Slice 6 replaces it.
 
 ## Open questions (decide during the build)
 - Which web search provider: Brave, Exa or Tavily.
