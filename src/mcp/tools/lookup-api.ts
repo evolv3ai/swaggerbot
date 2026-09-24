@@ -65,7 +65,11 @@ export function lookupResult(
   const { error, limit, used } = answer.body;
   const text =
     answer.status === 401
-      ? `${error} "${request.name}" isn't in the Index yet, and finding it on the live web needs an API key. ${MCP_KEY_HINT}`
+      ? `${error} ${
+          request.fresh
+            ? "A fresh Lookup runs Discovery on the live web, which needs an API key."
+            : `"${request.name}" isn't in the Index yet, and finding it on the live web needs an API key.`
+        } ${MCP_KEY_HINT}`
       : `${error} This key has made ${used} of its ${limit} Discovery Lookups today. The quota resets at 00:00 UTC, in ${durationOf(secondsToUtcMidnight(now))}. Names already in the Index still answer without using any.`;
   return {
     isError: true,
