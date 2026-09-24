@@ -61,6 +61,7 @@ Filed 2026-09-23 as WTR-104..111 (Backlog, `swaggerbot` only), with Linear "bloc
 | 16 | WTR-123 | `list_vendor_apis` matches the names Callers type | 7 | 6 |
 | 17 | WTR-124 | The Normalized Form inlines a `$ref` written where a map belongs (`headers`, `responses`, `content`, `properties`) | 13 | 6 |
 | 18 | WTR-125 | A Developer Portal that redirects to the Vendor's own API-docs domain keeps the Vendor's domain (Dropbox) | — | 6 |
+| 19 | WTR-126 | A builder bump rebuilds Current Specs before superseded ones (added 2026-09-24 after WTR-122's deploy: DigitalOcean's superseded Spec took the external lane first, so its Current Spec waited another ~50 min) | 15 | 8 |
 
 **Waves 6 and 7 (after acceptance; Wes approved the follow-ups 2026-09-23; filed as WTR-121..125, queued in Agent Todo except WTR-122, which is in Backlog, blocked by WTR-121, and is queued when WTR-121 merges):** #14, #16, #17 and #18 touch different files and run together. WTR-101 (Slice 3's add-on guard) is queued with them, because it and #14 both cut forms latency for DigitalOcean, Jira, Twilio and Plaid. #15 waits for #14, so that a builder bump's rebuild of DigitalOcean can't block the other Specs.
 
@@ -560,3 +561,16 @@ In `followPortals`: when the final registrable domain's first label is the searc
 - The manual check in the PR: `LOOKUP_TRACE=1 pnpm tsx scripts/lookup.ts "Dropbox API"` answers NoSpec (the expected Outcome), or states what it answers and why.
 - `pnpm bench --concurrency 1` once: False Resolution stays 0, and no entry that was correct in `docs/slices/slice-4-result.md`'s runs regresses, apart from the known Judge-variance names (Steam, Atlassian, Cisco).
 - `pnpm check` and `pnpm build` green.
+
+## 19. swaggerbot: a builder bump rebuilds Current Specs before superseded ones
+
+## Problem
+After WTR-122 deployed (2026-09-24 00:25), every production row was stale (`builder_version` null). The external lane then picked DigitalOcean's **superseded** Spec `e3cd049d` first, because its `built_at` is older. It takes ~50 min. The **Current** Spec `9601e8c3` waits behind it, so WTR-124's fix reaches the Spec Callers get only after ~100 min. Every future `FORMS_BUILDER_VERSION` bump pays the same, and more so as superseded Specs pile up. Only Current Specs are served by default; a superseded one is reached only by Spec id.
+
+## Change
+In `nextToBuild`'s stale query (`src/index-store/spec-forms.ts`), order Specs whose `specs.superseded_at` is null first, then as now (oldest `built_at`). Superseded Specs are still rebuilt, after every Current one in that lane. Never-built Specs still come before any stale one. Update the doc comment.
+
+## Done when
+- A test in `spec-forms.test.ts`: two stale Specs in one lane, the superseded one built earlier. `nextToBuild` picks the Current one.
+- `pnpm check` and `pnpm build` green.
+- **Live (operator), at the next builder bump:** DigitalOcean's Current Spec reaches the new version before its superseded ones.
