@@ -89,6 +89,8 @@ The deploys of 2026-09-23:
 
   Twilio Verify is still slow: its Spec has 33 paths, under `ADD_ON_MAX_PATHS` (40), and Box's add-on has 24. The issue assumed "hundreds".
 
+**`2cc7d32` (WTR-126) deployed at 00:30** (deployment `yq7nhwrwwozkdegfxtiqsebs`; healthy at 00:30:55). The restart abandoned the superseded DigitalOcean rebuild, which stays `ready` on its old forms. After start-up, the external lane took the **Current** Spec `9601e8c3` first (started 00:30:40), which is WTR-126's live check.
+
 ## Gotchas
 
 - Coolify's application health check runs `curl`/`wget` **inside** the container. An image without them is rolled back as unhealthy, even when its own Docker `HEALTHCHECK` passes.

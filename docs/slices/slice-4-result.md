@@ -64,7 +64,7 @@ Found in review and fixed before merging:
 
 Still open:
 - Twilio Verify is still ~12 s: 33 paths, under the 40-path add-on cut-off.
-- A builder bump rebuilds superseded Specs before Current ones (**WTR-126**, queued).
+- A builder bump rebuilt superseded Specs before Current ones. **Fixed by WTR-126** (`2cc7d32`, deployed 00:30; checked live).
 
 ## Known misses and follow-ups (Wes's decisions, 2026-09-23)
 
