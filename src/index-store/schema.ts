@@ -174,4 +174,9 @@ export const specForms = sqliteTable("spec_forms", {
   lastError: text("last_error"),
   startedAt: text("started_at"),
   builtAt: text("built_at"),
+  /**
+   * Whether a build fetches external references, which picks the worker's
+   * lane; `null` until a build has found out.
+   */
+  externalRefs: integer("external_refs", { mode: "boolean" }),
 });

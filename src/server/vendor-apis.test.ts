@@ -101,6 +101,24 @@ spec("otherco.com/other", "other", true);
 repo.upsertVendor({ id: "acme.com", name: "Acme", domain: "acme.com" });
 repo.upsertVendor({ id: "acme.io", name: "ACME", domain: "acme.io" });
 
+// Stored as production stores them: name equal to id, found by the names
+// Callers typed (`api_names`).
+for (const [vendorId, apiName, remembered] of [
+  ["stripe.com", "Stripe API", ["stripe"]],
+  ["github.com", "GitHub REST", ["github rest", "github"]],
+  ["slack.com", "Slack Web", ["slack web"]],
+  ["hooli.io", "Hooli", ["hooli"]],
+] as const) {
+  repo.upsertVendor({ id: vendorId, name: vendorId, domain: vendorId });
+  const apiId = `${vendorId}/api`;
+  repo.upsertApi({ id: apiId, vendorId, name: apiName });
+  for (const name of remembered) repo.rememberName(name, apiId);
+}
+// Two Vendors with one label, and one sharing a remembered name's label.
+repo.upsertVendor({ id: "twin.com", name: "twin.com", domain: "twin.com" });
+repo.upsertVendor({ id: "twin.io", name: "twin.io", domain: "twin.io" });
+repo.upsertVendor({ id: "hooli.com", name: "hooli.com", domain: "hooli.com" });
+
 async function list(vendor: string) {
   const response = vendorApisResponse(vendor, app);
   return { status: response.status, body: await response.json() };
@@ -174,6 +192,56 @@ describe("vendorApisResponse", () => {
     ]);
   });
 
+  it.each([
+    ["Stripe", "stripe.com"],
+    ["stripe api", "stripe.com"],
+    ["GitHub REST", "github.com"],
+    ["  GitHub  Rest API ", "github.com"],
+  ])(
+    "finds the Vendor of the API the Index remembers %j for",
+    async (vendor, id) => {
+      const { status, body } = await list(vendor);
+
+      expect(status).toBe(200);
+      expect(body.vendor.id).toBe(id);
+      expect(body.apis.map((a: { api: { id: string } }) => a.api.id)).toEqual([
+        `${id}/api`,
+      ]);
+    },
+  );
+
+  it("prefers the API's Vendor to Vendors with the label", async () => {
+    const { status, body } = await list("Hooli");
+
+    expect(status).toBe(200);
+    expect(body.vendor.id).toBe("hooli.io");
+  });
+
+  it.each([
+    ["Slack", "slack.com"],
+    ["SLACK api", "slack.com"],
+  ])(
+    "finds the Vendor by the first label of its id for %j",
+    async (vendor, id) => {
+      const { status, body } = await list(vendor);
+
+      expect(status).toBe(200);
+      expect(body.vendor.id).toBe(id);
+    },
+  );
+
+  it("answers 300 with the candidates when several Vendors have the label", async () => {
+    const { status, body } = await list("Twin");
+
+    expect(status).toBe(300);
+    expect(body).toEqual({
+      vendors: [
+        { id: "twin.com", name: "twin.com" },
+        { id: "twin.io", name: "twin.io" },
+      ],
+    });
+  });
+
   it("answers 300 with the candidates when several Vendors have the name", async () => {
     const { status, body } = await list("acme");
 
@@ -191,7 +259,7 @@ describe("vendorApisResponse", () => {
     expect((await list("https://acme.com/")).body.vendor.id).toBe("acme.com");
   });
 
-  it.each(["unknown.com", "Unknown", "Pay", "   "])(
+  it.each(["unknown.com", "Unknown", "Pay", "Slack Mobile", "   "])(
     "answers 404 with a Lookup hint for %j",
     async (vendor) => {
       const { status, body } = await list(vendor);

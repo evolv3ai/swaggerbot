@@ -277,6 +277,21 @@ export function createRepo(db: Db) {
         .all();
     },
 
+    /**
+     * The Vendors whose id's first label is `label` (`slack` → `slack.com`),
+     * by id.
+     */
+    findVendorsByLabel(label: string): Vendor[] {
+      return db
+        .select(vendorColumns)
+        .from(vendors)
+        .where(
+          sql`substr(${vendors.id}, 1, instr(${vendors.id}, '.') - 1) = ${label}`,
+        )
+        .orderBy(asc(vendors.id))
+        .all();
+    },
+
     /** The Vendor's APIs in the Index, by name ignoring case, then id. */
     listApisOfVendor(vendorId: string): Api[] {
       return db
