@@ -77,6 +77,39 @@ describe("outlineResult", () => {
     expect(textOf(result)).toContain(`cursor: "${page.nextCursor}"`);
   });
 
+  it("says a cut tag list holds only the largest tags", () => {
+    const text = textOf(outlineResult({ apiId }, ready(big)));
+
+    expect(text).toContain("tags lists the 200 largest");
+    expect(text).not.toContain("in 200 (the largest) tags");
+  });
+
+  it("doesn't repeat the filter advice on a later unfiltered page", () => {
+    const text = textOf(outlineResult({ apiId, cursor: "100" }, ready(big)));
+
+    expect(text).not.toContain("Filter rather than page");
+    expect(text).toMatch(/: operations 101–\d+ of 4000\./);
+  });
+
+  it("points an unfiltered cursor past the end back to the first page", () => {
+    const text = textOf(outlineResult({ apiId, cursor: "99999" }, ready(big)));
+
+    expect(text).toContain("4000 operations match, all before this cursor.");
+    expect(text).toContain(
+      `Next: get_spec_outline(apiId: "${apiId}") for the first page.`,
+    );
+    expect(text).not.toContain("Filter rather than page");
+  });
+
+  it("doesn't claim a cut tag list has every tag when nothing matches", () => {
+    const text = textOf(
+      outlineResult({ apiId, tag: "no-such-tag" }, ready(big)),
+    );
+
+    expect(text).toContain("tags lists the 200 largest.");
+    expect(text).not.toContain("them all");
+  });
+
   it("filters by tag and names the next page's call with the same filter", () => {
     const result = outlineResult(
       { apiId, tag: "ZONE-SETTINGS-AND-RESOURCES-1" },

@@ -143,28 +143,36 @@ function pageText(input: GetSpecOutlineInput, page: OutlinePage): string {
 
   if (page.matchedOperations === 0)
     return `${name}: no operation matches ${filter} (of ${page.totalOperations} in all).${
-      tagNames ? ` Its tags include ${tagNames}; tags lists them all.` : ""
-    } Next: ${call(", query: …")} with another word, or a tag from the list.`;
+      tagNames
+        ? ` Its tags include ${tagNames}; tags lists ${page.tagsCut ? `the ${page.tags.length} largest` : "them all"}.`
+        : ""
+    } Next: ${call(', query: "…"')} with another word, or a tag from the list.`;
 
   const sentences: string[] = [];
-  if (!filter && page.totalOperations > DEFAULT_PAGE_LIMIT) {
+  if (page.operations.length === 0)
+    sentences.push(
+      `${name}: ${page.matchedOperations} operations match${filter ? ` ${filter}` : ""}, all before this cursor. Next: ${call(filter ? filterArgs(input) : "")} for the first page.`,
+    );
+  else if (
+    !filter &&
+    page.totalOperations > DEFAULT_PAGE_LIMIT &&
+    first === 1
+  ) {
     const largest = [...page.tags].sort(
       (a, b) => b.operationCount - a.operationCount,
     )[0];
     const byQuery = `${call(', query: "…"')} for a word in the path, operationId or summary`;
     sentences.push(
       largest
-        ? `${name} has ${page.totalOperations} operations in ${page.tags.length}${page.tagsCut ? " (the largest)" : ""} tags, listed in tags with their counts. These are operations ${first}–${last} only.`
+        ? page.tagsCut
+          ? `${name} has ${page.totalOperations} operations in more tags than fit here; tags lists the ${page.tags.length} largest with their counts. These are operations ${first}–${last} only.`
+          : `${name} has ${page.totalOperations} operations in ${page.tags.length} tags, listed in tags with their counts. These are operations ${first}–${last} only.`
         : `${name} has ${page.totalOperations} operations and no tags. These are operations ${first}–${last} only.`,
       largest
         ? `Filter rather than page through them: ${call(`, tag: ${JSON.stringify(largest.name)}`)} for one tag, or ${byQuery}.`
         : `Filter rather than page through them: ${byQuery}.`,
     );
-  } else if (page.operations.length === 0)
-    sentences.push(
-      `${name}: ${page.matchedOperations} operations match${filter ? ` ${filter}` : ""}, all before this cursor. Next: ${call(filter ? filterArgs(input) : "")} for the first page.`,
-    );
-  else
+  } else
     sentences.push(
       `${name}: operations ${first}–${last} of ${page.matchedOperations}${filter ? ` matching ${filter}` : ""}${
         page.matchedOperations < page.totalOperations
