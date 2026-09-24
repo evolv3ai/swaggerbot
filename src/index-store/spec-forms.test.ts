@@ -495,7 +495,7 @@ describe("migration 0009", () => {
       .run("f".repeat(64), api.id);
     sqlite
       .prepare(
-        "INSERT INTO spec_forms (spec_id, status, outline, built_at, external_refs) VALUES (?, 'ready', ?, ?, 0)",
+        "INSERT INTO spec_forms (spec_id, status, outline, built_at, external_refs, attempts) VALUES (?, 'ready', ?, ?, 0, 2)",
       )
       .run("f".repeat(64), JSON.stringify(built.outline), AT);
     sqlite.close();
@@ -508,6 +508,12 @@ describe("migration 0009", () => {
         outline: built.outline,
       });
       expect(oldForms.nextToBuild("local")).toBe("f".repeat(64));
+      // Attempts from before it was ready don't shorten its rebuild's retries.
+      expect(
+        old.$client
+          .prepare("SELECT attempts FROM spec_forms WHERE spec_id = ?")
+          .get("f".repeat(64)),
+      ).toEqual({ attempts: 0 });
     } finally {
       old.$client.close();
     }
