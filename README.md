@@ -126,6 +126,32 @@ docker exec <container> node .output/cli/keys.mjs revoke <id>
 
 Only the secret's sha256 is stored, so `create` is the one time it is shown: hand it to its owner then. The id (`key_…`) is safe to show and is what `list` and `revoke` use. A key without `--quota` gets the default, 100 a day, or `DAILY_QUOTA` when that is set; a key's own quota wins over both. A revoked key stays in the list but is no longer accepted.
 
+## MCP
+
+swagger.bot is also an MCP server, for agents: `https://swaggerbot.dev/mcp`, Streamable HTTP, stateless (`@modelcontextprotocol/server` 2.1.0, [ADR 0005](docs/adr/0005-mcp-in-process-with-agent-sized-results.md)). Add it to Claude Code with:
+
+```sh
+claude mcp add --transport http swaggerbot https://swaggerbot.dev/mcp
+# with an API key, for Discovery and fresh:
+claude mcp add --transport http swaggerbot https://swaggerbot.dev/mcp --header "Authorization: Bearer <secret>"
+```
+
+Five tools, each a thin adapter over the HTTP API's code. Each returns `structuredContent` (the JSON) and a text that begins with a sentence for the agent and the next call to make; an error is `isError` with what went wrong and the call that fixes it.
+
+| Tool | Gives | Over |
+|---|---|---|
+| `lookup_api({ name, apiVersion?, allowCommunity?, fresh? })` | The Outcome, with the Spec's download URLs (the Spec itself is never returned inline). | `POST /api/lookup` |
+| `list_vendor_apis({ vendor })` | A Vendor's APIs in the Index, each with its Current Spec. | `GET /api/vendors/{vendor}/apis` |
+| `get_spec_outline({ apiId, specId?, tag?, query?, cursor? })` | One page (at most 100) of the Spec Outline's operations, filtered by tag or by a word of the path, `operationId` or summary, with the tag list; `nextCursor` for the next page. | `GET /api/apis/{apiId}/outline` |
+| `get_operation({ apiId, method, path, specId? })` | One operation with the references it reaches inlined; a path that isn't in the Spec gets the nearest ones. | `GET /api/apis/{apiId}/operation` |
+| `get_schema({ apiId, name, specId? })` | One component schema, to follow a reference `get_operation` or `get_schema` left. | `GET /api/apis/{apiId}/schema` |
+
+**Keys:** the same rules as the HTTP API ([Access](#access)). The key is optional: Index answers, the outline, operations, schemas and Vendor lists are open under the per-IP limit; Discovery and `fresh` need a key and use its quota. A key that is sent but isn't live is HTTP 401 (`WWW-Authenticate: Bearer`) before any tool runs. Every request to `/mcp` counts against the per-IP rate limit shared with `/api/`.
+
+**Result sizes:** every result stays under 30 kB (its `structuredContent` as JSON plus its text), below Claude Code's 10,000-token warning. `get_spec_outline` holds a page to that and, on a Spec over 100 operations without a filter, gives the tag list and the first page and says to filter. `get_operation` and `get_schema` inline breadth-first to 24 kB; past that a reference is `{ "$ref", "x-truncated": true }`, which `get_schema` follows. A schema that recurs within itself is `{ "$ref", "x-circular": true }`.
+
+To check the MCP server on a deployment, run `pnpm tsx scripts/mcpcheck.ts https://swaggerbot.dev` (`--names "Stripe,GitHub REST API,Cloudflare"` by default, `--json` for the whole report, `--help` for the rest; set `LOADCHECK_KEY` to send it as the bearer). It connects with the MCP SDK's HTTP client, lists the tools (all five must be there) and, for each name, calls `lookup_api` (which must be Resolved), `get_spec_outline` without a filter and then with a `query` taken from its first page, `get_operation` on 3 operations of that filtered page and `get_schema` on one schema reference they left. Calls are paced under the default 60/min per-IP limit. It prints each call's time and result size and exits 0 when no call failed, every result is under 30 kB and every call, the Lookups from the Index included, took at most 2 s; otherwise it exits 1, naming what failed.
+
 ## Crawling etiquette
 
 The fetcher (`src/fetch/fetcher.ts`) sends an honest User-Agent, spaces requests per host and respects `robots.txt`. The one exception is [ADR 0003](docs/adr/0003-robots-txt-exception-for-vendor-linked-specs.md): a single Spec document linked from an allowed Vendor page is fetched once even when its own host's `robots.txt` disallows it (`fetchUrl(url, { ignoreRobots: true })`), and never crawled on from; the result's `robotsDisallowed` records that it happened. The same holds for a Spec at a known path on the Vendor's own API host when that host's `robots.txt` disallows its whole site (`Disallow: /`, as an app host like `api.val.town` does): the known-path probe retries that one path once with `ignoreRobots`, but only for the Vendor's own domain and never when `robots.txt` merely lists disallowed paths (Codeberg's `/swagger.*.json`) or could not be fetched. Either way the Lookup adds a diagnostic naming the URL.
