@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { methodNotAllowed } from "~/server/api-fallbacks";
 import { getApp, openGet } from "~/server/app-instance";
 import { outlineResponse } from "~/spec-forms/http";
 import {
@@ -43,6 +44,7 @@ export const Route = createFileRoute("/api/apis/$")({
               );
           }
         }),
+      ANY: methodNotAllowed("GET"),
     },
   },
 });
