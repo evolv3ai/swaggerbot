@@ -13,6 +13,7 @@
  * `--keep-index` keeps the temporary one and prints its path.
  * `--concurrency <n>` runs n Lookups at once (default 4); 1 measures latency
  * without Lookups sharing the fetcher's per-host spacing.
+ * Loads the keys from `.env` and `.env.local` when they exist.
  */
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -30,6 +31,14 @@ import type { BenchmarkReport } from "~/benchmark/score";
 import { createAppLookup } from "~/lookup/app";
 
 const FALSE_RESOLUTION_GATE = 0.02;
+
+for (const file of [".env", ".env.local"]) {
+  try {
+    process.loadEnvFile(file);
+  } catch {
+    // Not there: rely on the environment.
+  }
+}
 
 const parsed = parseBenchArgs(process.argv.slice(2));
 if (!parsed.ok) {
