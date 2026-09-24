@@ -1,0 +1,1 @@
+ALTER TABLE `spec_forms` ADD `builder_version` integer;

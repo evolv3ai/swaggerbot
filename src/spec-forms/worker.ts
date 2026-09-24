@@ -39,6 +39,8 @@ const LANES: readonly FormsLane[] = ["local", "external"];
  * Issues and Spec Outline (ADR 0004): in-process, over the `spec_forms`
  * table, one Spec at a time per lane. A Spec stored before the table existed
  * has no row, so it is pending and gets built too: that is the backfill.
+ * When no Spec is pending, a lane rebuilds its `ready` Specs built by an
+ * older `FORMS_BUILDER_VERSION`, whose stored forms stay `ready` meanwhile.
  *
  * Every Spec is built first in the `"local"` lane, which never fetches. A
  * build there that asks for an external reference is discarded and its Spec

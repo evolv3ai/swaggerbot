@@ -1,10 +1,12 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { eq } from "drizzle-orm";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { openDb } from "~/index-store/db";
 import { createKeys } from "~/index-store/keys";
 import { createRepo } from "~/index-store/repo";
+import { specForms } from "~/index-store/schema";
 import { createSpecForms } from "~/index-store/spec-forms";
 import { SpecFormsError } from "~/spec-forms/build";
 import { Route as LookupRoute } from "./lookup";
@@ -134,8 +136,8 @@ describe("GET /api/specs/{specId}/published", () => {
 
 describe("GET /api/specs/{specId}/normalized", () => {
   afterEach(() => {
-    // Back to pending: a row that is building.
-    forms.markBuilding(jsonId, "2026-09-23T10:00:00.000Z");
+    // Back to pending: no row. (A `ready` row being rebuilt stays `ready`.)
+    db.delete(specForms).where(eq(specForms.specId, jsonId)).run();
   });
 
   it("answers 409 with retry-after while pending", async () => {

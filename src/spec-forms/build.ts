@@ -9,6 +9,13 @@ import { parseDocument } from "yaml";
 import type { SpecOutline, ValidityIssue } from "~/domain/spec-forms";
 
 /**
+ * The version of this builder's output. Bump it whenever the builder's output
+ * changes for a Spec already built: the forms worker then rebuilds every
+ * stored Spec's forms, keeping the old ones until the new are saved.
+ */
+export const FORMS_BUILDER_VERSION = 1;
+
+/**
  * Default ceiling on the Published Form's bytes. A build of Cloudflare's 26 MB
  * Spec peaks near 830 MB RSS in a 2 GB container (ADR 0004), so anything
  * larger than this is refused rather than built. `MAX_FORMS_BYTES` overrides it.

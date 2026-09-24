@@ -12,7 +12,11 @@ import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { type SpecForms, SpecFormsError } from "~/spec-forms/build";
+import {
+  FORMS_BUILDER_VERSION,
+  type SpecForms,
+  SpecFormsError,
+} from "~/spec-forms/build";
 import { type Db, MIGRATIONS_FOLDER, openDb } from "./db";
 import { createRepo, type Repo } from "./repo";
 import { specForms, specs } from "./schema";
@@ -228,6 +232,184 @@ describe("createSpecForms", () => {
     expect(forms.nextToBuild("local")).toBeUndefined();
   });
 
+  describe("a stale Spec: ready, built by an older builder", () => {
+    const readyForms = {
+      status: "ready",
+      normalizedSpecVersion: "3.1.1",
+      validityIssues: built.validityIssues,
+      validityFindingCount: 2,
+      normalizedFindingCount: 0,
+      outline: built.outline,
+    };
+    const rebuilt: SpecForms = {
+      ...built,
+      normalized: new TextEncoder().encode('{"openapi":"3.1.1","x":1}'),
+      validityIssues: [],
+      validityFindingCount: 0,
+    };
+
+    /** Builds `id`'s forms, then makes them stale: `builder_version` null. */
+    function makeStale(id: string, builtAt: string, externalRefs?: boolean) {
+      forms.markBuilding(id, builtAt);
+      forms.saveBuilt(id, built, builtAt, externalRefs);
+      db.update(specForms)
+        .set({ builderVersion: null })
+        .where(eq(specForms.specId, id))
+        .run();
+    }
+
+    function row(id: string) {
+      return db
+        .select({
+          status: specForms.status,
+          builderVersion: specForms.builderVersion,
+          attempts: specForms.attempts,
+          lastError: specForms.lastError,
+          startedAt: specForms.startedAt,
+          builtAt: specForms.builtAt,
+        })
+        .from(specForms)
+        .where(eq(specForms.specId, id))
+        .get();
+    }
+
+    it("stores the current builder version with the forms", () => {
+      const id = putSpec("{}", AT);
+      forms.markBuilding(id, AT);
+      forms.saveBuilt(id, built, AT);
+      expect(row(id)?.builderVersion).toBe(FORMS_BUILDER_VERSION);
+      expect(forms.nextToBuild("local")).toBeUndefined();
+    });
+
+    it("picks a never-built Spec before a stale one", () => {
+      const stale = putSpec('{"n":1}', "2026-09-20T00:00:00.000Z");
+      makeStale(stale, AT);
+      const fresh = putSpec('{"n":2}', "2026-09-22T00:00:00.000Z");
+
+      expect(forms.nextToBuild("local")).toBe(fresh);
+      forms.markBuilding(fresh, AT);
+      forms.saveBuilt(fresh, built, AT);
+      expect(forms.nextToBuild("local")).toBe(stale);
+    });
+
+    it("picks the oldest built first, older versions too, and never a failed one", () => {
+      const newer = putSpec('{"n":1}', "2026-09-20T00:00:00.000Z");
+      const older = putSpec('{"n":2}', "2026-09-21T00:00:00.000Z");
+      makeStale(newer, "2026-09-23T12:00:00.000Z");
+      makeStale(older, "2026-09-23T11:00:00.000Z");
+      db.update(specForms)
+        .set({ builderVersion: FORMS_BUILDER_VERSION - 1 })
+        .where(eq(specForms.specId, older))
+        .run();
+      const failed = putSpec('{"n":3}', "2026-09-19T00:00:00.000Z");
+      forms.markBuilding(failed, AT);
+      forms.saveFailure(failed, new SpecFormsError("not-openapi", "no"), AT);
+
+      expect(forms.nextToBuild("local")).toBe(older);
+      forms.markBuilding(older, AT);
+      forms.saveBuilt(older, rebuilt, AT);
+      expect(forms.nextToBuild("local")).toBe(newer);
+      forms.markBuilding(newer, AT);
+      forms.saveBuilt(newer, rebuilt, AT);
+      expect(forms.nextToBuild("local")).toBeUndefined();
+    });
+
+    it("rebuilds in the lane its row names", () => {
+      const external = putSpec('{"n":1}', "2026-09-20T00:00:00.000Z");
+      makeStale(external, AT, true);
+
+      expect(forms.nextToBuild("local")).toBeUndefined();
+      expect(forms.nextToBuild("external")).toBe(external);
+    });
+
+    it("stays ready with the old forms while it is rebuilt, then has the new ones", () => {
+      const id = putSpec("{}", AT);
+      makeStale(id, AT);
+
+      expect(forms.nextToBuild("local")).toBe(id);
+      forms.markBuilding(id, "2026-09-24T00:00:00.000Z");
+      expect(forms.getForms(id)).toEqual(readyForms);
+      expect(forms.getOutline(id)).toEqual({
+        status: "ready",
+        outline: built.outline,
+      });
+      expect(forms.getValidity(id).status).toBe("ready");
+      expect(forms.getNormalizedBytes(id)).toEqual(built.normalized);
+      expect(row(id)).toMatchObject({
+        status: "ready",
+        startedAt: "2026-09-24T00:00:00.000Z",
+        builtAt: AT,
+      });
+      // A process stopped mid-rebuild picks it again.
+      expect(forms.nextToBuild("local")).toBe(id);
+
+      forms.saveBuilt(id, rebuilt, "2026-09-24T00:01:00.000Z");
+      expect(forms.getNormalizedBytes(id)).toEqual(rebuilt.normalized);
+      expect(row(id)).toMatchObject({
+        status: "ready",
+        builderVersion: FORMS_BUILDER_VERSION,
+        builtAt: "2026-09-24T00:01:00.000Z",
+      });
+      expect(forms.nextToBuild("local")).toBeUndefined();
+    });
+
+    it("keeps the old forms when a rebuild fails, and stops after the last attempt", () => {
+      const id = putSpec("{}", AT);
+      makeStale(id, AT);
+
+      forms.markBuilding(id, AT);
+      forms.saveFailure(id, new Error("boom 1"), AT);
+      expect(forms.getForms(id)).toEqual(readyForms);
+      expect(forms.getNormalizedBytes(id)).toEqual(built.normalized);
+      expect(row(id)).toMatchObject({
+        status: "ready",
+        builderVersion: null,
+        attempts: 1,
+        lastError: "boom 1",
+        startedAt: null,
+        builtAt: AT,
+      });
+      expect(forms.nextToBuild("local")).toBe(id);
+
+      for (let i = 2; i <= MAX_FORMS_ATTEMPTS; i++) {
+        forms.markBuilding(id, AT);
+        forms.saveFailure(id, new Error(`boom ${i}`), AT);
+      }
+      expect(forms.getForms(id)).toEqual(readyForms);
+      expect(row(id)).toMatchObject({
+        status: "ready",
+        builderVersion: FORMS_BUILDER_VERSION,
+        attempts: MAX_FORMS_ATTEMPTS,
+        lastError: `boom ${MAX_FORMS_ATTEMPTS}`,
+      });
+      expect(forms.nextToBuild("local")).toBeUndefined();
+    });
+
+    it("keeps the old forms and stops at once when a rebuild fails for good", () => {
+      const id = putSpec("{}", AT);
+      makeStale(id, AT);
+
+      forms.markBuilding(id, AT);
+      forms.saveFailure(id, new SpecFormsError("too-large", "too large"), AT);
+      expect(forms.getForms(id)).toEqual(readyForms);
+      expect(row(id)).toMatchObject({
+        builderVersion: FORMS_BUILDER_VERSION,
+        attempts: 1,
+        lastError: "too large",
+      });
+      expect(forms.nextToBuild("local")).toBeUndefined();
+    });
+
+    it("counts only the rebuild's failures: saveBuilt clears earlier ones", () => {
+      const id = putSpec("{}", AT);
+      forms.markBuilding(id, AT);
+      forms.saveFailure(id, new Error("boom"), AT);
+      forms.markBuilding(id, AT);
+      forms.saveBuilt(id, built, AT);
+      expect(row(id)?.attempts).toBe(0);
+    });
+  });
+
   it("reads the bytes, the format and the best-Provenance Source to build from", () => {
     const id = putSpec('{"openapi":"3.1.0"}', AT);
     repo.addSource(id, "https://mirror.example/payco.json", "Mirror", AT);
@@ -280,6 +462,52 @@ describe("migration 0007", () => {
       const oldForms = createSpecForms(old);
       expect(oldForms.nextToBuild("local")).toBe("f".repeat(64));
       expect(oldForms.getForms("f".repeat(64))).toEqual({ status: "pending" });
+    } finally {
+      old.$client.close();
+    }
+  });
+});
+
+describe("migration 0009", () => {
+  it("applies on an existing Index, whose ready forms stay ready and are rebuilt", () => {
+    // The migrations up to 0008 only, as an Index from before this one.
+    const before = join(dir, "drizzle");
+    cpSync(MIGRATIONS_FOLDER, before, { recursive: true });
+    const journalPath = join(before, "meta", "_journal.json");
+    const journal = JSON.parse(readFileSync(journalPath, "utf8"));
+    journal.entries = journal.entries.filter(
+      (e: { idx: number }) => e.idx <= 8,
+    );
+    writeFileSync(journalPath, JSON.stringify(journal));
+    const path = join(dir, "old.db");
+    const sqlite = new Database(path);
+    migrate(drizzle({ client: sqlite }), { migrationsFolder: before });
+    sqlite
+      .prepare("INSERT INTO vendors (id, name, domain) VALUES (?, ?, ?)")
+      .run(vendor.id, vendor.name, vendor.domain);
+    sqlite
+      .prepare("INSERT INTO apis (id, vendor_id, name) VALUES (?, ?, ?)")
+      .run(api.id, vendor.id, api.name);
+    sqlite
+      .prepare(
+        "INSERT INTO specs (id, api_id, spec_version, format, byte_length, published_bytes) VALUES (?, ?, '3.0.0', 'json', 1, x'00')",
+      )
+      .run("f".repeat(64), api.id);
+    sqlite
+      .prepare(
+        "INSERT INTO spec_forms (spec_id, status, outline, built_at, external_refs) VALUES (?, 'ready', ?, ?, 0)",
+      )
+      .run("f".repeat(64), JSON.stringify(built.outline), AT);
+    sqlite.close();
+
+    const old = openDb(path);
+    try {
+      const oldForms = createSpecForms(old);
+      expect(oldForms.getOutline("f".repeat(64))).toEqual({
+        status: "ready",
+        outline: built.outline,
+      });
+      expect(oldForms.nextToBuild("local")).toBe("f".repeat(64));
     } finally {
       old.$client.close();
     }

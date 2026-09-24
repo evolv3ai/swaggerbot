@@ -179,4 +179,9 @@ export const specForms = sqliteTable("spec_forms", {
    * lane; `null` until a build has found out.
    */
   externalRefs: integer("external_refs", { mode: "boolean" }),
+  /**
+   * The `FORMS_BUILDER_VERSION` that built the stored forms; `null`, from
+   * before the column existed, is older than any version.
+   */
+  builderVersion: integer("builder_version"),
 });
