@@ -19,7 +19,7 @@ import {
 
 const DESCRIPTION = `One operation of an API's Spec, ready to call: its parameters (the Path Item's merged in), request body, responses and effective security, with the references they reach inlined, and the security schemes it names.
 
-To keep the result small (about 24 kB), inlining is breadth-first and stops at the deepest detail: a reference left is { $ref, "x-truncated": true }, and get_schema(apiId, name) returns that schema. A schema that recurs within itself is { $ref, "x-circular": true } where it recurs, and listed once in circular.
+To keep the result small (about 24 kB), inlining is breadth-first and stops at the deepest detail: a reference left is { $ref, "x-truncated": true }. When the $ref is a schema (#/components/schemas/…), get_schema(apiId, name: <that $ref>) returns it. A schema that recurs within itself is { $ref, "x-circular": true } where it recurs, and listed once in circular.
 
 path is a path of the Spec exactly as get_spec_outline lists it, with its {parameters}, not filled in. A path that isn't in the Spec gets the nearest operations to retry with.`;
 
