@@ -56,6 +56,7 @@ import type { WebSearch } from "~/sources/web-search";
 import { specAnswer, withSpecForms } from "~/spec-forms/outcome";
 import { crawledNamesCovered } from "./coverage";
 import {
+  ADD_ON_MAX_PATHS,
   DEFAULT_FRESHNESS_DAYS,
   DEFAULT_THRESHOLDS,
   freshnessMs,
@@ -1547,16 +1548,36 @@ export function createLookup(deps: LookupDeps): IndexedLookup {
       apiVersion === undefined ? !c.isPreview : c.apiVersion === apiVersion;
     /**
      * Settled once a wanted Spec from the Vendor or linked by it describes
-     * the API, and its URL names no API Version: a Spec whose URL does may
-     * be a per-version add-on (Box's 24-path `openapi-v2025.0.json` on
-     * GitHub, judged before the crawl brought `box-openapi.json`), so later
-     * Sources are still waited for and judged. When none comes in time,
-     * `answer` weighs such Specs as ever.
+     * the API, and it is not a possible add-on: its URL names an API Version
+     * and it has under `ADD_ON_MAX_PATHS` paths, or under `PARTIAL_SPEC_RATIO`
+     * of a sibling's: a confirming Spec found in this Lookup, or one held in
+     * the Index for this API. A Spec of another API found on the way (Twilio's
+     * 121-path `twilio_api_v2010.json` beside Verify's) is no sibling.
+     * Such a Spec may be a per-version add-on (Box's 24-path
+     * `openapi-v2025.0.json` on GitHub, judged before the crawl brought
+     * `box-openapi.json`), so later Sources are still waited for and judged.
+     * When none comes in time, `answer` weighs such Specs as ever.
      */
     const confirming = (c: SpecCandidate) =>
       isVendorBacked(c.provenance) && c.probability >= t.describes && wanted(c);
+    const pathsOf = (c: SpecCandidate) => c.sniff.extract.pathCount;
+    const indexedPaths = Math.max(
+      0,
+      ...(repo.getApiWithSpecs(choice.api.id)?.specs ?? []).map(
+        (s) => s.pathCount ?? 0,
+      ),
+    );
+    const possibleAddOn = (c: SpecCandidate) =>
+      urlNamesApiVersion(c.url) &&
+      (pathsOf(c) < ADD_ON_MAX_PATHS ||
+        pathsOf(c) <
+          PARTIAL_SPEC_RATIO *
+            Math.max(
+              indexedPaths,
+              ...candidates.filter(confirming).map(pathsOf),
+            ));
     const settled = () =>
-      candidates.some((c) => confirming(c) && !urlNamesApiVersion(c.url));
+      candidates.some((c) => confirming(c) && !possibleAddOn(c));
     /**
      * Whether a step goes on to its next Source. Once settled, it still takes
      * those whose URL names an API Version (`openapi-v2026.0.json` beside
