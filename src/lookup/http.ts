@@ -1,6 +1,7 @@
 import { z } from "zod";
-import { type Keys, utcDay } from "~/index-store/keys";
-import type { IndexedLookup } from "./lookup";
+import type { Outcome } from "~/domain/outcome";
+import { type ApiKey, type Keys, utcDay } from "~/index-store/keys";
+import type { IndexedLookup, LookupRequest } from "./lookup";
 import { clientIpOf, type RateLimiter } from "./rate-limit";
 
 /** The body of `POST /api/lookup`. */
@@ -27,8 +28,36 @@ export type Gate = {
   now?: () => Date;
 };
 
-const KEY_HINT =
+/** How a Caller sends its API key, for the answers that need one. */
+export const KEY_HINT =
   "Send it as `Authorization: Bearer <key>`. Keys are issued by the operator of this service; ask them for one.";
+
+/** The body of every 401 for a key that is sent but names no live key. */
+export const UNKNOWN_KEY = { error: "Unknown or revoked API key." };
+
+/** The body of a Lookup's refusal: what went wrong, and what fixes it. */
+export type LookupError = {
+  error: string;
+  hint?: string;
+  limit?: number;
+  used?: number;
+};
+
+/**
+ * A Lookup's answer, before any surface shapes it: the HTTP status, the JSON
+ * body (the Outcome when 200) and the headers. `POST /api/lookup` sends it
+ * as a `Response`; the MCP tool `lookup_api` turns it into a tool result.
+ */
+export type LookupAnswer =
+  | { status: 200; body: Outcome; headers: Record<string, string> }
+  | {
+      status: 401 | 429;
+      body: LookupError;
+      headers: Record<string, string>;
+    };
+
+/** The key a Lookup runs under: its id and its own daily quota, if any. */
+export type LookupKey = Pick<ApiKey, "id" | "dailyQuota">;
 
 /**
  * Handles `POST /api/lookup`, in this order:
@@ -37,11 +66,7 @@ const KEY_HINT =
  * 2. 400 with the zod issues for a bad body;
  * 3. 401 when an `Authorization` header is sent but names no live key, even
  *    when the Index could answer;
- * 4. 200 with the answer from the Index, unless `fresh`: open to anyone, no
- *    quota used;
- * 5. otherwise (Discovery or `fresh`), 401 without a key, 429 when the key's
- *    daily quota is used, else 200 with the Lookup's Outcome and the quota
- *    headers.
+ * 4. then `answerLookup`: the Index's answer, or Discovery under the key.
  *
  * `getApp` is called once a valid request needs it, so the real dependencies
  * are built only then.
@@ -51,7 +76,6 @@ export async function handleLookupRequest(
   getApp: () => LookupApp,
   gate: Gate,
 ): Promise<Response> {
-  const now = gate.now?.() ?? new Date();
   const limited = rateLimited(request, gate);
   if (limited) return limited;
 
@@ -68,20 +92,43 @@ export async function handleLookupRequest(
       { status: 400 },
     );
 
-  const { lookup, keys } = getApp();
-  const secret = bearerOf(request);
-  const key = secret === undefined ? undefined : keys.findKey(secret);
-  if (secret !== undefined && !key)
-    return unauthorized({ error: "Unknown or revoked API key." });
+  const app = getApp();
+  const auth = authenticate(request, app.keys);
+  if ("response" in auth) return auth.response;
 
-  const indexed = lookup.fromIndex(body.data);
-  if (indexed) return Response.json(indexed);
+  const answer = await answerLookup(body.data, auth.key, app, gate);
+  return Response.json(answer.body, {
+    status: answer.status,
+    headers: answer.headers,
+  });
+}
+
+/**
+ * The Lookup's rules, shared by every surface (ADR 0005), for a valid
+ * request whose key, if any, is live:
+ *
+ * 1. 200 with the answer from the Index, unless `fresh`: open to anyone, no
+ *    quota used;
+ * 2. otherwise (Discovery or `fresh`), 401 without a key, 429 when the key's
+ *    daily quota is used, else 200 with the Lookup's Outcome and the quota
+ *    headers.
+ */
+export async function answerLookup(
+  request: LookupRequest,
+  key: LookupKey | undefined,
+  { lookup, keys }: LookupApp,
+  gate: Pick<Gate, "dailyQuota" | "now">,
+): Promise<LookupAnswer> {
+  const now = gate.now?.() ?? new Date();
+  const indexed = lookup.fromIndex(request);
+  if (indexed) return { status: 200, body: indexed, headers: {} };
 
   if (!key)
-    return unauthorized({
-      error: "Discovery needs an API key.",
-      hint: KEY_HINT,
-    });
+    return {
+      status: 401,
+      body: { error: "Discovery needs an API key.", hint: KEY_HINT },
+      headers: { "www-authenticate": "Bearer" },
+    };
   const quota = keys.takeQuota(
     key.id,
     utcDay(now),
@@ -92,17 +139,44 @@ export async function handleLookupRequest(
     "x-quota-remaining": String(Math.max(0, quota.limit - quota.used)),
   };
   if (!quota.allowed)
-    return Response.json(
-      { error: "Daily quota used.", limit: quota.limit, used: quota.used },
-      {
-        status: 429,
-        headers: {
-          ...quotaHeaders,
-          "retry-after": String(secondsToUtcMidnight(now)),
-        },
+    return {
+      status: 429,
+      body: {
+        error: "Daily quota used.",
+        limit: quota.limit,
+        used: quota.used,
       },
-    );
-  return Response.json(await lookup(body.data), { headers: quotaHeaders });
+      headers: {
+        ...quotaHeaders,
+        "retry-after": String(secondsToUtcMidnight(now)),
+      },
+    };
+  return { status: 200, body: await lookup(request), headers: quotaHeaders };
+}
+
+/**
+ * The live key a request names in `Authorization: Bearer`, with its secret;
+ * no key when the header isn't sent; or `{ response }`, a 401, when a key is
+ * sent but names no live key.
+ */
+export function authenticate(
+  request: Request,
+  keys: Pick<Keys, "findKey">,
+):
+  | { key: ApiKey; secret: string }
+  | { key: undefined }
+  | { response: Response } {
+  const secret = bearerOf(request);
+  if (secret === undefined) return { key: undefined };
+  const key = keys.findKey(secret);
+  if (!key)
+    return {
+      response: Response.json(UNKNOWN_KEY, {
+        status: 401,
+        headers: { "www-authenticate": "Bearer" },
+      }),
+    };
+  return { key, secret };
 }
 
 /**
@@ -135,13 +209,6 @@ function bearerOf(request: Request): string | undefined {
   const header = request.headers.get("authorization")?.trim();
   if (!header) return undefined;
   return /^Bearer\s+(\S+)$/i.exec(header)?.[1] ?? "";
-}
-
-function unauthorized(body: Record<string, string>): Response {
-  return Response.json(body, {
-    status: 401,
-    headers: { "www-authenticate": "Bearer" },
-  });
 }
 
 /** Whole seconds from `now` until the next UTC midnight, when quotas reset. */
