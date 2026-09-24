@@ -212,6 +212,68 @@ describe("outlineResponse", () => {
     expect(getApp).not.toHaveBeenCalled();
   });
 
+  it("answers exactly as before without paging parameters", async () => {
+    const whole = await get("payco.com/payco-api").json();
+    const withSpecId = await get(
+      "payco.com/payco-api",
+      `?specId=${currentId}`,
+    ).json();
+
+    expect(Object.keys(whole)).toEqual([
+      "apiId",
+      "specId",
+      "specVersion",
+      "normalized",
+      "outline",
+      "downloads",
+    ]);
+    expect(withSpecId).toEqual(whole);
+  });
+
+  it("answers one page with a tag, query, cursor or limit", async () => {
+    const response = get("payco.com/payco-api", "?tag=CHARGES&query=list");
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      apiId: "payco.com/payco-api",
+      specId: currentId,
+      title: "PayCo v2",
+      apiVersion: "1.0",
+      servers: ["https://api.payco.com"],
+      securitySchemes: [{ name: "bearer", type: "http", scheme: "bearer" }],
+      tags: [{ name: "charges", operationCount: 1 }],
+      operations: outlineOf("PayCo v2").operations,
+      totalOperations: 1,
+      matchedOperations: 1,
+      nextCursor: null,
+      specVersion: "3.1.0",
+      normalized: "ready",
+      downloads: {
+        published: `/api/specs/${currentId}/published`,
+        normalized: `/api/specs/${currentId}/normalized`,
+      },
+    });
+    expect(await get("payco.com/payco-api", "?cursor=1").json()).toMatchObject({
+      operations: [],
+      matchedOperations: 1,
+      nextCursor: null,
+    });
+  });
+
+  it.each(["?limit=0", "?limit=501", "?limit=ten", "?cursor=abc"])(
+    "answers 400 for %s",
+    async (query) => {
+      const response = get("payco.com/payco-api", query);
+
+      expect(response.status).toBe(400);
+      expect((await response.json()).error).toBeTypeOf("string");
+    },
+  );
+
+  it("answers 409 while pending, with or without paging parameters", () => {
+    expect(get("payco.com/other-api", "?tag=charges").status).toBe(409);
+  });
+
   it("never reads the Normalized Form", () => {
     const spy = vi.spyOn(db.$client, "prepare");
 
