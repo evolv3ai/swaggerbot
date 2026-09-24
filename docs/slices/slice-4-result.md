@@ -48,7 +48,13 @@ Neither URL has been added to `benchmark/entries.json`.
 
 ## Known misses and follow-ups
 
-- **DigitalOcean** was rebuilt after WTR-120 deployed. The result is recorded in [`docs/deploy.md`](../deploy.md). Its Normalized Form still has 62 findings (from a clone of `main`): 60 from response `headers` maps written as a `$ref`, and 2 tag descriptions that aren't strings as published. Whether to normalize those is open.
+- **DigitalOcean after WTR-120:** rebuilt in production (19:44, 2,997 s) with 2 normalized findings, down from 697. All 695 operations are inlined, and `get_operation` returns them in full. Upstream `main` has changed since then: built from a clone, it gives 62 findings. 60 come from response `headers` maps written as a `$ref`; 2 are tag descriptions that aren't strings as published. Whether to normalize those is open.
+- **One slow Spec holds up every other Spec's forms (for Wes).** The worker builds one Spec at a time, and DigitalOcean's references take ~50 min to fetch. When a Lookup finds a changed DigitalOcean Spec, every Spec found after it waits about 50 minutes. On 2026-09-23 at 19:44, that held up Cloudflare's new Current Spec and five others: they answer 409 until ~20:35, and `formscheck` would fail on Cloudflare in that window. The options:
+  1. **A second lane** for Specs with external references, so they never block Specs without them. This is the smallest change, and it caps the damage at DigitalOcean itself.
+  2. **Keep fetched reference files across builds** (by URL, revalidated with ETag or Last-Modified), so a rebuild fetches only what changed. A DigitalOcean rebuild would take minutes, not ~50.
+  3. **Serve the previous Spec's forms** (flagged as stale) until the new Current Spec's forms are ready.
+
+  Recommendation: 1 now; 2 if DigitalOcean-like Specs multiply.
 - **Stored forms aren't rebuilt when the builder changes.** DigitalOcean's row was deleted by hand. Rebuilding stored forms after a builder change is an open decision.
 - **`list_vendor_apis` by name can't match anything yet.** Every Vendor in the Index is stored with `name` equal to its id (`stripe.com`), so `/api/vendors/Stripe/apis` is 404. Lookup by id, domain or URL works.
 - **Stripe's large operations come back truncated** at the 1 MB cap. That was all 5 operations sampled, `GET /v1/account` included. A Caller follows the `x-truncated` refs through the Normalized Form. This is the decided behaviour, and for Stripe it is the common case.
