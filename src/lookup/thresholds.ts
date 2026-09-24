@@ -49,6 +49,15 @@ export const DEFAULT_THRESHOLDS: Thresholds = {
 export const PARTIAL_SPEC_RATIO = 0.5;
 
 /**
+ * A confirmed Spec whose URL names an API Version, with fewer paths than
+ * this, may be a per-version add-on (Box's `openapi-v2025.0.json`, 24 paths;
+ * `openapi-v2026.0.json`, 5), so Discovery waits for later Sources rather
+ * than settle on it. The full Specs at versioned URLs that waited out the
+ * deadline for it (Twilio Verify, DigitalOcean, Jira, Plaid) have hundreds.
+ */
+export const ADD_ON_MAX_PATHS = 40;
+
+/**
  * The freshness window, in days (`FRESHNESS_DAYS`): an answer from the Index
  * whose `verifiedAt` is older is Stale, and a name whose last Verification
  * finished within it is not queued again. The PRD's starting assumption.

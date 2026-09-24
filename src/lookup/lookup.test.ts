@@ -2519,6 +2519,82 @@ describe("lookup with the Spec step's Sources at once", () => {
       });
     });
 
+    it("settles at once on a versioned URL's Spec with hundreds of paths", async () => {
+      // Twilio Verify's `twilio_verify_v2.json`: a full Spec, not an add-on.
+      const { probe } = slowProbe(0, [bytesHit(addOn, 300)]);
+      const { lookup } = setup(
+        script,
+        undefined,
+        undefined,
+        slowCrawl(2000, {
+          hits: [{ ...bytesHit(full, 60), linkedFrom: full, offHost: false }],
+        }),
+        undefined,
+        undefined,
+        undefined,
+        { probe },
+      );
+
+      const start = performance.now();
+      const outcome = await ask(lookup, "nospec");
+
+      expect(outcome).toMatchObject({
+        outcome: "Resolved",
+        sources: [{ url: addOn }],
+      });
+      expect(performance.now() - start).toBeLessThan(1000);
+    });
+
+    it("waits past a 24-path add-on for the crawl's full Spec", async () => {
+      const { probe } = slowProbe(0, [bytesHit(addOn, 24)]);
+      const { lookup } = setup(
+        script,
+        undefined,
+        undefined,
+        slowCrawl(300, {
+          hits: [{ ...bytesHit(full, 187), linkedFrom: full, offHost: false }],
+        }),
+        undefined,
+        undefined,
+        undefined,
+        { probe },
+      );
+
+      expect(await ask(lookup, "nospec")).toMatchObject({
+        outcome: "Resolved",
+        sources: [{ url: full }],
+      });
+    });
+
+    it("waits past a versioned Spec with far fewer paths than the Index holds", async () => {
+      const crawl = () =>
+        slowCrawl(300, {
+          hits: [{ ...bytesHit(full, 187), linkedFrom: full, offHost: false }],
+        });
+      const first = setup(script, undefined, undefined, crawl());
+      expect(await ask(first.lookup, "nospec")).toMatchObject({
+        outcome: "Resolved",
+        sources: [{ url: full }],
+      });
+      // Over ADD_ON_MAX_PATHS, but under half the indexed Spec's 187.
+      const { probe } = slowProbe(0, [bytesHit(addOn, 60)]);
+      const { lookup } = setup(
+        script,
+        undefined,
+        undefined,
+        crawl(),
+        undefined,
+        undefined,
+        undefined,
+        { probe },
+      );
+
+      expect(await ask(lookup, "nospec", { fresh: true })).toMatchObject({
+        outcome: "Resolved",
+        sources: [{ url: full }],
+      });
+    });
+
     it("answers the add-on when the deadline passes with nothing else", async () => {
       const { probe } = slowProbe(0, [bytesHit(addOn, 5)]);
       const { lookup } = setup(
