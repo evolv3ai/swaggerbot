@@ -1,12 +1,19 @@
-import { and, asc, eq, isNull, notInArray, or, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, lt, notInArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { bestProvenance } from "../domain/provenance";
 import { SpecOutline, ValidityIssue } from "../domain/spec-forms";
-import { type SpecForms, SpecFormsError } from "../spec-forms/build";
+import {
+  FORMS_BUILDER_VERSION,
+  type SpecForms,
+  SpecFormsError,
+} from "../spec-forms/build";
 import type { Db } from "./db";
 import { sources, specForms, specs } from "./schema";
 
-/** A build that fails this many times is given up: its Spec's forms are `failed`. */
+/**
+ * A build that fails this many times is given up: its Spec's forms are
+ * `failed`, or, for a rebuild, the old forms are kept.
+ */
 export const MAX_FORMS_ATTEMPTS = 3;
 
 /**
@@ -79,10 +86,23 @@ export function createSpecForms(db: Db) {
      * then oldest, so a Spec being retried never holds up one not yet tried.
      * Only among `lane`'s Specs: `"external"` has those whose build is known
      * to fetch external references, `"local"` the rest, including a Spec not
-     * yet built. `undefined` when there is none.
+     * yet built.
+     *
+     * Only when none is pending, the next stale Spec: `ready`, but built by
+     * an older `FORMS_BUILDER_VERSION` (or before versions were stored),
+     * oldest `built_at` first. Its stored forms stay `ready` while it is
+     * rebuilt. A `failed` Spec is never rebuilt. `undefined` when there is
+     * neither.
      */
     nextToBuild(lane: FormsLane): string | undefined {
-      return db
+      const inLane =
+        lane === "external"
+          ? eq(specForms.externalRefs, true)
+          : or(
+              isNull(specForms.externalRefs),
+              eq(specForms.externalRefs, false),
+            );
+      const pending = db
         .select({ id: specs.id })
         .from(specs)
         .leftJoin(specForms, eq(specForms.specId, specs.id))
@@ -92,12 +112,7 @@ export function createSpecForms(db: Db) {
               isNull(specForms.specId),
               notInArray(specForms.status, ["ready", "failed"]),
             ),
-            lane === "external"
-              ? eq(specForms.externalRefs, true)
-              : or(
-                  isNull(specForms.externalRefs),
-                  eq(specForms.externalRefs, false),
-                ),
+            inLane,
           ),
         )
         .orderBy(
@@ -105,6 +120,22 @@ export function createSpecForms(db: Db) {
           asc(specs.createdAt),
           asc(sql`${specs}.rowid`),
         )
+        .get()?.id;
+      if (pending !== undefined) return pending;
+      return db
+        .select({ id: specForms.specId })
+        .from(specForms)
+        .where(
+          and(
+            eq(specForms.status, "ready"),
+            or(
+              isNull(specForms.builderVersion),
+              lt(specForms.builderVersion, FORMS_BUILDER_VERSION),
+            ),
+            inLane,
+          ),
+        )
+        .orderBy(asc(specForms.builtAt), asc(sql`${specForms}.rowid`))
         .get()?.id;
     },
 
@@ -142,19 +173,27 @@ export function createSpecForms(db: Db) {
       };
     },
 
-    /** Records that a build of `specId`'s forms started at `at` (ISO). */
+    /**
+     * Records that a build of `specId`'s forms started at `at` (ISO). A
+     * rebuild of `ready` forms leaves them `ready`: Callers keep getting
+     * them until `saveBuilt` replaces them.
+     */
     markBuilding(specId: string, at: string): void {
       db.insert(specForms)
         .values({ specId, status: "building", startedAt: at })
         .onConflictDoUpdate({
           target: specForms.specId,
-          set: { status: "building", startedAt: at },
+          set: {
+            status: sql`case when ${specForms.status} = 'ready' then 'ready' else 'building' end`,
+            startedAt: at,
+          },
         })
         .run();
     },
 
     /**
-     * Stores a build's forms; `specId` is then `ready`. `externalRefs`, when
+     * Stores a build's forms, built by `FORMS_BUILDER_VERSION`; `specId` is
+     * then `ready`, with no failed attempt counted. `externalRefs`, when
      * given, says whether the build fetched external references.
      */
     saveBuilt(
@@ -172,8 +211,10 @@ export function createSpecForms(db: Db) {
         validityFindingCount: forms.validityFindingCount,
         normalizedFindingCount: forms.normalizedFindingCount,
         outline: JSON.stringify(forms.outline),
+        attempts: 0,
         lastError: null,
         builtAt: at,
+        builderVersion: FORMS_BUILDER_VERSION,
       };
       db.insert(specForms)
         .values({ specId, ...values })
@@ -197,19 +238,37 @@ export function createSpecForms(db: Db) {
      * Records a failed build. It is retried until `MAX_FORMS_ATTEMPTS`
      * failures, then `failed`; a Published Form over `MAX_FORMS_BYTES`, or
      * one that isn't OpenAPI, is `failed` at once.
+     *
+     * A failed rebuild of `ready` forms keeps them `ready`. It is retried
+     * the same way; when it is given up, the row is stamped with
+     * `FORMS_BUILDER_VERSION` so it isn't rebuilt again, and keeps
+     * `last_error`.
      */
     saveFailure(specId: string, error: unknown, at: string): void {
-      const attempts =
-        (db
-          .select({ attempts: specForms.attempts })
-          .from(specForms)
-          .where(eq(specForms.specId, specId))
-          .get()?.attempts ?? 0) + 1;
+      const row = db
+        .select({ status: specForms.status, attempts: specForms.attempts })
+        .from(specForms)
+        .where(eq(specForms.specId, specId))
+        .get();
+      const attempts = (row?.attempts ?? 0) + 1;
       const failed = attempts >= MAX_FORMS_ATTEMPTS || isPermanent(error);
+      const lastError = error instanceof Error ? error.message : String(error);
+      if (row?.status === "ready") {
+        db.update(specForms)
+          .set({
+            attempts,
+            lastError,
+            startedAt: null,
+            builderVersion: failed ? FORMS_BUILDER_VERSION : undefined,
+          })
+          .where(eq(specForms.specId, specId))
+          .run();
+        return;
+      }
       const values = {
         status: failed ? ("failed" as const) : ("building" as const),
         attempts,
-        lastError: error instanceof Error ? error.message : String(error),
+        lastError,
         // A retry hasn't started yet; a failed build ended now.
         startedAt: failed ? undefined : null,
         builtAt: failed ? at : undefined,
