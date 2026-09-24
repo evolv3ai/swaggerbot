@@ -88,7 +88,7 @@ describe("/mcp", () => {
       dailyQuota: 100,
       now: () => NOW,
     };
-    const getApp = () => ({ lookup: fake.lookup, keys, db });
+    const getApp = () => ({ db, lookup: fake.lookup, keys });
     handler = createSwaggerbotMcpHandler({ getApp, gate });
   });
 
@@ -153,6 +153,7 @@ describe("/mcp", () => {
 
     expect(tools.map((t: { name: string }) => t.name)).toEqual([
       "lookup_api",
+      "list_vendor_apis",
       "get_spec_outline",
     ]);
     const [tool] = tools;

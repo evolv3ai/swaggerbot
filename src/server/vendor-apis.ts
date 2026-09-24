@@ -1,9 +1,10 @@
-import type { Api, Vendor } from "~/domain/catalog";
-import { vendorIdFromDomain } from "~/domain/catalog";
-import type { Provenance } from "~/domain/provenance";
+import { z } from "zod";
+import { Api, Timestamp, Vendor, vendorIdFromDomain } from "~/domain/catalog";
+import { SpecAnswer } from "~/domain/outcome";
+import { Provenance } from "~/domain/provenance";
 import type { Db } from "~/index-store/db";
 import { createRepo, normalizeName, type Repo } from "~/index-store/repo";
-import type { CurrentFromIndex, IndexedLookup } from "~/lookup/lookup";
+import type { IndexedLookup } from "~/lookup/lookup";
 
 /** What `GET /api/vendors/{vendor}/apis` runs on: the Index and its Current Spec rule. */
 export type VendorApisApp = {
@@ -12,20 +13,44 @@ export type VendorApisApp = {
 };
 
 /** One API of the Vendor, as `list_vendor_apis` lists it. */
-export type VendorApi = {
-  api: Api;
+export const VendorApi = z.object({
+  api: Api,
   /** null when the Index holds no confirmed Official, Endorsed or Mirror Spec of it. */
-  currentSpec: CurrentFromIndex["currentSpec"] | null;
-  alternateSpecs: CurrentFromIndex["alternateSpecs"];
-  provenance: Provenance | null;
-  verifiedAt: string | null;
-};
+  currentSpec: SpecAnswer.nullable(),
+  alternateSpecs: z.array(SpecAnswer),
+  provenance: Provenance.nullable(),
+  verifiedAt: Timestamp.nullable(),
+});
+export type VendorApi = z.infer<typeof VendorApi>;
+
+/** A Vendor and its APIs in the Index: the 200 answer. */
+export const VendorApis = z.object({
+  vendor: Vendor,
+  apis: z.array(VendorApi),
+});
+export type VendorApis = z.infer<typeof VendorApis>;
+
+/** The listing's answer, for any surface to send (ADR 0005). */
+export type VendorApisAnswer =
+  | { status: 200; body: VendorApis }
+  | { status: 300; body: { vendors: Pick<Vendor, "id" | "name">[] } }
+  | { status: 404; body: { error: string; hint: string } };
 
 const LOOKUP_HINT =
   "Only APIs already in the Index are listed. A Lookup (`POST /api/lookup` with the name of an API) finds an API and adds it, with its Vendor, to the Index.";
 
+/** `GET /api/vendors/{vendor}/apis`: `answerVendorApis` as a JSON response. */
+export function vendorApisResponse(
+  vendor: string,
+  getApp: () => VendorApisApp,
+): Response {
+  const { status, body } = answerVendorApis(vendor, getApp());
+  return Response.json(body, { status });
+}
+
 /**
- * `GET /api/vendors/{vendor}/apis`: the Vendor's APIs, from the Index alone,
+ * The listing's rules, shared by `GET /api/vendors/{vendor}/apis` and
+ * `list_vendor_apis`: the Vendor's APIs, from the Index alone,
  * ordered by name, each with its Current Spec and Alternates as a default
  * Lookup answers them (`currentFromIndex`). Runs no Lookup, no Discovery and
  * no Verification.
@@ -40,27 +65,26 @@ const LOOKUP_HINT =
  * Vendors. 300 with the candidates when several Vendors match by label, name
  * or name prefix, 404 with a hint when none matches.
  */
-export function vendorApisResponse(
+export function answerVendorApis(
   vendor: string,
-  getApp: () => VendorApisApp,
-): Response {
-  const { db, lookup } = getApp();
+  { db, lookup }: VendorApisApp,
+): VendorApisAnswer {
   const repo = createRepo(db);
   const matched = matchVendor(repo, vendor);
   if (matched.length > 1)
-    return Response.json(
-      { vendors: matched.map(({ id, name }) => ({ id, name })) },
-      { status: 300 },
-    );
+    return {
+      status: 300,
+      body: { vendors: matched.map(({ id, name }) => ({ id, name })) },
+    };
   const [found] = matched;
   if (!found)
-    return Response.json(
-      {
+    return {
+      status: 404,
+      body: {
         error: `No Vendor "${vendor.trim()}" in the Index.`,
         hint: LOOKUP_HINT,
       },
-      { status: 404 },
-    );
+    };
   const apis = repo.listApisOfVendor(found.id).map((api): VendorApi => {
     const current = lookup.currentFromIndex(api.id);
     if (!current)
@@ -74,7 +98,7 @@ export function vendorApisResponse(
     const { currentSpec, alternateSpecs, provenance, verifiedAt } = current;
     return { api, currentSpec, alternateSpecs, provenance, verifiedAt };
   });
-  return Response.json({ vendor: found, apis });
+  return { status: 200, body: { vendor: found, apis } };
 }
 
 /**

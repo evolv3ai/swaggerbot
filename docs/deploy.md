@@ -105,6 +105,18 @@ The deploys of 2026-09-23:
 - `/api/vendors/Jira/apis` **200**, Vendor `atlassian.com` with `atlassian.com/jira`; `Jir` 404; `Stripe` 200.
 - The page's example, `curl https://swaggerbot.dev/api/lookup -H 'content-type: application/json' -d '{"name": "Stripe API"}'`, is Resolved, Official.
 
+## Slice 5: the MCP server
+
+### `7264d21` (2026-09-24): wave 1, `/mcp` with `lookup_api`
+
+**Deployed at 11:46 CDT** (deployment `pxohytuty89ffymyigdepbez`). It carries #82 (WTR-129): `/mcp`, the MCP endpoint (`@modelcontextprotocol/server` 2.1.0, stateless), with `lookup_api` and the same key rules as `/api/lookup` (ADR 0005). No new env vars; the per-IP limit is shared with the HTTP API.
+
+**Checked from outside** (11:47, Claude Code 2.1.281):
+- `claude mcp add --transport http swaggerbot https://swaggerbot.dev/mcp` → "✔ Connected" in `claude mcp list`.
+- `claude -p "Using only the swaggerbot MCP tools, find the Stripe API's Spec and give its download URL" --allowedTools "mcp__swaggerbot__*" --model haiku` answered with `stripe.com/stripe-api`, Official, and the `/api/specs/…/published` and `/normalized` URLs (33 s end to end). The published URL is 200 (6.6 MB).
+- `GET /mcp` 405 (the SDK's stateless answer); an unknown bearer is 401 with `www-authenticate: Bearer`; `/api/health` OK.
+- Until wave 2, the Resolved text names `get_spec_outline`, which isn't deployed yet.
+
 ## Gotchas
 
 - Coolify's application health check runs `curl`/`wget` **inside** the container. An image without them is rolled back as unhealthy, even when its own Docker `HEALTHCHECK` passes.
