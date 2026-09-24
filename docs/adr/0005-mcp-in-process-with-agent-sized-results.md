@@ -1,6 +1,6 @@
 # MCP served in-process, stateless, with results sized for agents
 
-**Status:** proposed (2026-09-24), awaiting Wes.
+**Status:** accepted (Wes, 2026-09-24).
 
 swagger.bot's MCP server is a route in the same TanStack Start app (ADR 0002), at `https://swaggerbot.dev/mcp`, built on the MCP TypeScript SDK **v2** (`@modelcontextprotocol/server`, the stable line, implementing the 2026-07-28 spec). Its `createMcpHandler` turns a web-standard `Request` into a `Response` and builds a fresh `McpServer` per request, so the server keeps no session state and needs no sticky routing; it also answers 2025-era clients. The tools are thin adapters over the same code as the HTTP API: one rule for Index answers, API keys, quotas and the per-IP rate limit, whichever surface a Caller uses. The API key travels as `Authorization: Bearer`, is checked before the handler runs and is handed to it as `authInfo` for that request only.
 

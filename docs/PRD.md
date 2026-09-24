@@ -81,7 +81,7 @@ Crawling etiquette:
 
 ## Surfaces
 
-**HTTP API and MCP.** Both expose the same four operations:
+**HTTP API and MCP.** Both expose the same operations (MCP results are sized for an agent's context: filtered, paged and capped at about 30 kB, [ADR 0005](adr/0005-mcp-in-process-with-agent-sized-results.md)):
 
 | Operation | Returns |
 |---|---|
@@ -89,6 +89,7 @@ Crawling etiquette:
 | `list_vendor_apis(vendor)` | The Vendor's APIs, from the Index |
 | `get_spec_outline(apiId)` | The Spec Outline |
 | `get_operation(apiId, method, path)` | One operation with its schemas fully expanded |
+| `get_schema(apiId, name)` | One component schema, expanded (follows the references `get_operation` leaves) |
 
 **Web UI.** Built with shadcn primitives, with the visual language set by Impeccable (`PRODUCT.md` via `/impeccable init`). The screens:
 - **Search.**
@@ -139,7 +140,7 @@ Each slice is usable end to end and demonstrable. Later slices don't start until
 - **Accept when:** these work on the largest Benchmark Specs (GitHub, Stripe) without timeouts.
 
 ### Slice 5 — MCP server
-- The four tools over MCP, authenticated with an API key.
+- Five tools over MCP (the four operations plus `get_schema`), with the same key rules as the HTTP API: the key is optional for Index answers and required for Discovery and `fresh` (ADR 0005).
 - **Accept when:** Claude Code, given only the MCP server, can find and call three operations of a Benchmark API it hasn't seen before.
 
 ### Slice 6 — Web UI

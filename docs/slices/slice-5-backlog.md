@@ -1,26 +1,26 @@
 # Slice 5 backlog: MCP server
 
-**Status: draft, awaiting Wes's decisions and approval (2026-09-24).** Nothing is filed yet.
+**Status: approved by Wes, 2026-09-24** (D1–D8 as recommended; ADR 0005 accepted). Filed on Linear as in the Order table.
 
 The issues for [Slice 5](../PRD.md#slice-5--mcp-server), written so the weawr factory can build them: each numbered body is filed as-is on Linear (team WTR, labels `ai` + `swaggerbot`). Capitalised terms are from [`CONTEXT.md`](../../CONTEXT.md). Conventions shared by every issue live in `.weawr/instructions.md`.
 
 **Acceptance (PRD):** Claude Code, given only the MCP server, can find and call three operations of a Benchmark API it hasn't seen before. Proposed concretely (decision D7): **Val Town** (long-tail, Resolved, Official, 52 operations), with Claude Code allowed the swagger.bot MCP tools and Bash to call the API, but no web search or fetch. It must make three successful calls to three different Val Town operations that need no key (`/v1/alias/{username}`, `/v1/users/{user_id}`, `/v1/users/{user_id}/vals` all answer 200 without one), once on the default model and once on Haiku as the canary for unclear tool descriptions. Every MCP result it received stays under 30 kB. Nothing may cost what Slices 3 and 4 bought: `formscheck` still passes, and the HTTP API answers as before.
 
-## Decisions for Wes
+## Decisions
 
-Recommendations first; each is recorded in [ADR 0005](../adr/0005-mcp-in-process-with-agent-sized-results.md) once taken.
+All eight taken as recommended by Wes on 2026-09-24, and recorded in [ADR 0005](../adr/0005-mcp-in-process-with-agent-sized-results.md).
 
-- **D1. SDK:** `@modelcontextprotocol/server` **2.1.0** (v2, the stable line; 2026-07-28 spec), its stateless `createMcpHandler`. *Spiked 2026-09-24:* served from a TanStack Start route and built with Nitro; Claude Code 2.1.281 on Haiku connected over HTTP, listed `lookup_api` and resolved Stripe.
-- **D2. Endpoint:** `https://swaggerbot.dev/mcp`, one route, every method (`ANY`). Added in Claude Code with `claude mcp add --transport http swaggerbot https://swaggerbot.dev/mcp --header "Authorization: Bearer <key>"`.
-- **D3. Auth: the same rules as the HTTP API.** The key is optional: Index answers, the outline, operations, schemas and vendor lists are open under the per-IP limit; Discovery and `fresh` need a key and use its quota. A key that is sent but unknown is a 401 at the HTTP level, before any tool runs. *The PRD says "authenticated with an API key"; the alternative is to require a key for every MCP call.* Recommended because one rule is simpler to explain and test, an agent without a key still gets every Index answer, and the acceptance run uses a key either way. The PRD line would be amended.
-- **D4. Five tools, not four:** the PRD's `lookup_api`, `list_vendor_apis`, `get_spec_outline` and `get_operation`, plus **`get_schema(apiId, name)`**, which returns one component schema. With results held to ~30 kB, `get_operation` leaves deep references as `{ $ref, "x-truncated": true }`, and without `get_schema` those are dead ends for an agent that has only the MCP server.
-- **D5. Results sized for agents, ~30 kB each** (Claude Code warns at 10,000 tokens and diverts results over 25,000 tokens to a file by default). Measured in production: Stripe's outline 93 kB, GitHub's 239 kB, Cloudflare's 761 kB (3,600 operations, 574 tags); every sampled Stripe operation hits its 1 MB cap.
+- **D1. SDK:** *Taken.* `@modelcontextprotocol/server` **2.1.0** (v2, the stable line; 2026-07-28 spec), its stateless `createMcpHandler`. *Spiked 2026-09-24:* served from a TanStack Start route and built with Nitro; Claude Code 2.1.281 on Haiku connected over HTTP, listed `lookup_api` and resolved Stripe.
+- **D2. Endpoint:** *Taken.* `https://swaggerbot.dev/mcp`, one route, every method (`ANY`). Added in Claude Code with `claude mcp add --transport http swaggerbot https://swaggerbot.dev/mcp --header "Authorization: Bearer <key>"`.
+- **D3. Auth: the same rules as the HTTP API.** *Taken.* The key is optional: Index answers, the outline, operations, schemas and vendor lists are open under the per-IP limit; Discovery and `fresh` need a key and use its quota. A key that is sent but unknown is a 401 at the HTTP level, before any tool runs. The alternative was to require a key for every MCP call; this was chosen because one rule is simpler to explain and test, an agent without a key still gets every Index answer, and the acceptance run uses a key either way. The PRD's Slice 5 line is amended to match.
+- **D4. Five tools, not four:** *Taken.* the PRD's `lookup_api`, `list_vendor_apis`, `get_spec_outline` and `get_operation`, plus **`get_schema(apiId, name)`**, which returns one component schema. With results held to ~30 kB, `get_operation` leaves deep references as `{ $ref, "x-truncated": true }`, and without `get_schema` those are dead ends for an agent that has only the MCP server.
+- **D5. Results sized for agents, ~30 kB each** *Taken.* (Claude Code warns at 10,000 tokens and diverts results over 25,000 tokens to a file by default). Measured in production: Stripe's outline 93 kB, GitHub's 239 kB, Cloudflare's 761 kB (3,600 operations, 574 tags); every sampled Stripe operation hits its 1 MB cap.
   - `get_spec_outline` takes optional `tag` and `query` (substring of path, `operationId` or summary) and pages at most 100 operations with a `cursor`. Without a filter on a Spec over 100 operations, the first page carries the tag list with counts and says to filter.
   - `get_operation` inlines breadth-first to 24 kB (today's `expandOperation` with `maxBytes`).
   - The same filters, paging and a `GET /api/apis/{apiId}/schema?name=` route are added to the HTTP API, whose defaults stay as they are.
-- **D6. Result shape:** each tool returns `structuredContent` (the JSON, with an `outputSchema`) and one `text` block that begins with a sentence for the agent and the next call to make (for example *"Resolved: Stripe API, Official Spec. Download: … Next: get_spec_outline(apiId: "stripe.com/stripe-api", query: "customers")."*). An error is `isError` with what went wrong and the call that fixes it (a wrong `path` gets the nearest paths from the outline). Spec content is never returned whole (PRD): the full Spec is its download URL.
-- **D7. Acceptance target:** Val Town, as above. Alternatives: GitHub REST (unauthenticated reads work, but Claude knows it well, so it proves less), or Stripe with a test-mode key you'd provide.
-- **D8. Docs:** a README "MCP" section and one "Use it from Claude Code" block on the landing page (still the interim page; Slice 6 replaces it).
+- **D6. Result shape:** *Taken.* each tool returns `structuredContent` (the JSON, with an `outputSchema`) and one `text` block that begins with a sentence for the agent and the next call to make (for example *"Resolved: Stripe API, Official Spec. Download: … Next: get_spec_outline(apiId: "stripe.com/stripe-api", query: "customers")."*). An error is `isError` with what went wrong and the call that fixes it (a wrong `path` gets the nearest paths from the outline). Spec content is never returned whole (PRD): the full Spec is its download URL.
+- **D7. Acceptance target:** *Taken.* Val Town, as above. Alternatives: GitHub REST (unauthenticated reads work, but Claude knows it well, so it proves less), or Stripe with a test-mode key you'd provide.
+- **D8. Docs:** *Taken.* a README "MCP" section and one "Use it from Claude Code" block on the landing page (still the interim page; Slice 6 replaces it).
 
 ## Where it stands going in
 
@@ -28,15 +28,15 @@ Slice 4 is accepted with its follow-ups (production `d0175c1`). The four operati
 
 ## Order
 
-| # | Issue | Depends on | Wave |
-|---|---|---|---|
-| 1 | `/mcp`: the MCP endpoint, auth, and `lookup_api` | — | 1 |
-| 2 | `get_spec_outline` for agents: filters and paging (MCP and HTTP) | 1 | 2 |
-| 3 | `get_operation` and `get_schema` for agents | 1 | 2 |
-| 4 | `list_vendor_apis` over MCP | 1 | 2 |
-| 5 | `scripts/mcpcheck.ts`, the README section and the landing-page block | 2, 3, 4 | 3 |
+| # | Linear | Issue | Depends on | Wave |
+|---|---|---|---|---|
+| 1 | WTR-129 | `/mcp`: the MCP endpoint, auth, and `lookup_api` | — | 1 |
+| 2 | WTR-130 | `get_spec_outline` for agents: filters and paging (MCP and HTTP) | 1 | 2 |
+| 3 | WTR-131 | `get_operation` and `get_schema` for agents | 1 | 2 |
+| 4 | WTR-132 | `list_vendor_apis` over MCP | 1 | 2 |
+| 5 | WTR-133 | `scripts/mcpcheck.ts`, the README section and the landing-page block | 2, 3, 4 | 3 |
 
-#2, #3 and #4 each add a file under `src/mcp/tools/` and one line to the tool list in `src/mcp/server.ts`, a mechanical conflict: wave 2 is merged one PR at a time, rebasing each on the last.
+Wave 1 was queued on filing; wave 2 (WTR-130–132) is queued when WTR-129 merges, wave 3 when all three have. #2, #3 and #4 each add a file under `src/mcp/tools/` and one line to the tool list in `src/mcp/server.ts`, a mechanical conflict: wave 2 is merged one PR at a time, rebasing each on the last.
 
 ## Operator steps (not factory issues)
 
