@@ -117,6 +117,16 @@ The deploys of 2026-09-23:
 - `GET /mcp` 405 (the SDK's stateless answer); an unknown bearer is 401 with `www-authenticate: Bearer`; `/api/health` OK.
 - Until wave 2, the Resolved text names `get_spec_outline`, which isn't deployed yet.
 
+### `3a41d89` (2026-09-24): wave 2, the other four tools
+
+**Deployed at 12:05 CDT** (deployment `omrjavc50cvt5ceevnbcldk3`). It carries #83 (WTR-132, `list_vendor_apis`), #84 (WTR-130, `get_spec_outline` with `tag`, `query` and `cursor`, on HTTP too) and #85 (WTR-131, `get_operation` at 24 kB, `get_schema`, and `GET /api/apis/{apiId}/schema`). No new env vars. `/api/apis/{apiId}/outline` without parameters answers byte-for-byte as before (checked on a copy of the Index before merging).
+
+**Live checks** (12:07, raw JSON-RPC to `https://swaggerbot.dev/mcp`, whole response):
+- `tools/list`: `lookup_api`, `list_vendor_apis`, `get_spec_outline`, `get_operation`, `get_schema`.
+- `get_spec_outline` Cloudflare, no filter: 26,966 B (76 operations, the 200 largest of its tags). Stripe with `query: "customers"`: 9,157 B.
+- `get_operation` Stripe `POST /v1/customers`: 21,279 B, 12 schema references left for `get_schema`. Val Town `GET /v1/alias/{username}`: 1,897 B.
+- `get_schema` Stripe `account`: 23,862 B. `list_vendor_apis` Jira: 1,643 B.
+
 ## Gotchas
 
 - Coolify's application health check runs `curl`/`wget` **inside** the container. An image without them is rolled back as unhealthy, even when its own Docker `HEALTHCHECK` passes.
