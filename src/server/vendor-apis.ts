@@ -35,8 +35,10 @@ const LOOKUP_HINT =
  * remembers for an API (`Stripe API`, through `api_names`), answering that
  * API's Vendor; as the first label of Vendor ids, normalized with spaces
  * removed (`Slack` → `slack.com`); as a Vendor name, exactly but ignoring
- * case (`Stripe`). 300 with the candidates when several Vendors match by
- * label or name, 404 with a hint when none matches.
+ * case (`Stripe`); as the first word or words of a name the Index remembers
+ * for an API (`Jira` → `jira cloud platform rest`), answering those APIs'
+ * Vendors. 300 with the candidates when several Vendors match by label, name
+ * or name prefix, 404 with a hint when none matches.
  */
 export function vendorApisResponse(
   vendor: string,
@@ -77,7 +79,8 @@ export function vendorApisResponse(
 
 /**
  * The Vendors `vendor` names: one by id, domain or remembered API name, else
- * all by id label, else all by name.
+ * all by id label, else all by name, else all of the APIs whose remembered
+ * name starts with it as whole words.
  */
 function matchVendor(repo: Repo, vendor: string): Vendor[] {
   const raw = vendor.trim();
@@ -90,5 +93,7 @@ function matchVendor(repo: Repo, vendor: string): Vendor[] {
   const label = normalizeName(raw).replace(/ /g, "");
   const byLabel = label ? repo.findVendorsByLabel(label) : [];
   if (byLabel.length > 0) return byLabel;
-  return repo.findVendorsByName(raw);
+  const byName = repo.findVendorsByName(raw);
+  if (byName.length > 0) return byName;
+  return repo.findVendorsByApiNamePrefix(raw);
 }

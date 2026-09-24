@@ -292,6 +292,25 @@ export function createRepo(db: Db) {
         .all();
     },
 
+    /**
+     * The Vendors of the APIs remembered under a name that starts with the
+     * word or words `name` (`jira` → `jira cloud platform rest`), distinct,
+     * by id.
+     */
+    findVendorsByApiNamePrefix(name: string): Vendor[] {
+      const prefix = `${normalizeName(name)} `;
+      return db
+        .selectDistinct(vendorColumns)
+        .from(apiNames)
+        .innerJoin(apis, eq(apis.id, apiNames.apiId))
+        .innerJoin(vendors, eq(vendors.id, apis.vendorId))
+        .where(
+          sql`substr(${apiNames.nameNormalized}, 1, length(${prefix})) = ${prefix}`,
+        )
+        .orderBy(asc(vendors.id))
+        .all();
+    },
+
     /** The Vendor's APIs in the Index, by name ignoring case, then id. */
     listApisOfVendor(vendorId: string): Api[] {
       return db
