@@ -66,6 +66,46 @@ function putSpec(
 const fixture = (name: string) =>
   new Uint8Array(readFileSync(join(FIXTURES, name)));
 
+const row = (specId: string) =>
+  db
+    .select({
+      externalRefs: specForms.externalRefs,
+      attempts: specForms.attempts,
+      startedAt: specForms.startedAt,
+    })
+    .from(specForms)
+    .where(eq(specForms.specId, specId))
+    .get();
+
+/**
+ * Makes `fetcher` answer every request with `bytes` only once `release()` is
+ * called; `asked` resolves at the first request.
+ */
+function holdFetches(bytes: Uint8Array) {
+  let release!: () => void;
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let asked!: () => void;
+  const first = new Promise<void>((resolve) => {
+    asked = resolve;
+  });
+  const fetchUrl = vi
+    .spyOn(fetcher, "fetchUrl")
+    .mockImplementation(async (url) => {
+      asked();
+      await released;
+      return {
+        url,
+        finalUrl: url,
+        status: 200,
+        contentType: "application/json",
+        bytes,
+      } as Awaited<ReturnType<Fetcher["fetchUrl"]>>;
+    });
+  return { fetchUrl, asked: first, release };
+}
+
 const status = (specId: string) =>
   db
     .select({ status: specForms.status })
@@ -225,7 +265,7 @@ describe("createFormsWorker", () => {
       attempts: 1,
       lastError: expect.stringContaining("external references not all fetched"),
     });
-    expect(forms.nextToBuild()).toBe(id);
+    expect(forms.nextToBuild("external")).toBe(id);
 
     while (await worker.runOnce());
     expect(status(id)).toBe("failed");
@@ -250,6 +290,84 @@ describe("createFormsWorker", () => {
         message: `Unresolved external reference: ${server.origin("vendor.test")}/specs/schemas/widget.json`,
       }),
     );
+  });
+
+  it("hands a Spec with a same-origin reference over to the external lane, without fetching", async () => {
+    const id = putSpec(
+      fixture("openapi31-same-origin.json"),
+      "json",
+      "2026-09-21T00:00:00.000Z",
+      `${server.origin("vendor.test")}/specs/openapi.json`,
+    );
+    const fetchUrl = vi.spyOn(fetcher, "fetchUrl");
+    const worker = createFormsWorker({ db, fetcher, env: {} });
+    const forms = createSpecForms(db);
+
+    expect(await worker.runOnce("local")).toBe(true);
+
+    expect(fetchUrl).not.toHaveBeenCalled();
+    expect(forms.getForms(id).status).toBe("pending");
+    expect(row(id)).toEqual({
+      externalRefs: true,
+      attempts: 0,
+      startedAt: null,
+    });
+    expect(forms.nextToBuild("local")).toBeUndefined();
+    expect(forms.nextToBuild("external")).toBe(id);
+
+    expect(await worker.runOnce("external")).toBe(true);
+    expect(fetchUrl).toHaveBeenCalledTimes(1);
+    expect(forms.getForms(id).status).toBe("ready");
+    expect(row(id)?.externalRefs).toBe(true);
+  });
+
+  it("builds a Spec without same-origin references in the local lane", async () => {
+    const id = putSpec(
+      fixture("swagger2.json"),
+      "json",
+      "2026-09-21T00:00:00.000Z",
+      `${server.origin("vendor.test")}/specs/openapi.json`,
+    );
+    const worker = createFormsWorker({ db, fetcher, env: {} });
+
+    expect(await worker.runOnce("local")).toBe(true);
+
+    expect(status(id)).toBe("ready");
+    expect(row(id)).toMatchObject({ externalRefs: false, attempts: 0 });
+    expect(await worker.runOnce("external")).toBe(false);
+  });
+
+  it("builds a Spec without external references while one with them is still fetching", async () => {
+    // WTR-121: DigitalOcean's references held every other Spec's forms up
+    // for about 50 min.
+    const slow = putSpec(
+      fixture("openapi31-same-origin.json"),
+      "json",
+      "2026-09-21T00:00:00.000Z",
+      `${server.origin("vendor.test")}/specs/openapi.json`,
+    );
+    const quick = putSpec(
+      fixture("swagger2.json"),
+      "json",
+      "2026-09-22T00:00:00.000Z",
+    );
+    const worker = createFormsWorker({ db, fetcher, env: {} });
+    const held = holdFetches(fixture("widget.json"));
+    worker.start();
+    try {
+      await held.asked;
+      await vi.waitFor(() => expect(status(quick)).toBe("ready"));
+      expect(status(slow)).toBe("building");
+      expect(createSpecForms(db).getForms(slow).status).toBe("pending");
+
+      held.release();
+      await vi.waitFor(() => expect(status(slow)).toBe("ready"));
+      expect(row(slow)?.externalRefs).toBe(true);
+      expect(row(quick)?.externalRefs).toBe(false);
+    } finally {
+      held.release();
+      worker.stop();
+    }
   });
 
   it("start() builds in the background until stopped", async () => {

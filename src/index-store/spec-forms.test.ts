@@ -15,7 +15,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { type SpecForms, SpecFormsError } from "~/spec-forms/build";
 import { type Db, MIGRATIONS_FOLDER, openDb } from "./db";
 import { createRepo, type Repo } from "./repo";
-import { specs } from "./schema";
+import { specForms, specs } from "./schema";
 import {
   createSpecForms,
   MAX_FORMS_ATTEMPTS,
@@ -82,15 +82,15 @@ afterEach(() => {
 
 describe("createSpecForms", () => {
   it("picks the oldest Spec with no row, and none when there is no Spec", () => {
-    expect(forms.nextToBuild()).toBeUndefined();
+    expect(forms.nextToBuild("local")).toBeUndefined();
     const newer = putSpec('{"n":2}', "2026-09-22T00:00:00.000Z");
     const older = putSpec('{"n":1}', "2026-09-21T00:00:00.000Z");
 
-    expect(forms.nextToBuild()).toBe(older);
+    expect(forms.nextToBuild("local")).toBe(older);
     expect(forms.getForms(older)).toEqual({ status: "pending" });
     forms.markBuilding(older, AT);
     forms.saveBuilt(older, built, AT);
-    expect(forms.nextToBuild()).toBe(newer);
+    expect(forms.nextToBuild("local")).toBe(newer);
   });
 
   it("picks a Spec not yet tried before an older one being retried", () => {
@@ -99,10 +99,10 @@ describe("createSpecForms", () => {
     forms.saveFailure(older, new Error("boom"), AT);
     const newer = putSpec('{"n":2}', "2026-09-22T00:00:00.000Z");
 
-    expect(forms.nextToBuild()).toBe(newer);
+    expect(forms.nextToBuild("local")).toBe(newer);
     forms.markBuilding(newer, AT);
     forms.saveFailure(newer, new Error("boom"), AT);
-    expect(forms.nextToBuild()).toBe(older);
+    expect(forms.nextToBuild("local")).toBe(older);
   });
 
   it("is ready after saveBuilt, and getForms returns what was saved", () => {
@@ -122,7 +122,7 @@ describe("createSpecForms", () => {
       outline: built.outline,
     });
     expect(forms.getNormalizedBytes(id)).toEqual(built.normalized);
-    expect(forms.nextToBuild()).toBeUndefined();
+    expect(forms.nextToBuild("local")).toBeUndefined();
   });
 
   it(`is failed after ${MAX_FORMS_ATTEMPTS} failures, and no longer next`, () => {
@@ -131,13 +131,13 @@ describe("createSpecForms", () => {
       forms.markBuilding(id, AT);
       forms.saveFailure(id, new Error(`boom ${i}`), AT);
       expect(forms.getForms(id)).toEqual({ status: "pending" });
-      expect(forms.nextToBuild()).toBe(id);
+      expect(forms.nextToBuild("local")).toBe(id);
     }
     forms.markBuilding(id, AT);
     forms.saveFailure(id, new Error("boom 3"), AT);
 
     expect(forms.getForms(id)).toEqual({ status: "failed", error: "boom 3" });
-    expect(forms.nextToBuild()).toBeUndefined();
+    expect(forms.nextToBuild("local")).toBeUndefined();
   });
 
   it.each([
@@ -149,15 +149,83 @@ describe("createSpecForms", () => {
     forms.saveFailure(id, new SpecFormsError(kind, message), AT);
 
     expect(forms.getForms(id)).toEqual({ status: "failed", error: message });
-    expect(forms.nextToBuild()).toBeUndefined();
+    expect(forms.nextToBuild("local")).toBeUndefined();
   });
 
   it("picks a building row again: the process stopped mid-build", () => {
     const id = putSpec("{}", AT);
     forms.markBuilding(id, AT);
 
-    expect(forms.nextToBuild()).toBe(id);
+    expect(forms.nextToBuild("local")).toBe(id);
     expect(forms.getForms(id)).toEqual({ status: "pending" });
+  });
+
+  it("picks from each lane only its own Specs, in the same order", () => {
+    const handed = putSpec('{"n":1}', "2026-09-20T00:00:00.000Z");
+    const local = putSpec('{"n":2}', "2026-09-21T00:00:00.000Z");
+    const unknown = putSpec('{"n":3}', "2026-09-22T00:00:00.000Z");
+    forms.markBuilding(handed, AT);
+    forms.handOver(handed);
+    forms.markBuilding(local, AT);
+    forms.saveFailure(local, new Error("boom"), AT);
+    db.update(specForms)
+      .set({ externalRefs: false })
+      .where(eq(specForms.specId, local))
+      .run();
+
+    expect(forms.nextToBuild("external")).toBe(handed);
+    // Not yet tried (`null`) first, then the retry known to be local.
+    expect(forms.nextToBuild("local")).toBe(unknown);
+    forms.markBuilding(unknown, AT);
+    forms.saveBuilt(unknown, built, AT, false);
+    expect(forms.nextToBuild("local")).toBe(local);
+    forms.markBuilding(local, AT);
+    forms.saveBuilt(local, built, AT, false);
+    expect(forms.nextToBuild("local")).toBeUndefined();
+
+    // Retried and newer in the external lane: the untried one goes first.
+    const retried = putSpec('{"n":4}', "2026-09-19T00:00:00.000Z");
+    forms.markBuilding(retried, AT);
+    forms.handOver(retried);
+    forms.saveFailure(retried, new Error("boom"), AT);
+    const newer = putSpec('{"n":5}', "2026-09-23T00:00:00.000Z");
+    forms.markBuilding(newer, AT);
+    forms.handOver(newer);
+    expect(forms.nextToBuild("external")).toBe(handed);
+    forms.saveBuilt(handed, built, AT, true);
+    expect(forms.nextToBuild("external")).toBe(newer);
+    forms.saveBuilt(newer, built, AT, true);
+    expect(forms.nextToBuild("external")).toBe(retried);
+    expect(forms.nextToBuild("local")).toBeUndefined();
+  });
+
+  it("hands a Spec over pending, with no attempt counted and no build started", () => {
+    const id = putSpec("{}", AT);
+    forms.markBuilding(id, AT);
+    forms.handOver(id);
+
+    expect(forms.getForms(id)).toEqual({ status: "pending" });
+    expect(
+      db
+        .select({
+          externalRefs: specForms.externalRefs,
+          attempts: specForms.attempts,
+          startedAt: specForms.startedAt,
+        })
+        .from(specForms)
+        .where(eq(specForms.specId, id))
+        .get(),
+    ).toEqual({ externalRefs: true, attempts: 0, startedAt: null });
+  });
+
+  it("picks a stopped build again in the lane its row names", () => {
+    const id = putSpec("{}", AT);
+    forms.markBuilding(id, AT);
+    forms.handOver(id);
+    forms.markBuilding(id, AT);
+
+    expect(forms.nextToBuild("external")).toBe(id);
+    expect(forms.nextToBuild("local")).toBeUndefined();
   });
 
   it("reads the bytes, the format and the best-Provenance Source to build from", () => {
@@ -210,7 +278,7 @@ describe("migration 0007", () => {
     const old = openDb(path);
     try {
       const oldForms = createSpecForms(old);
-      expect(oldForms.nextToBuild()).toBe("f".repeat(64));
+      expect(oldForms.nextToBuild("local")).toBe("f".repeat(64));
       expect(oldForms.getForms("f".repeat(64))).toEqual({ status: "pending" });
     } finally {
       old.$client.close();

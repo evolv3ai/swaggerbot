@@ -1,0 +1,1 @@
+ALTER TABLE `spec_forms` ADD `external_refs` integer;
