@@ -114,6 +114,18 @@ for (const [vendorId, apiName, remembered] of [
   repo.upsertApi({ id: apiId, vendorId, name: apiName });
   for (const name of remembered) repo.rememberName(name, apiId);
 }
+// Remembered names whose first word is not a Vendor's label or name.
+for (const [vendorId, vendorName, apiName, remembered] of [
+  ["atlassian.com", "Atlassian", "Jira", "jira cloud platform rest"],
+  ["globex.com", "Globex", "Widget Cloud", "widget cloud"],
+  ["initech.com", "Initech", "Widget Server", "widget server v2"],
+  ["umbrella.com", "Umbrella", "Twin Sync", "twin sync"],
+] as const) {
+  repo.upsertVendor({ id: vendorId, name: vendorName, domain: vendorId });
+  const apiId = `${vendorId}/api`;
+  repo.upsertApi({ id: apiId, vendorId, name: apiName });
+  repo.rememberName(remembered, apiId);
+}
 // Two Vendors with one label, and one sharing a remembered name's label.
 repo.upsertVendor({ id: "twin.com", name: "twin.com", domain: "twin.com" });
 repo.upsertVendor({ id: "twin.io", name: "twin.io", domain: "twin.io" });
@@ -254,19 +266,64 @@ describe("vendorApisResponse", () => {
     });
   });
 
+  it.each([
+    ["Jira", "atlassian.com"],
+    ["  JIRA API ", "atlassian.com"],
+    ["Jira Cloud", "atlassian.com"],
+  ])(
+    "finds the Vendor by the first words of a remembered API name for %j",
+    async (vendor, id) => {
+      const { status, body } = await list(vendor);
+
+      expect(status).toBe(200);
+      expect(body.vendor.id).toBe(id);
+      expect(body.apis.map((a: { api: { id: string } }) => a.api.id)).toEqual([
+        `${id}/api`,
+      ]);
+    },
+  );
+
+  it("answers 300 with the candidates when remembered API names of several Vendors start with it", async () => {
+    const { status, body } = await list("Widget");
+
+    expect(status).toBe(300);
+    expect(body).toEqual({
+      vendors: [
+        { id: "globex.com", name: "Globex" },
+        { id: "initech.com", name: "Initech" },
+      ],
+    });
+  });
+
+  it("prefers Vendors with the label to a remembered API name starting with it", async () => {
+    // "twin sync" is remembered for umbrella.com's API.
+    const { status, body } = await list("Twin");
+
+    expect(status).toBe(300);
+    expect(body.vendors.map((v: { id: string }) => v.id)).toEqual([
+      "twin.com",
+      "twin.io",
+    ]);
+  });
+
   it("prefers the Vendor whose id or domain it is to one named alike", async () => {
     expect((await list("acme.io")).body.vendor.id).toBe("acme.io");
     expect((await list("https://acme.com/")).body.vendor.id).toBe("acme.com");
   });
 
-  it.each(["unknown.com", "Unknown", "Pay", "Slack Mobile", "   "])(
-    "answers 404 with a Lookup hint for %j",
-    async (vendor) => {
-      const { status, body } = await list(vendor);
+  it.each([
+    "unknown.com",
+    "Unknown",
+    "Pay",
+    "Slack Mobile",
+    "Jir",
+    "Jira Cl",
+    "   ",
+  ])("answers 404 with a Lookup hint for %j", async (vendor) => {
+    const { status, body } = await list(vendor);
 
-      expect(status).toBe(404);
-      expect(body.error).toMatch(/No Vendor/);
-      expect(body.hint).toMatch(/POST \/api\/lookup/);
-    },
-  );
+    expect(status).toBe(404);
+    expect(body.error).toMatch(/No Vendor/);
+    expect(body.hint).toMatch(/POST \/api\/lookup/);
+  });
 });
