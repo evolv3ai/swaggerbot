@@ -22,7 +22,8 @@ convert at all. 3.1 is "current OpenAPI" in the glossary's sense.
 Specs in production are several megabytes (Cloudflare's is 26 MB, 2,241 paths),
 and outlines and operations are read far more often than Specs are found.
 
-**They are built by an in-process background worker, one Spec at a time.** A
+**They are built by an in-process background worker, one Spec at a time per
+lane, and a Spec that fetches references has its own lane.** A
 spike on 2026-09-23 (Scalar 0.29.5, Node 24) built Cloudflare's Spec in about
 1.2 s (parse 0.14 s, upgrade 0.21 s, validate 0.36 s, dereference 0.55 s) but
 peaked at about 830 MB RSS. The container has 2 GB. Building inside the Lookup
@@ -30,6 +31,13 @@ would add seconds to a Discovery whose p90 is already 14.2–14.6 s against a
 15 s target, and two builds side by side could exhaust memory. So a Lookup
 answers at once, the Spec's Normalized Form is reported as `pending`, and the
 worker builds it shortly after, as ADR 0002 already does for Verification.
+DigitalOcean's Spec showed why a Spec that fetches references needs its own
+lane (2026-09-23): its 2,976 same-origin files take about 50 min to fetch at
+one request per second per host, and every Spec queued behind it waited that
+long. So each Spec is built first in a local lane that fetches nothing; a
+build there that asks for a reference is discarded, and the Spec is built again
+in the external lane, which fetches. A Spec that fetches references never
+holds up one that doesn't.
 
 **Downloads are open, addressed by Spec id.** A Spec id is the sha256 of its
 Published Form, so a download URL names content that never changes and can be
@@ -55,5 +63,9 @@ answer.
   the largest Spec. It happens once per new Spec, so it is accepted for v1, on
   the condition that Index answers keep p90 < 200 ms while builds run (measured
   during the first backfill); if they don't, the build moves to a worker thread.
+- Two builds can run side by side, one per lane. The external lane's build
+  spends most of its time waiting on the fetcher, so the two rarely peak
+  together, but the container's peak memory while both lanes build is measured
+  and recorded in `docs/deploy.md`.
 - The Index roughly doubles in size (the Normalized Form is minified JSON,
   usually smaller than the Published Form), which Litestream replicates as usual.

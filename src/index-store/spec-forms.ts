@@ -62,6 +62,13 @@ function isPermanent(error: unknown): boolean {
   );
 }
 
+/**
+ * The forms worker's lanes (ADR 0004): `"external"` builds the Specs whose
+ * build fetches external references, `"local"` all the others, so a Spec
+ * whose references take long to fetch never holds up one that has none.
+ */
+export type FormsLane = "local" | "external";
+
 /** The stored Normalized Forms, Validity Issues and Spec Outlines (ADR 0004). */
 export function createSpecForms(db: Db) {
   return {
@@ -70,17 +77,27 @@ export function createSpecForms(db: Db) {
      * neither `ready` nor `failed` (a retry, or a build a stopped process
      * left `building`). Fewest failed attempts first (no row counts as 0),
      * then oldest, so a Spec being retried never holds up one not yet tried.
-     * `undefined` when there is none.
+     * Only among `lane`'s Specs: `"external"` has those whose build is known
+     * to fetch external references, `"local"` the rest, including a Spec not
+     * yet built. `undefined` when there is none.
      */
-    nextToBuild(): string | undefined {
+    nextToBuild(lane: FormsLane): string | undefined {
       return db
         .select({ id: specs.id })
         .from(specs)
         .leftJoin(specForms, eq(specForms.specId, specs.id))
         .where(
-          or(
-            isNull(specForms.specId),
-            notInArray(specForms.status, ["ready", "failed"]),
+          and(
+            or(
+              isNull(specForms.specId),
+              notInArray(specForms.status, ["ready", "failed"]),
+            ),
+            lane === "external"
+              ? eq(specForms.externalRefs, true)
+              : or(
+                  isNull(specForms.externalRefs),
+                  eq(specForms.externalRefs, false),
+                ),
           ),
         )
         .orderBy(
@@ -136,10 +153,19 @@ export function createSpecForms(db: Db) {
         .run();
     },
 
-    /** Stores a build's forms; `specId` is then `ready`. */
-    saveBuilt(specId: string, forms: SpecForms, at: string): void {
+    /**
+     * Stores a build's forms; `specId` is then `ready`. `externalRefs`, when
+     * given, says whether the build fetched external references.
+     */
+    saveBuilt(
+      specId: string,
+      forms: SpecForms,
+      at: string,
+      externalRefs?: boolean,
+    ): void {
       const values = {
         status: "ready" as const,
+        externalRefs,
         normalizedBytes: Buffer.from(forms.normalized),
         normalizedSpecVersion: forms.normalizedSpecVersion,
         validityIssues: JSON.stringify(forms.validityIssues),
@@ -152,6 +178,18 @@ export function createSpecForms(db: Db) {
       db.insert(specForms)
         .values({ specId, ...values })
         .onConflictDoUpdate({ target: specForms.specId, set: values })
+        .run();
+    },
+
+    /**
+     * Hands `specId` over to the `"external"` lane: the `"local"` lane found
+     * that its build fetches external references. It stays pending, with no
+     * failed attempt counted and no build started.
+     */
+    handOver(specId: string): void {
+      db.update(specForms)
+        .set({ externalRefs: true, startedAt: null })
+        .where(eq(specForms.specId, specId))
         .run();
     },
 
