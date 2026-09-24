@@ -91,6 +91,20 @@ The deploys of 2026-09-23:
 
 **`2cc7d32` (WTR-126) deployed at 00:30** (deployment `yq7nhwrwwozkdegfxtiqsebs`; healthy at 00:30:55). The restart abandoned the superseded DigitalOcean rebuild, which stays `ready` on its old forms. After start-up, the external lane took the **Current** Spec `9601e8c3` first (started 00:30:40), which is WTR-126's live check. It was **ready at 01:20:31 with `builder_version` 1 and 2 normalized findings, down from 62** (the 2 tag descriptions; WTR-124's map inlining), after 2,990 s. It has 718 Validity Issues. `get_operation` for `GET /v2/1-clicks` answered 200 in 0.30 s. The monitor (every ~20 s, 00:25–01:40) saw 188 of 189 Stripe `/outline` samples answer 200. The one 502 was at 00:31:29, about 30 s after the `2cc7d32` container reported healthy, during Coolify's container switch-over, so a deploy blips for well under a minute. Peak memory sampled: 540 MiB.
 
+### `d0175c1` (2026-09-24): API fallbacks, WTR-128 and the landing page
+
+**Deployed at 10:40 CDT** (deployment `irs4eyrms5dnpubkbo3awjsp`). It carries:
+- #80: every API route answers a method it doesn't take with 405 JSON and `Allow`, and an unknown `/api/…` path with a JSON 404. Before, TanStack Start rendered the app for both: `GET /api/lookup` was a blank 200 HTML page.
+- #79 (WTR-128, backlog #20): a Vendor is found by the first word of a remembered API name.
+- #81: the landing page that replaces "coming soon" (ahead of Slice 6), with a description, OG tags, `/og.png` and `/favicon.svg`.
+- `0b8a105`: `pnpm bench` loads `.env` and `.env.local`.
+
+**Live checks through Cloudflare** (10:41):
+- `/` 200, with the new title, description and `og:image`. It hydrates, the health line reads "The service is up", and there are no console errors. `/og.png` and `/favicon.svg` are 200.
+- `GET /api/lookup` 405 (`Allow: POST`); `POST /api/health` 405 (`Allow: GET, HEAD`); `GET /api/nope` JSON 404.
+- `/api/vendors/Jira/apis` **200**, Vendor `atlassian.com` with `atlassian.com/jira`; `Jir` 404; `Stripe` 200.
+- The page's example, `curl https://swaggerbot.dev/api/lookup -H 'content-type: application/json' -d '{"name": "Stripe API"}'`, is Resolved, Official.
+
 ## Gotchas
 
 - Coolify's application health check runs `curl`/`wget` **inside** the container. An image without them is rolled back as unhealthy, even when its own Docker `HEALTHCHECK` passes.

@@ -66,6 +66,16 @@ Still open:
 - Twilio Verify is still ~12 s: 33 paths, under the 40-path add-on cut-off.
 - A builder bump rebuilt superseded Specs before Current ones. **Fixed by WTR-126** (`2cc7d32`, deployed 00:30; checked live). DigitalOcean's Current Spec was rebuilt by 01:20 with 2 normalized findings, down from 62.
 
+## Review of what was left (Wes's decisions, 2026-09-24)
+
+- **"Jira" matched no Vendor.** Fixed by WTR-128 (backlog #20): a Vendor is found by the first word of a remembered API name. Deployed in `d0175c1`; `/api/vendors/Jira/apis` is 200 live.
+- **`pnpm bench` didn't load `.env`/`.env.local`.** Fixed in `0b8a105`.
+- **Twilio Verify is still ~12 s.** No change: it's inside the p90 < 15 s target, and lowering `ADD_ON_MAX_PATHS` to about 30 would leave only a 6-path margin over Box's add-on (24).
+- **The worker's `stop()` then `start()` during a build** could run two ticks in one lane. It predates Slice 4, and production never does it. Noted only.
+- **`followPortals`' `finalDomains` cache:** two portals on one domain that both redirect would share the first one's final URL. There's no current case. Noted only.
+- **ADR 0004's new consequence** (WTR-121): with both lanes building, peak memory was 540 MiB of 2 GiB. Accepted.
+- **weawr's Enricher phase 2** (one batched Linear query per refresh): deferred unless Linear's rate limit is hit again.
+
 ## Known misses and follow-ups (Wes's decisions, 2026-09-23)
 
 - **One slow Spec holds up every other Spec's forms.** The worker builds one Spec at a time, and DigitalOcean's references take ~50 min to fetch. On 2026-09-23 at 19:44, a changed DigitalOcean Spec held up Cloudflare's new Current Spec and five others until ~20:35. **Decided:** a second lane for Specs with same-origin external references (backlog #14). Defer keeping fetched reference files across builds until a second DigitalOcean-like Spec appears. Don't serve the previous Spec's forms. WTR-101 (Slice 3's add-on guard) is scheduled with #14.
