@@ -574,3 +574,16 @@ In `nextToBuild`'s stale query (`src/index-store/spec-forms.ts`), order Specs wh
 - A test in `spec-forms.test.ts`: two stale Specs in one lane, the superseded one built earlier. `nextToBuild` picks the Current one.
 - `pnpm check` and `pnpm build` green.
 - **Live (operator), at the next builder bump:** DigitalOcean's Current Spec reaches the new version before its superseded ones.
+
+## 20. swaggerbot: a Vendor is found by the first word of a remembered API name
+
+## Problem
+`GET /api/vendors/Jira/apis` is 404 in production (2026-09-24), though Jira is in the Index. Its Vendor is `atlassian.com` (name "Atlassian"), and its remembered API name is "jira cloud platform rest". `matchVendor` (`src/server/vendor-apis.ts`) tries the Vendor id or domain, an exact remembered API name, the id's first label (`jira` matches no Vendor), then the Vendor's name. None of them matches "Jira", which is how a Caller names the product.
+
+## Change
+In `matchVendor`, add a last rule after the Vendor-name rule: the Vendors of the APIs whose remembered name (`api_names.name_normalized`) starts with `normalizeName(raw) + " "`, distinct and ordered by Vendor id. Add the query to the repo (`findVendorsByApiNamePrefix`, or similar), escaping `%` and `_` if you use `LIKE`. One Vendor answers 200 as today; several answer 300 with the list, as the other rules do. Update `matchVendor`'s doc comment. Earlier rules keep precedence, so nothing that matches today changes.
+
+## Done when
+- Tests in `vendor-apis.test.ts`: "Jira" with a remembered name "jira cloud platform rest" under `atlassian.com` gives 200 with that Vendor; a prefix shared by APIs of two Vendors gives 300 listing both; "Jir" (no word boundary) is still 404; a name matched by an earlier rule is unchanged.
+- `pnpm check` and `pnpm build` green.
+- **Live (operator), after deploy:** `GET https://swaggerbot.dev/api/vendors/Jira/apis` is 200 with Vendor `atlassian.com`.
