@@ -322,6 +322,19 @@ describe("createSpecForms", () => {
       expect(forms.nextToBuild("external")).toBe(external);
     });
 
+    it("picks a Current Spec before a superseded one built earlier", () => {
+      const superseded = putSpec('{"n":1}', "2026-09-20T00:00:00.000Z");
+      const current = putSpec('{"n":2}', "2026-09-21T00:00:00.000Z");
+      makeStale(superseded, "2026-09-23T11:00:00.000Z", true);
+      makeStale(current, "2026-09-23T12:00:00.000Z", true);
+      repo.supersedeSpec(superseded, AT);
+
+      expect(forms.nextToBuild("external")).toBe(current);
+      forms.markBuilding(current, AT);
+      forms.saveBuilt(current, rebuilt, AT, true);
+      expect(forms.nextToBuild("external")).toBe(superseded);
+    });
+
     it("stays ready with the old forms while it is rebuilt, then has the new ones", () => {
       const id = putSpec("{}", AT);
       makeStale(id, AT);
