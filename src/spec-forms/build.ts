@@ -84,7 +84,9 @@ export type SpecFormsInput = {
 export type SpecForms = {
   /**
    * The Normalized Form, as minified JSON: bundled, upgraded to OpenAPI 3.1,
-   * with each operation written as a `$ref` replaced by a copy of its target.
+   * with each operation written as a `$ref` replaced by a copy of its target,
+   * and likewise each Response's `headers`, Operation's `responses`, Request
+   * Body's or Response's `content` and Schema's `properties` written as one.
    */
   normalized: Uint8Array;
   /** The Normalized Form's `openapi` field. */
@@ -131,8 +133,9 @@ const OBJECT_REFERENCE_FALSE_POSITIVE =
 
 /**
  * Builds a Spec's Normalized Form (bundled, upgraded to OpenAPI 3.1, with each
- * operation written as a `$ref` inlined, as minified JSON), its Validity Issues and its Spec Outline from the Published
- * Form (ADR 0004).
+ * operation, and each map where only its values may be, written as a `$ref`
+ * inlined, as minified JSON), its Validity Issues and its Spec Outline from
+ * the Published Form (ADR 0004).
  */
 export async function buildSpecForms(
   input: SpecFormsInput,
@@ -177,9 +180,12 @@ export async function buildSpecForms(
   await step("upgrade");
 
   // 5. Inline each operation written as an internal `$ref` (bundling turns an
-  // operation in another file into one), then strip the Swagger 2 keys the
-  // upgrader leaves behind, and the query-only keys on other parameters.
+  // operation in another file into one), and each map written as one where
+  // OpenAPI allows a `$ref` only for its values (`headers`, `responses`,
+  // `content`, `properties`); then strip the Swagger 2 keys the upgrader
+  // leaves behind, and the query-only keys on other parameters.
   inlineOperationRefs(normalized);
+  inlineMapRefs(normalized);
   stripSwagger2Leftovers(normalized);
   stripQueryOnlyParameterKeys(normalized);
   await step("strip");
@@ -408,16 +414,22 @@ function inlineOperationRefs(doc: Obj): void {
     if (!isObj(item)) continue;
     for (const [method, operation] of Object.entries(item)) {
       if (!HTTP_METHODS.has(method)) continue;
-      const inlined = inlinedOperation(doc, operation);
-      if (inlined) item[method] = inlined;
+      const inlined = inlinedRef(doc, operation);
+      if (inlined) item[method] = inlined.value;
     }
   }
 }
 
-/** A copy of what `operation`'s chain of internal `$ref`s leads to, if any. */
-function inlinedOperation(doc: Obj, operation: unknown): Obj | undefined {
+/**
+ * A copy of what `value`'s chain of internal `$ref`s leads to, if any, with the
+ * keys written beside each `$ref` over its target's, and the chain's `$ref`s.
+ */
+function inlinedRef(
+  doc: Obj,
+  value: unknown,
+): { value: Obj; refs: string[] } | undefined {
   const chain: Obj[] = [];
-  let node = operation;
+  let node = value;
   while (isObj(node) && typeof node.$ref === "string") {
     if (chain.includes(node)) return undefined;
     chain.push(node);
@@ -427,9 +439,94 @@ function inlinedOperation(doc: Obj, operation: unknown): Obj | undefined {
   }
   if (chain.length === 0 || !isObj(node)) return undefined;
   const inlined = structuredClone(node);
+  const refs = chain.map((link) => String(link.$ref));
   for (const { $ref: _, ...beside } of chain.reverse())
     Object.assign(inlined, structuredClone(beside));
-  return inlined;
+  return { value: inlined, refs };
+}
+
+/**
+ * Replaces each map written as an internal `$ref` with a copy of its target,
+ * as `inlinedRef` does: a Response's `headers`, an Operation's `responses`, a
+ * Request Body's or Response's `content` and a Schema's `properties`. OpenAPI
+ * allows a `$ref` for each of their values but not for the map, yet
+ * DigitalOcean's Spec writes a response's `headers` as a `$ref` to a file of
+ * several headers, which bundling turns into an internal one. It walks each
+ * operation, each Response under `components.responses` and each Schema under
+ * `components.schemas`, with their nested Schemas. The target stays in place;
+ * a reference that can't be resolved, or whose copy would contain it again,
+ * stays as it is.
+ */
+function inlineMapRefs(doc: Obj): void {
+  type Expanding = ReadonlySet<string>;
+  const visited = new WeakSet<object>();
+
+  /** Inlines `owner[key]`; returns the map and the refs expanded to reach it. */
+  const inlineMap = (owner: Obj, key: string, expanding: Expanding) => {
+    const inlined = inlinedRef(doc, owner[key]);
+    if (!inlined || inlined.refs.some((ref) => expanding.has(ref)))
+      return { map: owner[key], expanding };
+    owner[key] = inlined.value;
+    return {
+      map: inlined.value,
+      expanding: new Set([...expanding, ...inlined.refs]),
+    };
+  };
+  const firstVisit = (node: unknown): node is Obj => {
+    if (!isObj(node) || visited.has(node)) return false;
+    visited.add(node);
+    return true;
+  };
+
+  const walkSchema = (schema: unknown, expanding: Expanding): void => {
+    if (Array.isArray(schema)) {
+      for (const item of schema) walkSchema(item, expanding);
+      return;
+    }
+    if (!firstVisit(schema)) return;
+    const properties = inlineMap(schema, "properties", expanding);
+    if (isObj(properties.map))
+      for (const property of Object.values(properties.map))
+        walkSchema(property, properties.expanding);
+    for (const key of ["items", "allOf", "anyOf", "oneOf"])
+      walkSchema(schema[key], expanding);
+    walkSchema(schema.additionalProperties, expanding);
+  };
+  const walkContent = (owner: Obj, expanding: Expanding): void => {
+    const content = inlineMap(owner, "content", expanding);
+    if (!isObj(content.map)) return;
+    for (const media of Object.values(content.map))
+      if (isObj(media)) walkSchema(media.schema, content.expanding);
+  };
+  const walkResponse = (response: unknown, expanding: Expanding): void => {
+    if (!firstVisit(response)) return;
+    inlineMap(response, "headers", expanding);
+    walkContent(response, expanding);
+  };
+  const walkOperation = (operation: Obj): void => {
+    const responses = inlineMap(operation, "responses", new Set());
+    if (isObj(responses.map))
+      for (const response of Object.values(responses.map))
+        walkResponse(response, responses.expanding);
+    if (isObj(operation.requestBody))
+      walkContent(operation.requestBody, new Set());
+  };
+
+  if (isObj(doc.paths))
+    for (const value of Object.values(doc.paths)) {
+      const item = resolveLocal(doc, value);
+      if (!isObj(item)) continue;
+      for (const [method, operation] of Object.entries(item))
+        if (HTTP_METHODS.has(method) && isObj(operation))
+          walkOperation(operation);
+    }
+  const components = isObj(doc.components) ? doc.components : {};
+  if (isObj(components.responses))
+    for (const response of Object.values(components.responses))
+      walkResponse(response, new Set());
+  if (isObj(components.schemas))
+    for (const schema of Object.values(components.schemas))
+      walkSchema(schema, new Set());
 }
 
 function stripSwagger2Leftovers(doc: Obj): void {
