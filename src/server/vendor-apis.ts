@@ -2,7 +2,7 @@ import type { Api, Vendor } from "~/domain/catalog";
 import { vendorIdFromDomain } from "~/domain/catalog";
 import type { Provenance } from "~/domain/provenance";
 import type { Db } from "~/index-store/db";
-import { createRepo, type Repo } from "~/index-store/repo";
+import { createRepo, normalizeName, type Repo } from "~/index-store/repo";
 import type { CurrentFromIndex, IndexedLookup } from "~/lookup/lookup";
 
 /** What `GET /api/vendors/{vendor}/apis` runs on: the Index and its Current Spec rule. */
@@ -31,9 +31,12 @@ const LOOKUP_HINT =
  * no Verification.
  *
  * `vendor` is matched, in this order, as a Vendor id (`stripe.com`); as a
- * domain or URL (`https://www.stripe.com/docs`); as a Vendor name, exactly
- * but ignoring case (`Stripe`). 300 with the candidates when several Vendors
- * have that name, 404 with a hint when none matches.
+ * domain or URL (`https://www.stripe.com/docs`); as a name the Index
+ * remembers for an API (`Stripe API`, through `api_names`), answering that
+ * API's Vendor; as the first label of Vendor ids, normalized with spaces
+ * removed (`Slack` → `slack.com`); as a Vendor name, exactly but ignoring
+ * case (`Stripe`). 300 with the candidates when several Vendors match by
+ * label or name, 404 with a hint when none matches.
  */
 export function vendorApisResponse(
   vendor: string,
@@ -72,11 +75,20 @@ export function vendorApisResponse(
   return Response.json({ vendor: found, apis });
 }
 
-/** The Vendors `vendor` names: one by id or domain, else all by name. */
+/**
+ * The Vendors `vendor` names: one by id, domain or remembered API name, else
+ * all by id label, else all by name.
+ */
 function matchVendor(repo: Repo, vendor: string): Vendor[] {
   const raw = vendor.trim();
   if (!raw) return [];
   const byId = repo.getVendor(raw) ?? repo.getVendor(vendorIdFromDomain(raw));
   if (byId) return [byId];
+  const api = repo.findApiByName(raw);
+  const byApiName = api && repo.getVendor(api.vendorId);
+  if (byApiName) return [byApiName];
+  const label = normalizeName(raw).replace(/ /g, "");
+  const byLabel = label ? repo.findVendorsByLabel(label) : [];
+  if (byLabel.length > 0) return byLabel;
   return repo.findVendorsByName(raw);
 }
