@@ -455,17 +455,28 @@ function inlinedRef(
  * operation, each Response under `components.responses` and each Schema under
  * `components.schemas`, with their nested Schemas. The target stays in place;
  * a reference that can't be resolved, or whose copy would contain it again,
- * stays as it is.
+ * stays as it is. Each copy is walked afresh, so maps that reference one
+ * another can multiply without a cycle (each level doubling the copies): after
+ * `MAX_MAP_INLINES` copies in one document, every further one stays a `$ref`.
  */
+/**
+ * The most maps `inlineMapRefs` copies into one document. Real Specs need far
+ * fewer; the cap only stops maps that multiply one another.
+ */
+export const MAX_MAP_INLINES = 10_000;
+
 function inlineMapRefs(doc: Obj): void {
   type Expanding = ReadonlySet<string>;
   const visited = new WeakSet<object>();
+  let inlines = 0;
 
   /** Inlines `owner[key]`; returns the map and the refs expanded to reach it. */
   const inlineMap = (owner: Obj, key: string, expanding: Expanding) => {
+    if (inlines >= MAX_MAP_INLINES) return { map: owner[key], expanding };
     const inlined = inlinedRef(doc, owner[key]);
     if (!inlined || inlined.refs.some((ref) => expanding.has(ref)))
       return { map: owner[key], expanding };
+    inlines++;
     owner[key] = inlined.value;
     return {
       map: inlined.value,

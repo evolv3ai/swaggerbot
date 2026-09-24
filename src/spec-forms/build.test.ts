@@ -2,7 +2,12 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { SpecOutline, ValidityIssue } from "~/domain/spec-forms";
-import { buildSpecForms, SpecFormsError, type SpecFormsInput } from "./build";
+import {
+  buildSpecForms,
+  MAX_MAP_INLINES,
+  SpecFormsError,
+  type SpecFormsInput,
+} from "./build";
 
 const FIXTURES = join(import.meta.dirname, "__fixtures__");
 const SOURCE = "https://api.example.com/specs/openapi.json";
@@ -581,6 +586,43 @@ describe("buildSpecForms", () => {
     expect(at(doc, "components", "schemas", "Tree", "properties")).toEqual({
       child: { type: "object", properties: { $ref: "#/x-maps/tree" } },
     });
+  });
+
+  it("stops copying maps that multiply one another", async () => {
+    // Each level's two properties both reference the next level's map, so
+    // inlining every one would make 2^20 copies.
+    const levels = 20;
+    const maps: Record<string, unknown> = {};
+    for (let i = 0; i < levels; i++) {
+      const next = {
+        type: "object",
+        properties: { $ref: `#/x-maps/m${i + 1}` },
+      };
+      maps[`m${i}`] = { a: next, b: structuredClone(next) };
+    }
+    maps[`m${levels}`] = { leaf: { type: "string" } };
+    const spec = {
+      openapi: "3.1.0",
+      info: { title: "Doubling", version: "1" },
+      paths: {},
+      components: {
+        schemas: {
+          Root: { type: "object", properties: { $ref: "#/x-maps/m0" } },
+        },
+      },
+      "x-maps": maps,
+    };
+    const started = performance.now();
+    const forms = await buildSpecForms({
+      bytes: new TextEncoder().encode(JSON.stringify(spec)),
+      format: "json",
+      sourceUrl: SOURCE,
+    });
+    expect(performance.now() - started).toBeLessThan(5_000);
+    const text = new TextDecoder().decode(forms.normalized);
+    // Copies stop at the cap, and the rest stay references.
+    expect(text.split('"leaf"').length - 1).toBeLessThan(MAX_MAP_INLINES);
+    expect(text).toContain('"$ref":"#/x-maps/m');
   });
 
   it("outlines the 3.0 Spec's tags, operations and security schemes", async () => {
