@@ -11,6 +11,7 @@ import {
   type NormalizedParser,
   type OperationDeps,
   operationResponse,
+  schemaResponse,
 } from "./operation-http";
 
 const dir = mkdtempSync(join(tmpdir(), "swaggerbot-operation-"));
@@ -43,6 +44,13 @@ const normalized = {
   },
   components: {
     responses: { Customer: { description: "A customer" } },
+    schemas: {
+      customer: {
+        type: "object",
+        properties: { address: { $ref: "#/components/schemas/address" } },
+      },
+      address: { type: "object", properties: { city: { type: "string" } } },
+    },
   },
 };
 
@@ -229,5 +237,79 @@ describe("operationResponse", () => {
     await ask(alternate);
     await ask(current);
     expect(parse).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe("schemaResponse", () => {
+  function schemaUrl(query: Record<string, string>, apiId = API): URL {
+    const u = new URL(`http://localhost/api/apis/${apiId}/schema`);
+    for (const [k, v] of Object.entries(query)) u.searchParams.set(k, v);
+    return u;
+  }
+
+  it("expands a schema by its name or its whole reference", async () => {
+    for (const name of ["customer", "#/components/schemas/customer"]) {
+      const response = await schemaResponse(schemaUrl({ name }), API, deps());
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({
+        apiId: API,
+        specId: current,
+        name: "customer",
+        schema: {
+          type: "object",
+          properties: {
+            address: {
+              type: "object",
+              properties: { city: { type: "string" } },
+            },
+          },
+        },
+        circular: {},
+        truncated: false,
+      });
+    }
+  });
+
+  it("expands an Alternate's schema by specId", async () => {
+    const response = await schemaResponse(
+      schemaUrl({ name: "address", specId: alternate }),
+      API,
+      deps(),
+    );
+    expect(response.status).toBe(200);
+    expect((await response.json()).specId).toBe(alternate);
+  });
+
+  it("gets 404 with the nearest names for a schema not in the Spec", async () => {
+    const response = await schemaResponse(
+      schemaUrl({ name: "Customers" }),
+      API,
+      deps(),
+    );
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({
+      error: "This Spec has no schema Customers in components.schemas.",
+      nearest: ["customer", "address"],
+    });
+  });
+
+  it("gets 400 without a name, 404 for an API not in the Index, 409 while pending", async () => {
+    expect((await schemaResponse(schemaUrl({}), API, deps())).status).toBe(400);
+    expect(
+      (
+        await schemaResponse(
+          schemaUrl({ name: "customer" }, "nope.com/nope-api"),
+          "nope.com/nope-api",
+          deps(),
+        )
+      ).status,
+    ).toBe(404);
+    const waiting = await schemaResponse(
+      schemaUrl({ name: "customer" }),
+      API,
+      deps(pending),
+    );
+    expect(waiting.status).toBe(409);
+    expect(waiting.headers.get("retry-after")).toBe("10");
   });
 });
