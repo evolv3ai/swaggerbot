@@ -154,6 +154,7 @@ describe("/mcp", () => {
     expect(tools.map((t: { name: string }) => t.name)).toEqual([
       "lookup_api",
       "list_vendor_apis",
+      "get_spec_outline",
       "get_operation",
       "get_schema",
     ]);
@@ -170,6 +171,18 @@ describe("/mcp", () => {
       },
       required: ["name"],
     });
+  });
+
+  it("serves get_spec_outline, an API not in the Index being a tool error", async () => {
+    const result = await resultOf(
+      await rpc("tools/call", {
+        name: "get_spec_outline",
+        arguments: { apiId: "payco.com/payco-api", tag: "charges" },
+      }),
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("lookup_api(name)");
   });
 
   it("resolves an indexed name without a key, using no quota", async () => {

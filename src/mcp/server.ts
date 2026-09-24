@@ -5,9 +5,11 @@ import {
 } from "@modelcontextprotocol/server";
 import type { Gate, LookupApp } from "~/lookup/http";
 import type { VendorApisApp } from "~/server/vendor-apis";
+import type { OutlineApp } from "~/spec-forms/http";
 import type { NormalizedCache } from "~/spec-forms/operation-http";
 import { registerGetOperation } from "./tools/get-operation";
 import { registerGetSchema } from "./tools/get-schema";
+import { registerGetSpecOutline } from "./tools/get-spec-outline";
 import { registerListVendorApis } from "./tools/list-vendor-apis";
 import { registerLookupApi } from "./tools/lookup-api";
 
@@ -16,8 +18,10 @@ export const MCP_SERVER_VERSION = "0.5.0";
 
 /** What the tools run on: the same app and limits as the HTTP API. */
 export type McpDeps = {
-  getApp: () => LookupApp & VendorApisApp;
+  getApp: () => LookupApp & OutlineApp & VendorApisApp;
   gate: Pick<Gate, "dailyQuota" | "now">;
+  /** The public base URL download links are made absolute with, if any. */
+  baseUrl?: string;
   /** The parsed Normalized Form, shared with the HTTP API; the server's own by default. */
   cache?: NormalizedCache;
 };
@@ -29,6 +33,7 @@ export type McpTool = (server: McpServer, deps: McpDeps) => void;
 export const MCP_TOOLS: McpTool[] = [
   registerLookupApi,
   registerListVendorApis,
+  registerGetSpecOutline,
   registerGetOperation,
   registerGetSchema,
 ];
