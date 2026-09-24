@@ -153,6 +153,7 @@ describe("/mcp", () => {
 
     expect(tools.map((t: { name: string }) => t.name)).toEqual([
       "lookup_api",
+      "list_vendor_apis",
       "get_operation",
       "get_schema",
     ]);
