@@ -82,6 +82,7 @@
     "apiId": "box.com/box-platform",
     "specSources": [
       "https://raw.githubusercontent.com/box/box-openapi/main/openapi.json",
+      "https://raw.githubusercontent.com/box/box-openapi/main/openapi/openapi.json",
       "https://developer.box.com/box-openapi.json"
     ],
     "evidenceUrl": "https://developer.box.com/reference/",
@@ -154,7 +155,8 @@
     "apiId": "fly.io/machines-api",
     "specSources": [
       "https://docs.machines.dev/openapi.json",
-      "https://docs.machines.dev/spec/openapi3.json"
+      "https://docs.machines.dev/spec/openapi3.json",
+      "https://docs.fly.io/machines-api/openapi.json"
     ],
     "evidenceUrl": "https://fly.io/docs/machines/api/",
     "reviewed": true,

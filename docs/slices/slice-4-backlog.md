@@ -56,6 +56,13 @@ Filed 2026-09-23 as WTR-104..111 (Backlog, `swaggerbot` only), with Linear "bloc
 | 11 | WTR-117 | The forms worker has a reference budget DigitalOcean fits (75 min; its `$ref` closure is 2,976 files, measured by WTR-116), and retries go to the back of the queue. **Gates the wave 2 deploy** | 10 | 3 |
 | 12 | WTR-119 | The server starts the Verification and forms workers when it boots (added 2026-09-23 after the wave 2 deploy: no worker ran until a request came) | 2 | 3 |
 | 13 | WTR-120 | The Normalized Form inlines operations written as a `$ref` (added 2026-09-23 after O1: DigitalOcean's 695 operations were `$ref` stubs in the Normalized Form, the Outline and `get_operation`) | 1 | 5 |
+| 14 | WTR-? | The forms worker builds Specs with same-origin external references in a second lane (added 2026-09-23 after acceptance: DigitalOcean's ~50 min rebuild held up Cloudflare's new Current Spec) | 2 | 6 |
+| 15 | WTR-? | Stored forms are rebuilt when the builder changes (`builder_version`) | 14 | 7 |
+| 16 | WTR-? | `list_vendor_apis` matches the names Callers type | 7 | 6 |
+| 17 | WTR-? | The Normalized Form inlines a `$ref` written where a map belongs (`headers`, `responses`, `content`, `properties`) | 13 | 6 |
+| 18 | WTR-? | A Developer Portal that redirects to the Vendor's own API-docs domain keeps the Vendor's domain (Dropbox) | — | 6 |
+
+**Waves 6 and 7 (after acceptance; Wes approved the follow-ups 2026-09-23):** #14, #16, #17 and #18 touch different files and run together. WTR-101 (Slice 3's add-on guard) is queued with them, because it and #14 both cut forms latency for DigitalOcean, Jira, Twilio and Plaid. #15 waits for #14, so that a builder bump's rebuild of DigitalOcean can't block the other Specs.
 
 #3 and #4 touch different files (`lookup.ts` and `outcome.ts`; routes and `src/server/`), so they run together. #5, #6 and #7 each add a route file, and TanStack's generated `src/routeTree.gen.ts` changes with each. That's a mechanical conflict, so wave 4 is merged one PR at a time, regenerating the route tree (`pnpm build`) on each rebase.
 
@@ -457,4 +464,99 @@ Existing forms are **not** rebuilt by this change. Rebuilding stored forms after
 - `src/spec-forms/build.test.ts`: a fixture whose operation is a `$ref` to a same-origin file (through `fetchRef`), and one whose operation is an internal `$ref` to `#/x-ops/…`. Each comes out with the operation inlined (`responses`, `operationId` present), `normalizedFindingCount` 0, and the operation's `operationId`/`summary`/tags in the Outline. The Published Form's Validity Issues still report the operation `$ref`.
 - A cycle of operation references doesn't hang, and leaves the `$ref`.
 - The manual check in the PR: `scripts/forms-bench.ts` on DigitalOcean's Spec is out of reach (50 min of fetching). Instead, take a local copy of the Spec and a handful of its referenced files, and show the counts before and after.
+- `pnpm check` and `pnpm build` green.
+
+## 14. swaggerbot: the forms worker builds Specs with same-origin external references in a second lane
+
+## Problem
+The forms worker (`src/spec-forms/worker.ts`) builds one Spec at a time. DigitalOcean's Spec references 2,976 same-origin files, and at the fetcher's one request per second per host they take about 50 minutes to fetch. Every Spec queued behind it waits that long. On 2026-09-23 at 19:44, a Lookup found a changed DigitalOcean Spec. Cloudflare's new Current Spec and five others then answered 409 on `/outline`, `/operation` and `/normalized` until about 20:35, and `formscheck` would have failed on Cloudflare in that window (`docs/slices/slice-4-result.md`, "One slow Spec holds up every other Spec's forms"). Wes chose a second lane (2026-09-23): a Spec that fetches external references never blocks a Spec that doesn't.
+
+## Change
+- **`spec_forms.external_refs`** (integer 0/1, nullable; a migration). `null` means not known yet.
+- **`nextToBuild(lane)`** in `src/index-store/spec-forms.ts`, with `lane: "local" | "external"`. `"local"` picks as today among pending Specs whose `external_refs` is `null` or `0`. `"external"` picks among pending Specs whose `external_refs` is `1`. The order within each lane stays as it is (fewest failed attempts, then oldest).
+- **Handing a Spec over.** The local lane's `fetchRef` never fetches. It records that it was called and rejects at once. (The builder's loader swallows a `fetchRef` error as an unresolved reference, so a thrown error never reaches the worker. Check the flag after `buildSpecForms` returns, as `ranOut` is checked today.) When it was called, the worker discards the build, sets `external_refs = 1`, and leaves the Spec pending with no attempt counted and `started_at` cleared. The external lane then builds it with the real `fetchRef` and its budget, as today. A local build that finishes without calling `fetchRef` sets `external_refs = 0` along with `saveBuilt`. Only same-origin references reach `fetchRef` today, so a Spec with only other-origin references stays in the local lane.
+- **Two loops.** `createFormsWorker` runs one loop per lane. `start()`, `stop()` and the timer handling stay as they are, per lane. `runOnce(lane?)` keeps working for tests. Without a lane, it runs the local lane, then the external one.
+- **A build that stops mid-way** (the process restarts) is picked again by the lane its `external_refs` names.
+- Update `docs/adr/0004-…` ("one Spec at a time" becomes "one Spec at a time per lane, and a Spec that fetches references has its own lane") and the worker's doc comment.
+
+## Done when
+- Tests in `worker.test.ts`, with a fake `fetchRef` that never resolves until released:
+  - A Spec with external refs is in progress, and a Spec without them is queued after it. The second is `ready` before the first is released.
+  - A handed-over Spec has `external_refs = 1` and `attempts = 0`.
+  - A local-only Spec ends with `external_refs = 0`.
+- Tests in `spec-forms.test.ts` for `nextToBuild` in both lanes.
+- `pnpm check` and `pnpm build` green.
+- **Live, after the deploy (operator):** delete DigitalOcean's `spec_forms` row, then delete (or change) another Spec's row, say Stripe's. Stripe's forms are `ready` within a minute, while DigitalOcean's are still building. Record the container's peak memory while both lanes build (`docker stats`) in `docs/deploy.md`. Then `scripts/formscheck.ts https://swaggerbot.dev` passes while DigitalOcean builds.
+
+## 15. swaggerbot: stored forms are rebuilt when the builder changes
+
+## Problem
+A change to `src/spec-forms/build.ts` that changes its output (like WTR-112 or WTR-120) doesn't reach Specs already built. After WTR-120, DigitalOcean's `spec_forms` row was deleted by hand so the worker would rebuild it, and during that rebuild its forms answered 409.
+
+## Change
+- **`FORMS_BUILDER_VERSION`**, an integer exported from `src/spec-forms/build.ts`, starting at `1`. Its doc comment says: bump it whenever the builder's output changes for a Spec already built.
+- **`spec_forms.builder_version`** (integer, nullable; a migration). `saveBuilt` stores the current version. An existing row has `null`, which counts as older than any version.
+- **`nextToBuild`** (in both of #14's lanes) picks a Spec that has never been built first, as today. Only when there is none does it pick a `ready` Spec whose `builder_version` is older than the current one, oldest `built_at` first. It doesn't rebuild a `failed` Spec: failures keep their attempts rule.
+- **A rebuild never takes a Spec's forms away.** A stale `ready` row stays `ready` while it is rebuilt: don't set `status = 'building'`, and record the start in `started_at` only. Callers keep getting the stored forms until `saveBuilt` replaces them. A failed rebuild keeps the old forms and records `last_error` and one attempt. After `MAX_FORMS_ATTEMPTS` failed rebuilds, it stamps the current version so it isn't retried, and it keeps `last_error`.
+- **Nothing more for #14.** A stale Spec rebuilds in the lane its `external_refs` names, so DigitalOcean's rebuild never blocks the others.
+
+## Done when
+- Tests in `spec-forms.test.ts`: a never-built Spec is picked before a stale one. A stale Spec is picked, and `getForms` still answers `ready` with the old forms while it is building. After `saveBuilt`, the row has the current version. A failed rebuild keeps the old forms.
+- `pnpm check` and `pnpm build` green.
+- **Live, after the deploy (operator):** every production row starts at `null`, so all of them rebuild once. Within 10 minutes, every Spec without external references has `builder_version = 1`, and no Outcome's forms status left `ready` while that happened (poll `/api/apis/stripe.com/stripe-api/outline` during the rebuild: always 200). DigitalOcean reaches version 1 in its own lane within about an hour.
+
+## 16. swaggerbot: `list_vendor_apis` matches the names Callers type
+
+## Problem
+`GET /api/vendors/{vendor}/apis` matches a Vendor name exactly, ignoring case (`findVendorsByName`). Every one of production's 20 Vendors is stored with `name` equal to its id (`stripe.com`), so `/api/vendors/Stripe/apis` is 404, and no name can match. Lookup by id, domain or URL works. The Index already knows the names Callers typed: `api_names` maps each normalized name (`stripe`, `github`, `slack web`) to an API. Every Vendor's id also starts with its brand (`slack.com`).
+
+## Change
+In `matchVendor` (`src/server/vendor-apis.ts`), after the id and domain rules and before the name rule:
+1. **A name the Index remembers.** Apply `findApiByName(raw)` (it normalizes with `normalizeName`). If there's a match, the answer is that API's Vendor.
+2. **The Vendor's brand label.** If there's still no match, look for Vendors whose id's first label equals `normalizeName(raw)` with spaces removed (`slack` ↔ `slack.com`; `val town` ↔ `val.town` is covered by the domain rule). Several matches are 300 with the candidates, as today.
+3. The existing name rule stays last.
+
+No new data, no Judge, and no Lookup (ADR 0001: mechanical). Update the route's doc comment, and the order in the README or API doc if it lists the rules.
+
+## Done when
+- Tests in `vendor-apis.test.ts`: `Stripe`, `stripe api` and `GitHub REST` find their Vendor through `api_names`. `Slack` finds `slack.com` by label when `api_names` only holds `slack web`. Two Vendors with the same label are 300. An unknown name is still 404 with the hint.
+- `pnpm check` and `pnpm build` green.
+- **Live, after the deploy (operator):** `/api/vendors/Stripe/apis`, `/api/vendors/Slack/apis` and `/api/vendors/PagerDuty/apis` are 200 in production, each listing its API.
+
+## 17. swaggerbot: the Normalized Form inlines a `$ref` written where a map belongs
+
+## Problem
+Built from a clone of DigitalOcean's upstream `main` on 2026-09-23, the Normalized Form has 62 findings. 60 come from a response's `headers` written as a single `$ref` to a file of several headers. OpenAPI allows a `$ref` for each header, not for the `headers` map. `bundle` resolves the file, but leaves `headers: { "$ref": "#/x-ext/<hash>" }`, which the validator rejects and a Caller can't read as headers. The other 2 are tag descriptions that aren't strings as published. That's the Vendor's defect, already reported as Validity Issues, and it stays as it is. The same pattern can appear anywhere a map is expected.
+
+## Change
+`src/spec-forms/build.ts`, in step 5, next to `inlineOperationRefs`. Walk the Normalized copy, and where one of these maps is an internal `$ref` (`#/…`), replace it with a copy of its target (following a chain, with the same cycle guard as `inlinedOperation`; keys written beside the `$ref` override the target's):
+- a Response's `headers`
+- an Operation's `responses`
+- a Request Body's or Response's `content`
+- a Schema's `properties`
+
+Walk every operation (after `inlineOperationRefs`), each Response under `components.responses`, and each Schema under `components.schemas`, recursing into nested schemas (`properties`, `items`, `allOf`/`anyOf`/`oneOf`, `additionalProperties`). The target stays in place. A reference that can't be resolved stays as it is. Mention it in the step's comment and `SpecForms`' doc.
+
+Existing forms are rebuilt by #15 if it has merged (bump `FORMS_BUILDER_VERSION`). If not, the operator deletes DigitalOcean's row after the deploy.
+
+## Done when
+- `build.test.ts`: fixtures for each of the four maps written as a `$ref` (one through `fetchRef` to a same-origin file, the others internal) come out inlined, with `normalizedFindingCount` 0. A cycle leaves the `$ref`.
+- The manual check in the PR: with a local copy of DigitalOcean's Spec and the files one response's `headers` references, show the counts before and after.
+- `pnpm check` and `pnpm build` green.
+- **Live, after DigitalOcean's rebuild (operator):** its `normalized_finding_count` is 2 (the tag descriptions) or lower, not 62.
+
+## 18. swaggerbot: a Developer Portal that redirects to the Vendor's own API-docs domain keeps the Vendor's domain
+
+## Problem
+Since Slice 3, "Dropbox API" answers Unknown where NoSpec is expected. That was both O4 runs, and three traced Lookups on 2026-09-23 (22:15). The trace says `Judge whichApi: the only Candidate, dropboxapi.com/api, was not likely enough (0.64)` (0.68 and 0.67 on the other runs; `apiPick` is 0.7). Web search finds the right portal, `https://www.dropbox.com/developers/documentation`. But Dropbox now redirects it (301) to `https://docs.dropboxapi.com/dropbox-api/docs/get-started/welcome`. `followPortals` (`src/lookup/lookup.ts`) replaces the Candidate's domain with the final one, so `fromPortal` makes the Vendor `dropboxapi.com` and the API "Dropboxapi API". The Judge rightly hesitates over that. It's not Judge variance: the redirect is new on Dropbox's side.
+
+`followPortals` follows redirects on purpose: `neon.tech` → `neon.com` is a Vendor's move.
+
+## Change
+In `followPortals`: when the final registrable domain's first label is the search domain's first label plus `api` or `apis` (`dropbox` → `dropboxapi`, the same suffix rule as `isUmbrellaLabel`), keep the search domain as the Candidate's domain. Keep the followed URL as its `portalUrl`, so the Spec step still crawls the docs site. Every other redirect is followed as today.
+
+## Done when
+- A test: a portal on `dropbox.com` whose fetch ends on `docs.dropboxapi.com` gives the Candidate `dropbox.com/api`, with the `dropboxapi.com` URL as its portal. A `neon.tech` → `neon.com` redirect still gives `neon.com`.
+- The manual check in the PR: `LOOKUP_TRACE=1 pnpm tsx scripts/lookup.ts "Dropbox API"` answers NoSpec (the expected Outcome), or states what it answers and why.
+- `pnpm bench --concurrency 1` once: False Resolution stays 0, and no entry that was correct in `docs/slices/slice-4-result.md`'s runs regresses, apart from the known Judge-variance names (Steam, Atlassian, Cisco).
 - `pnpm check` and `pnpm build` green.
