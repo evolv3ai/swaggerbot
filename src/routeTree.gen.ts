@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiSplatRouteImport } from './routes/api/$'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as ApiLookupRouteImport } from './routes/api/lookup'
 import { Route as ApiApisSplatRouteImport } from './routes/api/apis/$'
@@ -20,6 +21,11 @@ import { Route as ApiVendorsVendorApisRouteImport } from './routes/api/vendors/$
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSplatRoute = ApiSplatRouteImport.update({
+  id: '/api/$',
+  path: '/api/$',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiHealthRoute = ApiHealthRouteImport.update({
@@ -56,6 +62,7 @@ const ApiVendorsVendorApisRoute = ApiVendorsVendorApisRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/api/$': typeof ApiSplatRoute
   '/api/health': typeof ApiHealthRoute
   '/api/lookup': typeof ApiLookupRoute
   '/api/apis/$': typeof ApiApisSplatRoute
@@ -65,6 +72,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/api/$': typeof ApiSplatRoute
   '/api/health': typeof ApiHealthRoute
   '/api/lookup': typeof ApiLookupRoute
   '/api/apis/$': typeof ApiApisSplatRoute
@@ -75,6 +83,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/api/$': typeof ApiSplatRoute
   '/api/health': typeof ApiHealthRoute
   '/api/lookup': typeof ApiLookupRoute
   '/api/apis/$': typeof ApiApisSplatRoute
@@ -86,6 +95,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/api/$'
     | '/api/health'
     | '/api/lookup'
     | '/api/apis/$'
@@ -95,6 +105,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/api/$'
     | '/api/health'
     | '/api/lookup'
     | '/api/apis/$'
@@ -104,6 +115,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/api/$'
     | '/api/health'
     | '/api/lookup'
     | '/api/apis/$'
@@ -114,6 +126,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ApiSplatRoute: typeof ApiSplatRoute
   ApiHealthRoute: typeof ApiHealthRoute
   ApiLookupRoute: typeof ApiLookupRoute
   ApiApisSplatRoute: typeof ApiApisSplatRoute
@@ -129,6 +142,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/$': {
+      id: '/api/$'
+      path: '/api/$'
+      fullPath: '/api/$'
+      preLoaderRoute: typeof ApiSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/health': {
@@ -178,6 +198,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApiSplatRoute: ApiSplatRoute,
   ApiHealthRoute: ApiHealthRoute,
   ApiLookupRoute: ApiLookupRoute,
   ApiApisSplatRoute: ApiApisSplatRoute,

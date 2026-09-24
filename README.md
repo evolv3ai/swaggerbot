@@ -101,7 +101,10 @@ To check the forms and the navigation on a deployment, run `pnpm tsx scripts/for
 | 200 | The Outcome, from the Index or from a Lookup. |
 | 400 | The body isn't JSON or isn't a valid lookup request (`issues` says why). |
 | 401 | `Unknown or revoked API key.` (a key was sent that isn't live), or `Discovery needs an API key.` (none was sent and the Index can't answer, or `fresh: true`). |
+| 405 | Any method but `POST`, with `Allow: POST`. |
 | 429 | `Rate limit exceeded.` for the IP, or `Daily quota used.` with `limit` and `used` for the key. `Retry-After` gives the seconds to wait: until a request is allowed again, or until UTC midnight. |
+
+Every API route answers a method it doesn't take with 405 and an `Allow` header, and a path under `/api/` that no route serves with a JSON 404, never the web page.
 
 ## API keys
 
