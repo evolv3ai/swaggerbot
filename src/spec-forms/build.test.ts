@@ -2,7 +2,12 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { SpecOutline, ValidityIssue } from "~/domain/spec-forms";
-import { buildSpecForms, SpecFormsError, type SpecFormsInput } from "./build";
+import {
+  buildSpecForms,
+  MAX_MAP_INLINES,
+  SpecFormsError,
+  type SpecFormsInput,
+} from "./build";
 
 const FIXTURES = join(import.meta.dirname, "__fixtures__");
 const SOURCE = "https://api.example.com/specs/openapi.json";
@@ -395,6 +400,229 @@ describe("buildSpecForms", () => {
     const doc = parsed(forms.normalized);
     expect(at(doc, "paths", "/a", "get")).toEqual({ $ref: "#/x-ops/a" });
     expect(at(doc, "paths", "/b", "get")).toEqual({ $ref: "#/x-ops/missing" });
+  });
+
+  it("inlines a response's headers written as a $ref to a same-origin file", async () => {
+    // DigitalOcean's Spec writes a response's `headers` this way; OpenAPI
+    // allows a `$ref` for each header, not for the map.
+    const spec = [
+      "openapi: 3.0.0",
+      "info: { title: Droplets, version: '2.0' }",
+      "paths:",
+      "  /v2/droplets:",
+      "    get:",
+      "      responses:",
+      "        '200':",
+      "          description: The Droplets",
+      "          headers:",
+      "            $ref: shared/headers.yml",
+      "components:",
+      "  responses:",
+      "    unauthorized:",
+      "      description: Unauthorized",
+      "      headers:",
+      "        $ref: shared/headers.yml",
+    ].join("\n");
+    const headers = [
+      "ratelimit-limit:",
+      "  schema: { type: integer }",
+      "ratelimit-remaining:",
+      "  schema: { type: integer }",
+    ].join("\n");
+    const fetchRef = vi.fn(async (_url: string) =>
+      new TextEncoder().encode(headers),
+    );
+    const forms = await buildSpecForms({
+      bytes: new TextEncoder().encode(spec),
+      format: "yaml",
+      sourceUrl: SOURCE,
+      fetchRef,
+    });
+
+    expect(fetchRef).toHaveBeenCalledWith(
+      "https://api.example.com/specs/shared/headers.yml",
+    );
+    const doc = parsed(forms.normalized);
+    const expected = {
+      "ratelimit-limit": { schema: { type: "integer" } },
+      "ratelimit-remaining": { schema: { type: "integer" } },
+    };
+    expect(
+      at(doc, "paths", "/v2/droplets", "get", "responses", "200", "headers"),
+    ).toEqual(expected);
+    expect(
+      at(doc, "components", "responses", "unauthorized", "headers"),
+    ).toEqual(expected);
+    expect(forms.normalizedFindingCount).toBe(0);
+    // As published, `headers` written as a `$ref` is invalid.
+    expect(forms.validityIssues).not.toEqual([]);
+  });
+
+  it("inlines responses, content and properties written as an internal $ref", async () => {
+    const spec = {
+      openapi: "3.1.0",
+      info: { title: "Maps", version: "1" },
+      paths: {
+        "/a": {
+          get: { responses: { $ref: "#/x-maps/responses" } },
+          post: {
+            requestBody: { content: { $ref: "#/x-maps/content" } },
+            responses: { "204": { description: "Created" } },
+          },
+        },
+      },
+      components: {
+        responses: {
+          Ok: { description: "OK", content: { $ref: "#/x-maps/content" } },
+        },
+        schemas: {
+          Widget: {
+            type: "object",
+            properties: { $ref: "#/x-maps/properties" },
+          },
+          List: {
+            type: "array",
+            // Nested, and a chain of references with a key written beside it.
+            items: {
+              type: "object",
+              properties: {
+                $ref: "#/x-maps/chain",
+                extra: { type: "boolean" },
+              },
+            },
+          },
+        },
+      },
+      "x-maps": {
+        responses: {
+          "200": {
+            description: "A",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: { $ref: "#/x-maps/properties" },
+                },
+              },
+            },
+          },
+        },
+        content: {
+          "application/json": {
+            schema: { $ref: "#/components/schemas/Widget" },
+          },
+        },
+        chain: { $ref: "#/x-maps/properties" },
+        properties: { id: { type: "string" }, name: { type: "string" } },
+      },
+    };
+    const forms = await buildSpecForms({
+      bytes: new TextEncoder().encode(JSON.stringify(spec)),
+      format: "json",
+      sourceUrl: SOURCE,
+    });
+    const doc = parsed(forms.normalized);
+    const properties = spec["x-maps"].properties;
+
+    expect(at(doc, "paths", "/a", "get", "responses")).toEqual({
+      "200": {
+        description: "A",
+        content: {
+          "application/json": { schema: { type: "object", properties } },
+        },
+      },
+    });
+    expect(at(doc, "paths", "/a", "post", "requestBody", "content")).toEqual(
+      spec["x-maps"].content,
+    );
+    expect(at(doc, "components", "responses", "Ok", "content")).toEqual(
+      spec["x-maps"].content,
+    );
+    expect(at(doc, "components", "schemas", "Widget", "properties")).toEqual(
+      properties,
+    );
+    expect(
+      at(doc, "components", "schemas", "List", "items", "properties"),
+    ).toEqual({ ...properties, extra: { type: "boolean" } });
+    // The target stays in place.
+    expect(at(doc, "x-maps")).toEqual(spec["x-maps"]);
+    expect(forms.normalizedFindingCount).toBe(0);
+    expect(forms.validityIssues).not.toEqual([]);
+  });
+
+  it("leaves a cycle of map references as a $ref", async () => {
+    const spec = {
+      openapi: "3.1.0",
+      info: { title: "Cycle", version: "1" },
+      paths: {},
+      components: {
+        schemas: {
+          Loop: { type: "object", properties: { $ref: "#/x-maps/a" } },
+          Missing: { type: "object", properties: { $ref: "#/x-maps/none" } },
+          // A map whose copy would contain its own reference again.
+          Tree: { type: "object", properties: { $ref: "#/x-maps/tree" } },
+        },
+      },
+      "x-maps": {
+        a: { $ref: "#/x-maps/b" },
+        b: { $ref: "#/x-maps/a" },
+        tree: {
+          child: { type: "object", properties: { $ref: "#/x-maps/tree" } },
+        },
+      },
+    };
+    const forms = await buildSpecForms({
+      bytes: new TextEncoder().encode(JSON.stringify(spec)),
+      format: "json",
+      sourceUrl: SOURCE,
+    });
+    const doc = parsed(forms.normalized);
+    expect(at(doc, "components", "schemas", "Loop", "properties")).toEqual({
+      $ref: "#/x-maps/a",
+    });
+    expect(at(doc, "components", "schemas", "Missing", "properties")).toEqual({
+      $ref: "#/x-maps/none",
+    });
+    expect(at(doc, "components", "schemas", "Tree", "properties")).toEqual({
+      child: { type: "object", properties: { $ref: "#/x-maps/tree" } },
+    });
+  });
+
+  it("stops copying maps that multiply one another", async () => {
+    // Each level's two properties both reference the next level's map, so
+    // inlining every one would make 2^20 copies.
+    const levels = 20;
+    const maps: Record<string, unknown> = {};
+    for (let i = 0; i < levels; i++) {
+      const next = {
+        type: "object",
+        properties: { $ref: `#/x-maps/m${i + 1}` },
+      };
+      maps[`m${i}`] = { a: next, b: structuredClone(next) };
+    }
+    maps[`m${levels}`] = { leaf: { type: "string" } };
+    const spec = {
+      openapi: "3.1.0",
+      info: { title: "Doubling", version: "1" },
+      paths: {},
+      components: {
+        schemas: {
+          Root: { type: "object", properties: { $ref: "#/x-maps/m0" } },
+        },
+      },
+      "x-maps": maps,
+    };
+    const started = performance.now();
+    const forms = await buildSpecForms({
+      bytes: new TextEncoder().encode(JSON.stringify(spec)),
+      format: "json",
+      sourceUrl: SOURCE,
+    });
+    expect(performance.now() - started).toBeLessThan(5_000);
+    const text = new TextDecoder().decode(forms.normalized);
+    // Copies stop at the cap, and the rest stay references.
+    expect(text.split('"leaf"').length - 1).toBeLessThan(MAX_MAP_INLINES);
+    expect(text).toContain('"$ref":"#/x-maps/m');
   });
 
   it("outlines the 3.0 Spec's tags, operations and security schemes", async () => {

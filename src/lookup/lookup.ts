@@ -56,6 +56,7 @@ import type { WebSearch } from "~/sources/web-search";
 import { specAnswer, withSpecForms } from "~/spec-forms/outcome";
 import { crawledNamesCovered } from "./coverage";
 import {
+  ADD_ON_MAX_PATHS,
   DEFAULT_FRESHNESS_DAYS,
   DEFAULT_THRESHOLDS,
   freshnessMs,
@@ -522,9 +523,12 @@ export function createLookup(deps: LookupDeps): IndexedLookup {
   /**
    * Fetches each portal Candidate's own page and moves the Candidate to the
    * registrable domain it ends up on (`neon.tech` → `neon.com`), one fetch per
-   * search domain. When the page can't be fetched, the site's origin is tried;
-   * when that fails too, the Candidate keeps its search domain, with a
-   * diagnostic.
+   * search domain. A page that ends on the Vendor's own API-docs domain
+   * (`dropbox.com` → `docs.dropboxapi.com`, `isApiDocsDomain`) keeps the
+   * search domain, with the followed URL as its portal, so the crawl still
+   * starts on the docs site. When the page can't be fetched, the site's origin
+   * is tried; when that fails too, the Candidate keeps its search domain, with
+   * a diagnostic.
    *
    * Then, when the Candidates are on more than one domain, each domain's apex
    * (`https://<domain>/`) is fetched once: when it ends on another Candidate's
@@ -538,17 +542,24 @@ export function createLookup(deps: LookupDeps): IndexedLookup {
     portals: PortalCandidate[],
     diagnostics: string[],
   ): Promise<PortalCandidate[]> {
-    const finalDomains = new Map<string, Promise<string | null>>();
-    const settle = async (url: string, searchDomain: string) => {
+    type Settled = { domain: string; url: string } | null;
+    const finalDomains = new Map<string, Promise<Settled>>();
+    const settle = async (
+      url: string,
+      searchDomain: string,
+    ): Promise<Settled> => {
       try {
-        return registrableDomain((await fetcher.fetchUrl(url)).finalUrl);
+        const { finalUrl } = await fetcher.fetchUrl(url);
+        const domain = registrableDomain(finalUrl);
+        return domain ? { domain, url: finalUrl } : null;
       } catch (error) {
         if (!(error instanceof FetchError)) return null;
         // A host that answered, or a redirect off the search domain, still
         // says where the page lives.
         const domain = registrableDomain(error.url);
-        return error.kind === "http-error" || domain !== searchDomain
-          ? domain
+        return domain &&
+          (error.kind === "http-error" || domain !== searchDomain)
+          ? { domain, url: error.url }
           : null;
       }
     };
@@ -572,8 +583,11 @@ export function createLookup(deps: LookupDeps): IndexedLookup {
     };
     const settled = await Promise.all(
       portals.map(async (p) => {
-        const domain = await finalDomain(p);
-        return domain && domain !== p.domain ? { ...p, domain } : p;
+        const final = await finalDomain(p);
+        if (!final || final.domain === p.domain) return p;
+        return isApiDocsDomain(p.domain, final.domain)
+          ? { ...p, url: final.url }
+          : { ...p, domain: final.domain };
       }),
     );
     const domains = new Set(settled.map((p) => p.domain));
@@ -581,7 +595,7 @@ export function createLookup(deps: LookupDeps): IndexedLookup {
     const apexDomains = new Map(
       await Promise.all(
         [...domains].map(
-          async (d) => [d, await settle(`https://${d}/`, d)] as const,
+          async (d) => [d, (await settle(`https://${d}/`, d))?.domain] as const,
         ),
       ),
     );
@@ -1534,16 +1548,36 @@ export function createLookup(deps: LookupDeps): IndexedLookup {
       apiVersion === undefined ? !c.isPreview : c.apiVersion === apiVersion;
     /**
      * Settled once a wanted Spec from the Vendor or linked by it describes
-     * the API, and its URL names no API Version: a Spec whose URL does may
-     * be a per-version add-on (Box's 24-path `openapi-v2025.0.json` on
-     * GitHub, judged before the crawl brought `box-openapi.json`), so later
-     * Sources are still waited for and judged. When none comes in time,
-     * `answer` weighs such Specs as ever.
+     * the API, and it is not a possible add-on: its URL names an API Version
+     * and it has under `ADD_ON_MAX_PATHS` paths, or under `PARTIAL_SPEC_RATIO`
+     * of a sibling's: a confirming Spec found in this Lookup, or one held in
+     * the Index for this API. A Spec of another API found on the way (Twilio's
+     * 121-path `twilio_api_v2010.json` beside Verify's) is no sibling.
+     * Such a Spec may be a per-version add-on (Box's 24-path
+     * `openapi-v2025.0.json` on GitHub, judged before the crawl brought
+     * `box-openapi.json`), so later Sources are still waited for and judged.
+     * When none comes in time, `answer` weighs such Specs as ever.
      */
     const confirming = (c: SpecCandidate) =>
       isVendorBacked(c.provenance) && c.probability >= t.describes && wanted(c);
+    const pathsOf = (c: SpecCandidate) => c.sniff.extract.pathCount;
+    const indexedPaths = Math.max(
+      0,
+      ...(repo.getApiWithSpecs(choice.api.id)?.specs ?? []).map(
+        (s) => s.pathCount ?? 0,
+      ),
+    );
+    const possibleAddOn = (c: SpecCandidate) =>
+      urlNamesApiVersion(c.url) &&
+      (pathsOf(c) < ADD_ON_MAX_PATHS ||
+        pathsOf(c) <
+          PARTIAL_SPEC_RATIO *
+            Math.max(
+              indexedPaths,
+              ...candidates.filter(confirming).map(pathsOf),
+            ));
     const settled = () =>
-      candidates.some((c) => confirming(c) && !urlNamesApiVersion(c.url));
+      candidates.some((c) => confirming(c) && !possibleAddOn(c));
     /**
      * Whether a step goes on to its next Source. Once settled, it still takes
      * those whose URL names an API Version (`openapi-v2026.0.json` beside
@@ -2015,6 +2049,16 @@ function isUmbrellaLabel(query: string, label: string): boolean {
     (label.startsWith(query) &&
       ["apis", "api"].includes(label.slice(query.length)))
   );
+}
+
+/**
+ * `docs.dropboxapi.com` is `dropbox.com`'s API-docs domain: its first label
+ * is the search domain's plus `api` or `apis`, as in `isUmbrellaLabel`.
+ */
+function isApiDocsDomain(searchDomain: string, finalDomain: string): boolean {
+  const searchLabel = searchDomain.split(".")[0] ?? searchDomain;
+  const finalLabel = finalDomain.split(".")[0] ?? finalDomain;
+  return finalLabel !== searchLabel && isUmbrellaLabel(searchLabel, finalLabel);
 }
 
 /**
