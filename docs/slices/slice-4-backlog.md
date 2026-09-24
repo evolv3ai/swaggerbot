@@ -56,13 +56,13 @@ Filed 2026-09-23 as WTR-104..111 (Backlog, `swaggerbot` only), with Linear "bloc
 | 11 | WTR-117 | The forms worker has a reference budget DigitalOcean fits (75 min; its `$ref` closure is 2,976 files, measured by WTR-116), and retries go to the back of the queue. **Gates the wave 2 deploy** | 10 | 3 |
 | 12 | WTR-119 | The server starts the Verification and forms workers when it boots (added 2026-09-23 after the wave 2 deploy: no worker ran until a request came) | 2 | 3 |
 | 13 | WTR-120 | The Normalized Form inlines operations written as a `$ref` (added 2026-09-23 after O1: DigitalOcean's 695 operations were `$ref` stubs in the Normalized Form, the Outline and `get_operation`) | 1 | 5 |
-| 14 | WTR-? | The forms worker builds Specs with same-origin external references in a second lane (added 2026-09-23 after acceptance: DigitalOcean's ~50 min rebuild held up Cloudflare's new Current Spec) | 2 | 6 |
-| 15 | WTR-? | Stored forms are rebuilt when the builder changes (`builder_version`) | 14 | 7 |
-| 16 | WTR-? | `list_vendor_apis` matches the names Callers type | 7 | 6 |
-| 17 | WTR-? | The Normalized Form inlines a `$ref` written where a map belongs (`headers`, `responses`, `content`, `properties`) | 13 | 6 |
-| 18 | WTR-? | A Developer Portal that redirects to the Vendor's own API-docs domain keeps the Vendor's domain (Dropbox) | — | 6 |
+| 14 | WTR-121 | The forms worker builds Specs with same-origin external references in a second lane (added 2026-09-23 after acceptance: DigitalOcean's ~50 min rebuild held up Cloudflare's new Current Spec) | 2 | 6 |
+| 15 | WTR-122 | Stored forms are rebuilt when the builder changes (`builder_version`) | 14 | 7 |
+| 16 | WTR-123 | `list_vendor_apis` matches the names Callers type | 7 | 6 |
+| 17 | WTR-124 | The Normalized Form inlines a `$ref` written where a map belongs (`headers`, `responses`, `content`, `properties`) | 13 | 6 |
+| 18 | WTR-125 | A Developer Portal that redirects to the Vendor's own API-docs domain keeps the Vendor's domain (Dropbox) | — | 6 |
 
-**Waves 6 and 7 (after acceptance; Wes approved the follow-ups 2026-09-23):** #14, #16, #17 and #18 touch different files and run together. WTR-101 (Slice 3's add-on guard) is queued with them, because it and #14 both cut forms latency for DigitalOcean, Jira, Twilio and Plaid. #15 waits for #14, so that a builder bump's rebuild of DigitalOcean can't block the other Specs.
+**Waves 6 and 7 (after acceptance; Wes approved the follow-ups 2026-09-23; filed as WTR-121..125, queued in Agent Todo except WTR-122, which is in Backlog, blocked by WTR-121, and is queued when WTR-121 merges):** #14, #16, #17 and #18 touch different files and run together. WTR-101 (Slice 3's add-on guard) is queued with them, because it and #14 both cut forms latency for DigitalOcean, Jira, Twilio and Plaid. #15 waits for #14, so that a builder bump's rebuild of DigitalOcean can't block the other Specs.
 
 #3 and #4 touch different files (`lookup.ts` and `outcome.ts`; routes and `src/server/`), so they run together. #5, #6 and #7 each add a route file, and TanStack's generated `src/routeTree.gen.ts` changes with each. That's a mechanical conflict, so wave 4 is merged one PR at a time, regenerating the route tree (`pnpm build`) on each rebase.
 
