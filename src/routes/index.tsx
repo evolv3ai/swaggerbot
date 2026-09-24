@@ -11,6 +11,8 @@ const REQUEST = `curl https://swaggerbot.dev/api/lookup \\
   -H 'content-type: application/json' \\
   -d '{"name": "Stripe API"}'`;
 
+const MCP_ADD = `claude mcp add --transport http swaggerbot https://swaggerbot.dev/mcp`;
+
 // Production's answer on 2026-09-24, trimmed: ids shortened, fields omitted.
 const RESPONSE = `{
   "outcome": "Resolved",
@@ -117,6 +119,12 @@ const ROUTES: { method: "GET" | "POST"; path: string; gives: string }[] = [
     gives: "A Vendor's APIs in the Index, by domain or name.",
   },
   {
+    method: "POST",
+    path: "/mcp",
+    gives:
+      "The MCP server for agents: the same answers as five tools, under the same key rules.",
+  },
+  {
     method: "GET",
     path: "/api/health",
     gives: "{ ok: true } while the service is up.",
@@ -210,6 +218,29 @@ function Home() {
                 </Fragment>
               ))}
             </dl>
+          </section>
+
+          <section className="section" aria-labelledby="mcp-title">
+            <div>
+              <h2 id="mcp-title">Use it from Claude Code</h2>
+              <p>
+                swagger.bot is an MCP server too. Add it, and your agent can
+                look up an API, search its operations and read the one it needs,
+                every result small enough for its context.
+              </p>
+              <p>
+                Discovery and <code>fresh</code> need a key: add{" "}
+                <code>--header "Authorization: Bearer …"</code>.
+              </p>
+            </div>
+            <figure className="exchange exchange-command">
+              <pre>
+                <code>
+                  <span className="prompt">$ </span>
+                  {MCP_ADD}
+                </code>
+              </pre>
+            </figure>
           </section>
 
           <section
