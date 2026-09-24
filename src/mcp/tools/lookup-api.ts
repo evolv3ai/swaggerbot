@@ -126,7 +126,8 @@ function versionOf(spec: SpecAnswer): string {
   return spec.apiVersion ? ` (API Version ${spec.apiVersion})` : "";
 }
 
-function downloadsText(spec: SpecAnswer): string {
+/** Where to download a Spec's two forms, and whether its Normalized Form is built yet. */
+export function downloadsText(spec: SpecAnswer): string {
   const pending =
     spec.normalized === "pending"
       ? ", still being built: retry it in a few seconds"

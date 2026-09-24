@@ -88,7 +88,7 @@ describe("/mcp", () => {
       dailyQuota: 100,
       now: () => NOW,
     };
-    const getApp = () => ({ lookup: fake.lookup, keys });
+    const getApp = () => ({ db, lookup: fake.lookup, keys });
     handler = createSwaggerbotMcpHandler({ getApp, gate });
   });
 
@@ -151,7 +151,10 @@ describe("/mcp", () => {
   it("lists lookup_api with the Lookup's input schema", async () => {
     const { tools } = await resultOf(await rpc("tools/list"));
 
-    expect(tools.map((t: { name: string }) => t.name)).toEqual(["lookup_api"]);
+    expect(tools.map((t: { name: string }) => t.name)).toEqual([
+      "lookup_api",
+      "list_vendor_apis",
+    ]);
     const [tool] = tools;
     expect(tool.description).toContain("get_spec_outline");
     expect(tool.description).toContain("never returned inline");
