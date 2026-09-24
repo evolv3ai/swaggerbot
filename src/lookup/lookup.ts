@@ -1537,7 +1537,9 @@ export function createLookup(deps: LookupDeps): IndexedLookup {
      * Settled once a wanted Spec from the Vendor or linked by it describes
      * the API, and it is not a possible add-on: its URL names an API Version
      * and it has under `ADD_ON_MAX_PATHS` paths, or under `PARTIAL_SPEC_RATIO`
-     * of a sibling's found in this Lookup or held in the Index for this API.
+     * of a sibling's: a confirming Spec found in this Lookup, or one held in
+     * the Index for this API. A Spec of another API found on the way (Twilio's
+     * 121-path `twilio_api_v2010.json` beside Verify's) is no sibling.
      * Such a Spec may be a per-version add-on (Box's 24-path
      * `openapi-v2025.0.json` on GitHub, judged before the crawl brought
      * `box-openapi.json`), so later Sources are still waited for and judged.
@@ -1557,7 +1559,10 @@ export function createLookup(deps: LookupDeps): IndexedLookup {
       (pathsOf(c) < ADD_ON_MAX_PATHS ||
         pathsOf(c) <
           PARTIAL_SPEC_RATIO *
-            Math.max(indexedPaths, ...candidates.map(pathsOf)));
+            Math.max(
+              indexedPaths,
+              ...candidates.filter(confirming).map(pathsOf),
+            ));
     const settled = () =>
       candidates.some((c) => confirming(c) && !possibleAddOn(c));
     /**

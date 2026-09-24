@@ -2115,6 +2115,7 @@ describe("lookup with the Spec step's Sources at once", () => {
       "NoSpec API": yes,
       "NoSpec API (known path)": yes,
       "NoSpec API (GitHub)": yes,
+      "Other API": yesNo(0.05),
     },
     defaults: { isSpecLink: yes },
   };
@@ -2425,16 +2426,16 @@ describe("lookup with the Spec step's Sources at once", () => {
 
   describe("with a per-version add-on found first (Box)", () => {
     /** Box's shape: a Spec with `paths` paths, titled as the full one. */
-    const boxSpec = (paths: number) =>
+    const boxSpec = (paths: number, title = "NoSpec API") =>
       JSON.stringify({
         openapi: "3.0.3",
-        info: { title: "NoSpec API", version: "2025.0" },
+        info: { title, version: "2025.0" },
         paths: Object.fromEntries(
           Array.from({ length: paths }, (_, i) => [`/files/${i}`, {}]),
         ),
       });
-    const bytesHit = (url: string, paths: number) => {
-      const bytes = new TextEncoder().encode(boxSpec(paths));
+    const bytesHit = (url: string, paths: number, title?: string) => {
+      const bytes = new TextEncoder().encode(boxSpec(paths, title));
       const sniff = sniffSpec(bytes, "application/json");
       if (!sniff) throw new Error("fixture is not a Spec");
       return { url, bytes, sniff, robotsDisallowed: false };
@@ -2564,6 +2565,34 @@ describe("lookup with the Spec step's Sources at once", () => {
         outcome: "Resolved",
         sources: [{ url: full }],
       });
+    });
+
+    it("doesn't take another API's Spec for a sibling", async () => {
+      // Twilio Verify's 33-path Spec beside Twilio's 121-path REST API Spec.
+      const other = `${server.origin("api.nospec.test")}/openapi/other-v2010.json`;
+      const { probe } = slowProbe(0, [
+        bytesHit(addOn, 60),
+        bytesHit(other, 187, "Other API"),
+      ]);
+      const { lookup } = setup(
+        script,
+        undefined,
+        undefined,
+        slowCrawl(2000, {
+          hits: [{ ...bytesHit(full, 60), linkedFrom: full, offHost: false }],
+        }),
+        undefined,
+        undefined,
+        undefined,
+        { probe },
+      );
+
+      const start = performance.now();
+      expect(await ask(lookup, "nospec")).toMatchObject({
+        outcome: "Resolved",
+        sources: [{ url: addOn }],
+      });
+      expect(performance.now() - start).toBeLessThan(1000);
     });
 
     it("waits past a versioned Spec with far fewer paths than the Index holds", async () => {

@@ -53,7 +53,8 @@ export const PARTIAL_SPEC_RATIO = 0.5;
  * this, may be a per-version add-on (Box's `openapi-v2025.0.json`, 24 paths;
  * `openapi-v2026.0.json`, 5), so Discovery waits for later Sources rather
  * than settle on it. The full Specs at versioned URLs that waited out the
- * deadline for it (Twilio Verify, DigitalOcean, Jira, Plaid) have hundreds.
+ * deadline for it have hundreds (DigitalOcean, Jira, Plaid), except Twilio
+ * Verify's `twilio_verify_v2.json`, with 33: it still waits.
  */
 export const ADD_ON_MAX_PATHS = 40;
 
