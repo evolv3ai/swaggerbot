@@ -88,7 +88,7 @@ describe("/mcp", () => {
       dailyQuota: 100,
       now: () => NOW,
     };
-    const getApp = () => ({ lookup: fake.lookup, keys });
+    const getApp = () => ({ lookup: fake.lookup, keys, db });
     handler = createSwaggerbotMcpHandler({ getApp, gate });
   });
 
@@ -151,7 +151,10 @@ describe("/mcp", () => {
   it("lists lookup_api with the Lookup's input schema", async () => {
     const { tools } = await resultOf(await rpc("tools/list"));
 
-    expect(tools.map((t: { name: string }) => t.name)).toEqual(["lookup_api"]);
+    expect(tools.map((t: { name: string }) => t.name)).toEqual([
+      "lookup_api",
+      "get_spec_outline",
+    ]);
     const [tool] = tools;
     expect(tool.description).toContain("get_spec_outline");
     expect(tool.description).toContain("never returned inline");
@@ -165,6 +168,18 @@ describe("/mcp", () => {
       },
       required: ["name"],
     });
+  });
+
+  it("serves get_spec_outline, an API not in the Index being a tool error", async () => {
+    const result = await resultOf(
+      await rpc("tools/call", {
+        name: "get_spec_outline",
+        arguments: { apiId: "payco.com/payco-api", tag: "charges" },
+      }),
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("lookup_api(name)");
   });
 
   it("resolves an indexed name without a key, using no quota", async () => {
