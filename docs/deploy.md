@@ -63,6 +63,32 @@ The deploys of 2026-09-23:
 - Every sampled Stripe operation comes back `truncated` at about 1 MB.
 - `GitHub` isn't a name the Index remembers, so the Lookup ran Discovery (9.1 s) and found a new GitHub Spec. The worker built it in about 5.6 s while formscheck waited on a 409.
 
+
+### The follow-ups: `d74a3c9` (2026-09-24)
+
+**Deployed at 00:24 CDT** (deployment `jjiwxlosk4tlaw0l8xzsadmt`; healthy at 00:25). It carries WTR-121 (two forms lanes), WTR-122 (`builder_version`), WTR-123 (Vendor names), WTR-124 (map `$ref`s), WTR-125 (Dropbox redirect) and WTR-101 (add-on guard). Migrations 0008 and 0009 add `spec_forms.external_refs` and `builder_version`. 0009 also resets `attempts` on `ready` rows; none of the 37 had any.
+
+**The rebuild after the bump** (every row started stale, `builder_version` null; sampled every ~20 s):
+- 35 of 37 Specs reached version 1 within 90 s of start-up (00:25:25 → 00:26:47), all in the local lane.
+- `GET /api/apis/stripe.com/stripe-api/outline` answered **200 in every sample** throughout. A rebuild keeps the stored forms.
+- Memory peaked at 540 MiB sampled, then settled to ~260 MiB.
+- The other 2 are DigitalOcean's Specs, handed to the external lane. **It took the superseded `e3cd049d` first** (oldest `built_at`), so the Current `9601e8c3` waits ~50 min behind it. Filed as WTR-126: Current Specs rebuild first.
+- **`formscheck` PASS at 00:28 while DigitalOcean was building** (outline p90 182 ms, operation p90 380 ms, 0 non-2xx). This is WTR-121's live check: one DigitalOcean build no longer holds up the others.
+
+**Live checks** (00:26–00:28):
+- **WTR-123:** `/api/vendors/{Stripe,Slack,PagerDuty,GitHub}/apis` are 200, each listing its API. `nosuch` is 404. `Jira` is also 404: its Vendor is `atlassian.com`, and the remembered name is "jira cloud platform rest".
+- **WTR-125 and WTR-101** (`fresh` Lookups through Cloudflare, with the load-check key):
+
+  | Name | Outcome | Time | Before |
+  |---|---|---|---|
+  | Dropbox API | **NoSpec**, `dropbox.com/api` | 21.3 s | Unknown |
+  | DigitalOcean API | Resolved | 2.2 s | ~10 s |
+  | Jira Cloud platform REST API | Resolved | 3.6 s | ~10 s |
+  | Plaid API | Resolved | 3.8 s | 15–17 s |
+  | Twilio Verify API | Resolved | 12.4 s | ~10 s |
+
+  Twilio Verify is still slow: its Spec has 33 paths, under `ADD_ON_MAX_PATHS` (40), and Box's add-on has 24. The issue assumed "hundreds".
+
 ## Gotchas
 
 - Coolify's application health check runs `curl`/`wget` **inside** the container. An image without them is rolled back as unhealthy, even when its own Docker `HEALTHCHECK` passes.

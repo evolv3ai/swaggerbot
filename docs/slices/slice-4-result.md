@@ -48,6 +48,24 @@ Both URLs are now in their entries' `specSources` in `benchmark/entries.json`. C
 | WTR-119 | The workers start when the server boots (found in production: they waited for the first request) |
 | WTR-120 | Operations written as a `$ref` are inlined in the Normalized Form (found in production on DigitalOcean) |
 
+## Follow-ups shipped (2026-09-24, `d74a3c9`)
+
+WTR-121, 122, 123, 124, 125 and WTR-101 were merged and deployed at 00:24. The live checks are in [`deploy.md`](../deploy.md) under "The follow-ups". In short:
+- 35 of 37 Specs rebuilt in 90 s, with `/outline` 200 throughout.
+- `formscheck` passed while DigitalOcean built in its own lane.
+- Vendor names match.
+- Dropbox is NoSpec.
+- Plaid, DigitalOcean and Jira resolve in 2–4 s.
+
+Found in review and fixed before merging:
+- WTR-124: a cap on map copies (10,000), because maps that reference one another multiplied exponentially.
+- WTR-101: a sibling is a Spec of this API only.
+- WTR-122: migration 0009 resets `attempts`.
+
+Still open:
+- Twilio Verify is still ~12 s: 33 paths, under the 40-path add-on cut-off.
+- A builder bump rebuilds superseded Specs before Current ones (**WTR-126**, queued).
+
 ## Known misses and follow-ups (Wes's decisions, 2026-09-23)
 
 - **One slow Spec holds up every other Spec's forms.** The worker builds one Spec at a time, and DigitalOcean's references take ~50 min to fetch. On 2026-09-23 at 19:44, a changed DigitalOcean Spec held up Cloudflare's new Current Spec and five others until ~20:35. **Decided:** a second lane for Specs with same-origin external references (backlog #14). Defer keeping fetched reference files across builds until a second DigitalOcean-like Spec appears. Don't serve the previous Spec's forms. WTR-101 (Slice 3's add-on guard) is scheduled with #14.
