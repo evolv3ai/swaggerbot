@@ -89,7 +89,7 @@ The deploys of 2026-09-23:
 
   Twilio Verify is still slow: its Spec has 33 paths, under `ADD_ON_MAX_PATHS` (40), and Box's add-on has 24. The issue assumed "hundreds".
 
-**`2cc7d32` (WTR-126) deployed at 00:30** (deployment `yq7nhwrwwozkdegfxtiqsebs`; healthy at 00:30:55). The restart abandoned the superseded DigitalOcean rebuild, which stays `ready` on its old forms. After start-up, the external lane took the **Current** Spec `9601e8c3` first (started 00:30:40), which is WTR-126's live check. It was **ready at 01:20:31 with `builder_version` 1 and 2 normalized findings, down from 62** (the 2 tag descriptions; WTR-124's map inlining), after 2,990 s. It has 718 Validity Issues. `get_operation` for `GET /v2/1-clicks` answered 200 in 0.30 s.
+**`2cc7d32` (WTR-126) deployed at 00:30** (deployment `yq7nhwrwwozkdegfxtiqsebs`; healthy at 00:30:55). The restart abandoned the superseded DigitalOcean rebuild, which stays `ready` on its old forms. After start-up, the external lane took the **Current** Spec `9601e8c3` first (started 00:30:40), which is WTR-126's live check. It was **ready at 01:20:31 with `builder_version` 1 and 2 normalized findings, down from 62** (the 2 tag descriptions; WTR-124's map inlining), after 2,990 s. It has 718 Validity Issues. `get_operation` for `GET /v2/1-clicks` answered 200 in 0.30 s. The monitor (every ~20 s, 00:25–01:40) saw 188 of 189 Stripe `/outline` samples answer 200. The one 502 was at 00:31:29, about 30 s after the `2cc7d32` container reported healthy, during Coolify's container switch-over, so a deploy blips for well under a minute. Peak memory sampled: 540 MiB.
 
 ## Gotchas
 
