@@ -115,7 +115,7 @@ The deploys of 2026-09-23:
 - `claude mcp add --transport http swaggerbot https://swaggerbot.dev/mcp` → "✔ Connected" in `claude mcp list`.
 - `claude -p "Using only the swaggerbot MCP tools, find the Stripe API's Spec and give its download URL" --allowedTools "mcp__swaggerbot__*" --model haiku` answered with `stripe.com/stripe-api`, Official, and the `/api/specs/…/published` and `/normalized` URLs (33 s end to end). The published URL is 200 (6.6 MB).
 - `GET /mcp` 405 (the SDK's stateless answer); an unknown bearer is 401 with `www-authenticate: Bearer`; `/api/health` OK.
-- Until wave 2, the Resolved text names `get_spec_outline`, which isn't deployed yet.
+- Until wave 2 (12:05), the Resolved text named `get_spec_outline`, which wasn't deployed yet.
 
 ### `3a41d89` (2026-09-24): wave 2, the other four tools
 
@@ -126,6 +126,12 @@ The deploys of 2026-09-23:
 - `get_spec_outline` Cloudflare, no filter: 26,966 B (76 operations, the 200 largest of its tags). Stripe with `query: "customers"`: 9,157 B.
 - `get_operation` Stripe `POST /v1/customers`: 21,279 B, 12 schema references left for `get_schema`. Val Town `GET /v1/alias/{username}`: 1,897 B.
 - `get_schema` Stripe `account`: 23,862 B. `list_vendor_apis` Jira: 1,643 B.
+
+### `5acb32d` (2026-09-24): wave 3, `mcpcheck` and the docs
+
+**Deployed at 12:25 CDT** (deployment `5siucceh1ddisnbc1vorxxy2`). It carries #86 (WTR-133): `scripts/mcpcheck.ts`, the README's MCP section, and the landing page's "Use it from Claude Code" block with `/mcp` in its route table. No new env vars.
+
+**Live checks** (12:26): `mcpcheck https://swaggerbot.dev` PASS on the first run (largest 26.9 kB, slowest 543 ms), and with `--names "Val Town"` PASS; `formscheck` PASS (outline p90 190 ms, operation p90 319 ms, 0 non-2xx); `/` 200 with the new block. The acceptance run is in [`slice-5-result.md`](slices/slice-5-result.md).
 
 ## Gotchas
 

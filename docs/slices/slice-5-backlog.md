@@ -1,6 +1,6 @@
 # Slice 5 backlog: MCP server
 
-**Status: approved by Wes, 2026-09-24** (D1–D8 as recommended; ADR 0005 accepted). Filed on Linear as in the Order table.
+**Status: approved by Wes, 2026-09-24** (D1–D8 as recommended; ADR 0005 accepted). Filed on Linear as in the Order table; all five merged and deployed the same day. Result: [`slice-5-result.md`](slice-5-result.md).
 
 The issues for [Slice 5](../PRD.md#slice-5--mcp-server), written so the weawr factory can build them: each numbered body is filed as-is on Linear (team WTR, labels `ai` + `swaggerbot`). Capitalised terms are from [`CONTEXT.md`](../../CONTEXT.md). Conventions shared by every issue live in `.weawr/instructions.md`.
 
