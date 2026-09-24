@@ -89,8 +89,10 @@ export function createSpecForms(db: Db) {
      * yet built.
      *
      * Only when none is pending, the next stale Spec: `ready`, but built by
-     * an older `FORMS_BUILDER_VERSION` (or before versions were stored),
-     * oldest `built_at` first. Its stored forms stay `ready` while it is
+     * an older `FORMS_BUILDER_VERSION` (or before versions were stored).
+     * Current Specs (`superseded_at` null) first, since only they are served
+     * by default, then oldest `built_at`; a superseded Spec is still rebuilt,
+     * after every Current one in its lane. Its stored forms stay `ready` while it is
      * rebuilt. A `failed` Spec is never rebuilt. `undefined` when there is
      * neither.
      */
@@ -125,6 +127,7 @@ export function createSpecForms(db: Db) {
       return db
         .select({ id: specForms.specId })
         .from(specForms)
+        .innerJoin(specs, eq(specs.id, specForms.specId))
         .where(
           and(
             eq(specForms.status, "ready"),
@@ -135,7 +138,11 @@ export function createSpecForms(db: Db) {
             inLane,
           ),
         )
-        .orderBy(asc(specForms.builtAt), asc(sql`${specForms}.rowid`))
+        .orderBy(
+          asc(sql`${specs.supersededAt} is not null`),
+          asc(specForms.builtAt),
+          asc(sql`${specForms}.rowid`),
+        )
         .get()?.id;
     },
 
