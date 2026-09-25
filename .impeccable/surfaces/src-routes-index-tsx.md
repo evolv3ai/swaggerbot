@@ -23,7 +23,7 @@ related_targets: ["src/routes/__root.tsx"]
 - **Station 06 is "Judged", not "Verified":** in CONTEXT.md, Verification is the re-check of an Index entry; the last step of Discovery is a Jev judgment (ADR 0001).
 - **The print's image** is a density field (recency: newest densest, Stale washed) carrying the measured answer time, not a second copy of the API's name.
 - **The test strip** is the certainty scale beside the search: one density per Outcome, Resolved densest.
-- **The grease pencil** is Permanent Marker (Apache 2.0), in caps. No self-hostable open face carries real wax grain; faking it with an SVG filter is refused, so the lettering has the marker's rough edge but no grain.
+- **The grease pencil** is Permanent Marker (Apache 2.0), in caps. No self-hostable open face carries real wax grain; faking it with an SVG filter is refused, so the lettering has the marker's rough edge but no grain. **Accepted by Wes, 2026-09-25**, after the finish review scored it partial: Permanent Marker is the display face.
 - **Roll record:** seed `d05b4106`, direction scope, persuade mode. Round 1 assigned index 3 (the card catalogue), re-rolled by Wes. Round 2 (`--reroll 1`) assigned index 5 (the registry page), re-rolled bolder by Wes. Round 3 (`--reroll 2 --register bolder`) dealt challengers only, led by `signals-instruments-darkroom-safelight-bay`, which Wes chose.
 
 ## Direction contract
