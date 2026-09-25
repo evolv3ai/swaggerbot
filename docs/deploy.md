@@ -133,6 +133,16 @@ The deploys of 2026-09-23:
 
 **Live checks** (12:26): `mcpcheck https://swaggerbot.dev` PASS on the first run (largest 26.9 kB, slowest 543 ms), and with `--names "Val Town"` PASS; `formscheck` PASS (outline p90 190 ms, operation p90 319 ms, 0 non-2xx); `/` 200 with the new block. The acceptance run is in [`slice-5-result.md`](slices/slice-5-result.md).
 
+### `f6b9bf3` (2026-09-24): WTR-134, the agent's guidance in `structuredContent`
+
+**Deployed at 21:52 CDT** (deployment `pgytlt5bshjownjwxeoyipai`). It carries #87 (WTR-134, Slice 5 backlog #6, ADR 0005's amendment). Every successful MCP result's `structuredContent` now begins with `summary` and `next`, and all five tools declare an `outputSchema`. The HTTP API is unchanged. No new env vars.
+
+**Live checks:**
+- `mcpcheck` PASS: largest result 28.4 kB (`tools/list`, which now carries the output schemas), slowest call 701 ms.
+- `formscheck` PASS: outline p90 207 ms, operation p90 380 ms, 0 non-2xx.
+- Claude Code 2.1.282 on Haiku, asked to quote what production `lookup_api` returned, got a tool result beginning `{"summary":"Resolved: Stripe API by stripe.com, apiId "stripe.com/stripe-api". … Download the Spec: https://swaggerbot.dev/api/specs/…/published`.
+- Watch: `tools/list` at 28.4 kB is near `mcpcheck`'s 30 kB bound. The Outcome's schema alone is 13.2 kB.
+
 ## Gotchas
 
 - Coolify's application health check runs `curl`/`wget` **inside** the container. An image without them is rolled back as unhealthy, even when its own Docker `HEALTHCHECK` passes.

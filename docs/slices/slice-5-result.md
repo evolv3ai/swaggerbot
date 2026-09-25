@@ -34,7 +34,8 @@
 
 ## Follow-ups
 
-- **WTR-134** (backlog #6, queued): the D6 guidance in `structuredContent`, with tool-level tests for the pending and failed Normalized Form texts and `get_schema`'s no-match hint.
+- **WTR-134** (backlog #6): the D6 guidance is now in `structuredContent`, with tool-level tests for the pending and failed Normalized Form texts and `get_schema`'s no-match hint. Merged as `f6b9bf3` and deployed 21:52. On production, Claude Code's model now receives `{"summary":"Resolved: …` first ([deploy.md](../deploy.md)).
+- `tools/list` is 28.4 kB with the output schemas, near `mcpcheck`'s 30 kB bound. A bigger Outcome schema would fail the check, so slim the advertised schema before adding fields to it.
 - Not filed: `list_vendor_apis` needs paging before multi-API Vendors arrive (about 1.5 kB per API, over 30 kB at about 20). Today every Vendor has one API.
 - `mcpcheck` passes even if every name skips `get_schema` (true today for Cloudflare and Val Town). A fallback to any schema reference would guarantee `get_schema` is exercised.
 - `fetcher.test.ts`'s host-spacing tests are timing-sensitive and failed once each in two verifier runs under load; they passed on rerun.
