@@ -15,7 +15,7 @@ related_targets: ["src/routes/__root.tsx"]
 
 **Constraints:** WCAG 2.2 AA in both themes, keyboard-complete; Tailwind v4 + shadcn primitives restyled into the world; no Spec content rendered as HTML; the UI holds no key (Index answers only); the SwaggerBot name and bot icon are binding (the icon's drawing is kept; its tile colour follows this world).
 
-**Unresolved:** the exact faces (grease-pencil display, condensed instrument caps, numerals) are chosen at build; the Search headline's words are drafted at build and shown to Wes.
+**Unresolved:** the exact faces (grease-pencil display, condensed instrument caps, numerals) are chosen at build; the Search headline is **"NO FAKE SPECS."** (Wes, 2026-09-25), with a subline that says what it does.
 
 ## Direction contract
 

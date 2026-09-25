@@ -1,6 +1,6 @@
 # Slice 6 backlog: Web UI
 
-**Status: approved by Wes, 2026-09-25** (D1–D8 as recommended; D9 a `mailto:`, address to come). Filed on Linear as in the Order table. Unkey for keys was considered the same day and deferred to self-service keys (PRD "Later"): see D9.
+**Status: approved by Wes, 2026-09-25** (D1–D8 as recommended; D9 a `mailto:` to hello@evolv3.ai). Filed on Linear as in the Order table. Unkey for keys was considered the same day and deferred to self-service keys (PRD "Later"): see D9.
 
 The issues for [Slice 6](../PRD.md#slice-6--web-ui), written so the weawr factory can build them: each numbered body is filed as-is on Linear (team WTR, labels `ai` + `swaggerbot`). Capitalised terms are from [`CONTEXT.md`](../../CONTEXT.md). Conventions shared by every issue live in `.weawr/instructions.md`.
 
@@ -37,7 +37,7 @@ Slice 5 is accepted (production `f6b9bf3`, `main` `2299aef`). The UI has these p
   - Large Specs: Cloudflare is 26 MB. The viewer loads Scalar only for the chosen form, shows its size first, and for Specs over 10 MB links to the outline and downloads instead of rendering them inline (the threshold is checked in the issue's manual check against Stripe, GitHub and Cloudflare).
 - **D7. Index browsing: a new `GET /api/vendors`.** *Recommended:* `GET /api/vendors?cursor=&limit=&query=`: Vendors ordered by name, each with its id, name and API count, 50 per page by default (at most 200), `query` a substring of the id or name. The `/vendors` page uses the same function. **No new MCP tool:** `tools/list` is 28.4 kB, near `mcpcheck`'s 30 kB bound, and an agent reaches Vendors through `lookup_api` and `list_vendor_apis`. The open follow-up that `list_vendor_apis` needs paging past ~20 APIs is left open (not Slice 6).
 - **D8. Acceptance:** as at the top. The WCAG AA check is automated (`uicheck`) so every screen issue can run it in its PR, not only at the end. `uicheck` uses Playwright (`playwright` and `@axe-core/playwright` as dev dependencies, Chromium only). The alternative is the headless-Chrome screenshots of earlier slices plus a manual axe run, which catches less and can't run in a PR.
-- **D9. "Request a key": a `mailto:`.** *Taken (Wes, 2026-09-25):* a `mailto:` link with a prefilled subject ("swagger.bot API key request"); the address is Wes's to give before issue #6 is queued. Keys stay hand-issued in the Index (`scripts/keys.ts`). **Unkey was considered and deferred:** it maps cleanly onto our keys (daily credits refilled at midnight UTC, `verifyKey` codes; our `findKey`/`takeQuota` seam makes it one adapter issue, with `findKey` going async), but it puts an outside service in the auth path and its customer portal, the part that would replace this link, is unreleased. Revisit with self-service keys.
+- **D9. "Request a key": a `mailto:`.** *Taken (Wes, 2026-09-25):* a `mailto:` link with a prefilled subject ("swagger.bot API key request"); to **hello@evolv3.ai** (Wes, 2026-09-25). Keys stay hand-issued in the Index (`scripts/keys.ts`). **Unkey was considered and deferred:** it maps cleanly onto our keys (daily credits refilled at midnight UTC, `verifyKey` codes; our `findKey`/`takeQuota` seam makes it one adapter issue, with `findKey` going async), but it puts an outside service in the auth path and its customer portal, the part that would replace this link, is unreleased. Revisit with self-service keys.
 
 ## Screens and routes
 
@@ -162,7 +162,7 @@ A person can't see what the Index already holds. The PRD's Index browsing screen
 The PRD's API and MCP docs page, with the "request a key" link, doesn't exist; the interim landing page carried the route table and the Claude Code block, and O1 has replaced it with Search. Design: `DESIGN.md` and `PRODUCT.md`; build it as an extension of the shell and Search, in their components and tokens.
 
 ## Change
-- **`/docs`**: the HTTP API (each route, `GET /api/vendors` included, with a `curl` example and its answer, the route table), MCP (the endpoint, the `claude mcp add` command, the five tools, result sizes), the key rules (a key is optional for Index answers; Discovery and `fresh` need one; quotas and the per-IP limit), and a **Keys** section (`#keys`) with the "request a key" link (backlog D9). Each code block has a Copy button that works by keyboard and says it copied (`aria-live`).
+- **`/docs`**: the HTTP API (each route, `GET /api/vendors` included, with a `curl` example and its answer, the route table), MCP (the endpoint, the `claude mcp add` command, the five tools, result sizes), the key rules (a key is optional for Index answers; Discovery and `fresh` need one; quotas and the per-IP limit), and a **Keys** section (`#keys`) with the "request a key" link: `mailto:hello@evolv3.ai?subject=swagger.bot%20API%20key%20request` (backlog D9). Each code block has a Copy button that works by keyboard and says it copied (`aria-live`).
 - Add "Docs" to the nav. The README links to `/docs`.
 - The route table and Claude Code block exist only here now: remove any copy left from the landing page.
 
