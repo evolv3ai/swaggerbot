@@ -20,3 +20,6 @@ uicheck-out/
 
 # Impeccable decision-page logs
 .impeccable/questions/
+
+# Impeccable review captures
+.impeccable/review/
