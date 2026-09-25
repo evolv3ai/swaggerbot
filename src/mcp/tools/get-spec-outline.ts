@@ -1,5 +1,6 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
 import { z } from "zod";
+import { SpecOutline } from "~/domain/spec-forms";
 import {
   answerOutline,
   type OutlineAnswer,
@@ -11,6 +12,7 @@ import {
   type OutlinePage,
   pageOutline,
 } from "~/spec-forms/outline-page";
+import { type Guidance, toolResult, withGuidance } from "../result";
 import type { McpTool } from "../server";
 
 /** The most bytes a result may hold: `structuredContent` as JSON plus the text. */
@@ -57,6 +59,19 @@ const GetSpecOutlineInput = z.object({
 });
 type GetSpecOutlineInput = z.infer<typeof GetSpecOutlineInput>;
 
+/** One page of the Spec Outline (`OutlinePage`) and the Spec's downloads. */
+export const GetSpecOutlineOutput = withGuidance(
+  SpecOutline.extend({
+    apiId: z.string(),
+    specId: z.string(),
+    tagsCut: z.literal(true).optional(),
+    totalOperations: z.number().int().nonnegative(),
+    matchedOperations: z.number().int().nonnegative(),
+    nextCursor: z.string().nullable(),
+    downloads: z.object({ published: z.string(), normalized: z.string() }),
+  }),
+);
+
 /**
  * `get_spec_outline`: the outline route's answer (`answerOutline`), one
  * page of at most 100 operations, held to `MAX_RESULT_BYTES` (ADR 0005).
@@ -71,6 +86,7 @@ export const registerGetSpecOutline: McpTool = (
       title: "Find operations in an API's Spec",
       description: DESCRIPTION,
       inputSchema: GetSpecOutlineInput,
+      outputSchema: GetSpecOutlineOutput,
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
     async (input) =>
@@ -100,10 +116,10 @@ export function outlineResult(
     if (error instanceof BadCursorError) return errorResult(error.message);
     throw error;
   }
-  return {
-    content: [{ type: "text", text: pageText(input, page) }],
-    structuredContent: { ...page, downloads: answer.body.downloads },
-  };
+  return toolResult({
+    ...pageGuidance(input, page),
+    data: { ...page, downloads: answer.body.downloads },
+  });
 }
 
 function errorResult(text: string): CallToolResult {
@@ -126,8 +142,8 @@ function errorText(
   return body.error;
 }
 
-/** What the page shows, and the call to make next. */
-function pageText(input: GetSpecOutlineInput, page: OutlinePage): string {
+/** What the page shows, and the calls to make next. */
+function pageGuidance(input: GetSpecOutlineInput, page: OutlinePage): Guidance {
   const name = page.title
     ? `${page.title} (apiId "${page.apiId}")`
     : `apiId "${page.apiId}"`;
@@ -140,20 +156,26 @@ function pageText(input: GetSpecOutlineInput, page: OutlinePage): string {
     .slice(0, 5)
     .map((t) => `"${t.name}"`)
     .join(", ");
+  const byQuery = call(', query: "…"');
 
   if (page.matchedOperations === 0)
-    return `${name}: no operation matches ${filter} (of ${page.totalOperations} in all).${
-      tagNames
-        ? ` Its tags include ${tagNames}; tags lists ${page.tagsCut ? `the ${page.tags.length} largest` : "them all"}.`
-        : ""
-    } Next: ${call(', query: "…"')} with another word, or a tag from the list.`;
+    return {
+      summary: `${name}: no operation matches ${filter} (of ${page.totalOperations} in all).${
+        tagNames
+          ? ` Its tags include ${tagNames}; tags lists ${page.tagsCut ? `the ${page.tags.length} largest` : "them all"}.`
+          : ""
+      } Try another word, or a tag from the list.`,
+      next: tagNames ? [byQuery, call(', tag: "…"')] : [byQuery],
+    };
 
   const sentences: string[] = [];
-  if (page.operations.length === 0)
+  const next: string[] = [];
+  if (page.operations.length === 0) {
     sentences.push(
-      `${name}: ${page.matchedOperations} operations match${filter ? ` ${filter}` : ""}, all before this cursor. Next: ${call(filter ? filterArgs(input) : "")} for the first page.`,
+      `${name}: ${page.matchedOperations} operations match${filter ? ` ${filter}` : ""}, all before this cursor. The first page has them.`,
     );
-  else if (
+    next.push(call(filter ? filterArgs(input) : ""));
+  } else if (
     !filter &&
     page.totalOperations > DEFAULT_PAGE_LIMIT &&
     first === 1
@@ -161,7 +183,6 @@ function pageText(input: GetSpecOutlineInput, page: OutlinePage): string {
     const largest = [...page.tags].sort(
       (a, b) => b.operationCount - a.operationCount,
     )[0];
-    const byQuery = `${call(', query: "…"')} for a word in the path, operationId or summary`;
     sentences.push(
       largest
         ? page.tagsCut
@@ -169,9 +190,11 @@ function pageText(input: GetSpecOutlineInput, page: OutlinePage): string {
           : `${name} has ${page.totalOperations} operations in ${page.tags.length} tags, listed in tags with their counts. These are operations ${first}–${last} only.`
         : `${name} has ${page.totalOperations} operations and no tags. These are operations ${first}–${last} only.`,
       largest
-        ? `Filter rather than page through them: ${call(`, tag: ${JSON.stringify(largest.name)}`)} for one tag, or ${byQuery}.`
-        : `Filter rather than page through them: ${byQuery}.`,
+        ? "Filter rather than page through them: by one tag, or by a word in the path, operationId or summary."
+        : "Filter rather than page through them: by a word in the path, operationId or summary.",
     );
+    if (largest) next.push(call(`, tag: ${JSON.stringify(largest.name)}`));
+    next.push(byQuery);
   } else
     sentences.push(
       `${name}: operations ${first}–${last} of ${page.matchedOperations}${filter ? ` matching ${filter}` : ""}${
@@ -182,15 +205,14 @@ function pageText(input: GetSpecOutlineInput, page: OutlinePage): string {
     );
 
   const op = page.operations[0];
-  if (op)
-    sentences.push(
-      `Next: get_operation(apiId: "${page.apiId}", method: "${op.method}", path: "${op.path}"${input.specId ? `, specId: "${input.specId}"` : ""}) for one of these operations${
-        page.nextCursor
-          ? `, or ${call(`${filterArgs(input)}, cursor: "${page.nextCursor}"`)} for the next page`
-          : ""
-      }.`,
+  if (op) {
+    next.push(
+      `get_operation(apiId: "${page.apiId}", method: "${op.method}", path: "${op.path}"${input.specId ? `, specId: "${input.specId}"` : ""})`,
     );
-  return sentences.join(" ");
+    if (page.nextCursor)
+      next.push(call(`${filterArgs(input)}, cursor: "${page.nextCursor}"`));
+  }
+  return { summary: sentences.join(" "), next };
 }
 
 function filterText({ tag, query }: GetSpecOutlineInput): string {

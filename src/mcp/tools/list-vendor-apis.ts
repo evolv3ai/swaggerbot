@@ -6,6 +6,7 @@ import {
   VendorApis,
   type VendorApisAnswer,
 } from "~/server/vendor-apis";
+import { type Guidance, toolResult, withGuidance } from "../result";
 import type { McpTool } from "../server";
 import { downloadsText } from "./lookup-api";
 
@@ -13,7 +14,7 @@ const DESCRIPTION = `List the APIs a Vendor (the company behind them, e.g. "Stri
 
 \`vendor\` may be the Vendor's id or domain ("stripe.com"), its name ("Stripe"), or the name of one of its APIs ("Jira"). Only APIs already in the Index are listed: to find an API that isn't, call lookup_api with its name. No API key needed.
 
-The Spec itself is never returned inline: each API gives its download URLs. The result's text lists the APIs and the call to make next.
+The Spec itself is never returned inline: each API gives its download URLs. The result starts with summary (the APIs, one line each) and next (the calls to make next).
 
 Next: get_spec_outline(apiId) for the API you need, to find its operations.`;
 
@@ -29,6 +30,9 @@ export const ListVendorApisInput = z.object({
     ),
 });
 
+/** `list_vendor_apis`'s answer: the Vendor and its APIs, after `summary` and `next`. */
+export const ListVendorApisOutput = withGuidance(VendorApis);
+
 /**
  * `list_vendor_apis`: the Vendor's APIs under the same rules as
  * `GET /api/vendors/{vendor}/apis` (`answerVendorApis`), from the Index
@@ -41,7 +45,7 @@ export const registerListVendorApis: McpTool = (server, { getApp }) => {
       title: "List a Vendor's APIs",
       description: DESCRIPTION,
       inputSchema: ListVendorApisInput,
-      outputSchema: VendorApis,
+      outputSchema: ListVendorApisOutput,
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
     async ({ vendor }) => vendorApisResult(answerVendorApis(vendor, getApp())),
@@ -52,10 +56,10 @@ export const registerListVendorApis: McpTool = (server, { getApp }) => {
 export function vendorApisResult(answer: VendorApisAnswer): CallToolResult {
   switch (answer.status) {
     case 200:
-      return {
-        content: [{ type: "text", text: vendorApisText(answer.body) }],
-        structuredContent: answer.body,
-      };
+      return toolResult({
+        ...vendorApisGuidance(answer.body),
+        data: answer.body,
+      });
     case 300: {
       const vendors = answer.body.vendors
         .map(({ id, name }) => (id === name ? `"${id}"` : `"${id}" (${name})`))
@@ -71,17 +75,16 @@ export function vendorApisResult(answer: VendorApisAnswer): CallToolResult {
   }
 }
 
-/** One line for the Vendor, one per API, then the call to make next. */
-export function vendorApisText({ vendor, apis }: VendorApis): string {
+/** One line for the Vendor and one per API, and the call to make next. */
+export function vendorApisGuidance({ vendor, apis }: VendorApis): Guidance {
   const head = `${vendor.name}${vendor.name === vendor.id ? "" : ` (${vendor.id})`} has ${apis.length} API${apis.length === 1 ? "" : "s"} in the Index${apis.length > 0 ? ":" : "."}`;
   const next = apis.find((a) => a.currentSpec) ?? apis[0];
-  return [
-    head,
-    ...apis.map(apiLine),
-    next
-      ? `Next: get_spec_outline(apiId: "${next.api.id}") to find the operation you need, or the same with another apiId above.`
-      : `Next: lookup_api(name) with the name of the API you want, which adds it to the Index.`,
-  ].join("\n");
+  return {
+    summary: [head, ...apis.map(apiLine)].join("\n"),
+    next: next
+      ? [`get_spec_outline(apiId: "${next.api.id}")`]
+      : ["lookup_api(name)"],
+  };
 }
 
 function apiLine({ api, currentSpec: spec, provenance }: VendorApi): string {

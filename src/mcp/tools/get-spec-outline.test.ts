@@ -3,7 +3,12 @@ import { describe, expect, it } from "vitest";
 import type { SpecOutline } from "~/domain/spec-forms";
 import { generatedOutline } from "~/spec-forms/__fixtures__/outline";
 import type { OutlineAnswer } from "~/spec-forms/http";
-import { MAX_RESULT_BYTES, outlineResult } from "./get-spec-outline";
+import { expectGuided } from "../__fixtures__/guided";
+import {
+  GetSpecOutlineOutput,
+  MAX_RESULT_BYTES,
+  outlineResult,
+} from "./get-spec-outline";
 
 const apiId = "example.com/generated-api";
 const specId = "b".repeat(64);
@@ -47,7 +52,7 @@ describe("outlineResult", () => {
     (_, args) => {
       const result = outlineResult({ apiId, ...args }, ready(big));
 
-      expect(result.isError).toBeUndefined();
+      expectGuided(result, GetSpecOutlineOutput);
       expect(sizeOf(result)).toBeLessThan(MAX_RESULT_BYTES);
     },
   );
@@ -67,14 +72,18 @@ describe("outlineResult", () => {
     expect(page.operations.length).toBeGreaterThan(0);
     expect(page.operations.length).toBeLessThanOrEqual(100);
     expect(page.totalOperations).toBe(4000);
-    expect(textOf(result)).toContain("Filter rather than page through them");
-    expect(textOf(result)).toContain(
-      `get_spec_outline(apiId: "${apiId}", tag: "`,
-    );
-    expect(textOf(result)).toContain(
-      `get_operation(apiId: "${apiId}", method: "get"`,
-    );
-    expect(textOf(result)).toContain(`cursor: "${page.nextCursor}"`);
+    const { summary, next } = expectGuided(result, GetSpecOutlineOutput);
+    expect(summary).toContain("Filter rather than page through them");
+    expect(next).toEqual([
+      expect.stringMatching(
+        new RegExp(`^get_spec_outline\\(apiId: "${apiId}", tag: "[^"]+"\\)$`),
+      ),
+      `get_spec_outline(apiId: "${apiId}", query: "…")`,
+      expect.stringMatching(
+        new RegExp(`^get_operation\\(apiId: "${apiId}", method: "get"`),
+      ),
+      `get_spec_outline(apiId: "${apiId}", cursor: "${page.nextCursor}")`,
+    ]);
   });
 
   it("says a cut tag list holds only the largest tags", () => {
@@ -96,7 +105,7 @@ describe("outlineResult", () => {
 
     expect(text).toContain("4000 operations match, all before this cursor.");
     expect(text).toContain(
-      `Next: get_spec_outline(apiId: "${apiId}") for the first page.`,
+      `The first page has them. Next: get_spec_outline(apiId: "${apiId}").`,
     );
     expect(text).not.toContain("Filter rather than page");
   });
@@ -138,9 +147,12 @@ describe("outlineResult", () => {
       ready(generatedOutline(200, 4)),
     );
 
-    expect(textOf(result)).toBe(
-      `Generated API (apiId "${apiId}"): operations 1–1 of 1 matching query "resources-12/" (of 200 in all). Next: get_operation(apiId: "${apiId}", method: "get", path: "/accounts/{account_id}/resources-12/{resource_id}/settings") for one of these operations.`,
-    );
+    expect(expectGuided(result, GetSpecOutlineOutput)).toEqual({
+      summary: `Generated API (apiId "${apiId}"): operations 1–1 of 1 matching query "resources-12/" (of 200 in all).`,
+      next: [
+        `get_operation(apiId: "${apiId}", method: "get", path: "/accounts/{account_id}/resources-12/{resource_id}/settings")`,
+      ],
+    });
     expect(result.structuredContent).toMatchObject({
       nextCursor: null,
       matchedOperations: 1,
@@ -166,11 +178,15 @@ describe("outlineResult", () => {
       ready(big),
     );
 
-    expect(result.isError).toBeUndefined();
-    expect(textOf(result)).toMatch(
+    const { summary, next } = expectGuided(result, GetSpecOutlineOutput);
+    expect(summary).toMatch(
       /^Generated API \(apiId ".*"\): no operation matches query "nothing-like-this"/,
     );
-    expect(textOf(result)).toContain('"zone-settings-and-resources-0"');
+    expect(summary).toContain('"zone-settings-and-resources-0"');
+    expect(next).toEqual([
+      `get_spec_outline(apiId: "${apiId}", query: "…")`,
+      `get_spec_outline(apiId: "${apiId}", tag: "…")`,
+    ]);
   });
 
   it("is an error for a bad cursor", () => {
@@ -189,8 +205,36 @@ describe("outlineResult", () => {
       },
     );
 
-    expect(result.isError).toBe(true);
-    expect(textOf(result)).toContain("retry in 10 s");
+    expect(result).toEqual({
+      isError: true,
+      content: [
+        {
+          type: "text",
+          text: "The Normalized Form of this Spec is still being built, so its outline isn't ready: retry in 10 s.",
+        },
+      ],
+    });
+  });
+
+  it("is an error saying to download the Spec when its Normalized Form failed", () => {
+    const result = outlineResult(
+      { apiId },
+      {
+        status: 422,
+        body: { status: "failed", error: "Unresolvable $ref #/x" },
+        headers: {},
+      },
+    );
+
+    expect(result).toEqual({
+      isError: true,
+      content: [
+        {
+          type: "text",
+          text: "The Normalized Form of this Spec could not be built (Unresolvable $ref #/x), so it has no outline. Download the Spec from lookup_api's result instead.",
+        },
+      ],
+    });
   });
 
   it("is an error naming lookup_api for an API not in the Index", () => {
@@ -219,7 +263,9 @@ describe("outlineResult without tags", () => {
     const text = textOf(outlineResult({ apiId }, ready(untagged)));
 
     expect(text).toContain("has 150 operations and no tags.");
-    expect(text).toContain('query: "…"');
+    expect(text).toContain(
+      `Next: get_spec_outline(apiId: "${apiId}", query: "…"); or get_operation(`,
+    );
     expect(text).not.toContain("tag:");
   });
 });

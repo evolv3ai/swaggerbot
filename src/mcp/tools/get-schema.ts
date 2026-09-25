@@ -2,13 +2,14 @@ import type { CallToolResult } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { schemaNameOf } from "~/spec-forms/operation";
 import { nearestSchemaNames, schemaAnswer } from "~/spec-forms/operation-http";
+import { toolResult, withGuidance } from "../result";
 import type { McpTool } from "../server";
 import {
   ApiIdInput,
   JsonObject,
   MCP_EXPANDED_MAX_BYTES,
   openForTool,
-  referencesText,
+  referencesGuidance,
   SpecIdInput,
   toolError,
 } from "./expanded";
@@ -28,14 +29,16 @@ const GetSchemaInput = z.object({
   specId: SpecIdInput,
 });
 
-const GetSchemaOutput = z.object({
-  apiId: z.string(),
-  specId: z.string(),
-  name: z.string(),
-  schema: z.unknown(),
-  circular: JsonObject,
-  truncated: z.boolean(),
-});
+export const GetSchemaOutput = withGuidance(
+  z.object({
+    apiId: z.string(),
+    specId: z.string(),
+    name: z.string(),
+    schema: z.unknown(),
+    circular: JsonObject,
+    truncated: z.boolean(),
+  }),
+);
 
 /**
  * `get_schema`: the answer of `GET /api/apis/{apiId}/schema`, expanded to
@@ -62,24 +65,36 @@ export const registerGetSchema: McpTool = (server, deps) => {
         name,
         MCP_EXPANDED_MAX_BYTES,
       );
-      if (!answer) {
-        const nearest = nearestSchemaNames(opened.doc, name);
-        const next = nearest[0]
-          ? ` The nearest: ${nearest.map((n) => `"${n}"`).join(", ")}. Next: get_schema(apiId: "${apiId}", name: "${nearest[0]}"${specId ? `, specId: "${specId}"` : ""}).`
-          : "";
+      if (!answer)
         return toolError(
-          `This Spec has no schema "${schemaNameOf(name)}" in components.schemas.${next}`,
+          missingSchemaText(
+            apiId,
+            specId,
+            name,
+            nearestSchemaNames(opened.doc, name),
+          ),
         );
-      }
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Schema "${answer.name}" of ${apiId}. ${referencesText(answer, apiId, specId)}`,
-          },
-        ],
-        structuredContent: answer,
-      };
+      const references = referencesGuidance(answer, apiId, specId);
+      return toolResult({
+        summary: `Schema "${answer.name}" of ${apiId}. ${references.summary}`,
+        next: references.next,
+        data: answer,
+      });
     },
   );
 };
+
+/** Why the schema isn't there, and the call to make instead. */
+export function missingSchemaText(
+  apiId: string,
+  specId: string | undefined,
+  name: string,
+  nearest: readonly string[],
+): string {
+  const asked = `This Spec has no schema "${schemaNameOf(name)}" in components.schemas.`;
+  const spec = specId ? `, specId: "${specId}"` : "";
+  const [first] = nearest;
+  if (first === undefined)
+    return `${asked} No name in it is near. Next: get_spec_outline(apiId: "${apiId}"${spec}) to find an operation, then get_operation for it, which inlines the schemas it uses.`;
+  return `${asked} The nearest: ${nearest.map((n) => `"${n}"`).join(", ")}. Next: get_schema(apiId: "${apiId}", name: "${first}"${spec}).`;
+}
