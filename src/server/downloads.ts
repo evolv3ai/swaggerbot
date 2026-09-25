@@ -44,9 +44,12 @@ export function normalizedResponse(specId: string, getDb: () => Db): Response {
  * Lets any origin read the answer. The downloads are public already; the one
  * that needs this is the Spec viewer's frame (`/embed/specs/…`), which is
  * sandboxed to an opaque origin, so its `fetch` of the Spec is cross-origin.
+ * `nosniff` because the bytes are a vendor's, not ours: a browser must never
+ * run a YAML or JSON Spec as a script, even from a page of our own origin.
  */
 function anyOrigin(response: Response): Response {
   response.headers.set("access-control-allow-origin", "*");
+  response.headers.set("x-content-type-options", "nosniff");
   return response;
 }
 

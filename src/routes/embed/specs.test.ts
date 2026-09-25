@@ -55,7 +55,7 @@ async function get(id: string, query = ""): Promise<Response> {
 }
 
 const CSP_NONE =
-  "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; frame-ancestors 'self'; base-uri 'none'; form-action 'none'";
+  "sandbox allow-scripts; default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; frame-ancestors 'self'; base-uri 'none'; form-action 'none'";
 
 describe("GET /embed/specs/{specId}", () => {
   afterEach(() => {
@@ -70,7 +70,7 @@ describe("GET /embed/specs/{specId}", () => {
       "text/html; charset=utf-8",
     );
     expect(response.headers.get("content-security-policy")).toBe(
-      `default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src http://localhost:3000/api/specs/${specId}/published; frame-ancestors 'self'; base-uri 'none'; form-action 'none'`,
+      `sandbox allow-scripts; default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src http://localhost:3000/api/specs/${specId}/published; frame-ancestors 'self'; base-uri 'none'; form-action 'none'`,
     );
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
     expect(response.headers.get("referrer-policy")).toBe("no-referrer");

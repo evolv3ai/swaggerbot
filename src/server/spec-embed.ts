@@ -47,10 +47,13 @@ export function tooLargeToView(bytes: number): boolean {
  * The frame's Content Security Policy. `connect-src` is the one download
  * URL, absolute, so the frame can fetch that Spec and nothing else.
  * `script-src 'self'` has no nonce and no `'unsafe-inline'`: the page has
- * no inline script, and Scalar's bundle is a file of ours.
+ * no inline script, and Scalar's bundle is a file of ours. `sandbox
+ * allow-scripts` repeats the frame's sandbox on the response itself, so the
+ * page has an opaque origin even when it is opened directly.
  */
 export function embedCsp(connectUrl: string | null): string {
   return [
+    "sandbox allow-scripts",
     "default-src 'none'",
     "script-src 'self'",
     "style-src 'self' 'unsafe-inline'",
