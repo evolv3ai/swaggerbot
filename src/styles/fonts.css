@@ -1,6 +1,7 @@
 /* The Web UI's faces, self-hosted (the CSP allows font-src 'self' only).
-   Latin subsets. Licences: public/fonts/OFL-*.txt (SIL Open Font License 1.1).
-   - Caveat Brush: the grease-pencil display, for a few human words.
+   Latin subsets. Licences: public/fonts/OFL-*.txt (SIL Open Font License 1.1)
+   and LICENSE-PermanentMarker.txt (Apache 2.0).
+   - Permanent Marker: the grease-pencil display, in caps, for a few words.
    - Barlow Condensed: instrument caps (labels, nav, buttons).
    - Barlow: body text.
    - DSEG7 Classic: seven-segment numerals for counts, times and sizes.
@@ -67,11 +68,11 @@
 }
 
 @font-face {
-  font-family: "Caveat Brush";
+  font-family: "Permanent Marker";
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src: url(/fonts/caveat-brush-400-latin.woff2) format("woff2");
+  src: url(/fonts/permanent-marker-400-latin.woff2) format("woff2");
   unicode-range:
     U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }

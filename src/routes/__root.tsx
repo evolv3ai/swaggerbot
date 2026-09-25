@@ -38,7 +38,7 @@ export const Route = createRootRoute({
       { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
       {
         rel: "preload",
-        href: "/fonts/caveat-brush-400-latin.woff2",
+        href: "/fonts/permanent-marker-400-latin.woff2",
         as: "font",
         type: "font/woff2",
         crossOrigin: "anonymous",

@@ -17,6 +17,15 @@ related_targets: ["src/routes/__root.tsx"]
 
 **Unresolved:** the exact faces (grease-pencil display, condensed instrument caps, numerals) are chosen at build; the Search headline is **"NO FAKE SPECS."** (Wes, 2026-09-25), with a subline that says what it does.
 
+## Adaptations (after the finish review, 2026-09-25)
+
+- **The chain, honestly.** The Index doesn't record which Source station found a Spec, and the UI holds no key, so every answer it shows comes from station 01. The replay and a submitted Lookup light 01 ("Answered here"), and stations 02–06 say "Not needed"; nothing pretends a path it didn't take.
+- **Station 06 is "Judged", not "Verified":** in CONTEXT.md, Verification is the re-check of an Index entry; the last step of Discovery is a Jev judgment (ADR 0001).
+- **The print's image** is a density field (recency: newest densest, Stale washed) carrying the measured answer time, not a second copy of the API's name.
+- **The test strip** is the certainty scale beside the search: one density per Outcome, Resolved densest.
+- **The grease pencil** is Permanent Marker (Apache 2.0), in caps. No self-hostable open face carries real wax grain; faking it with an SVG filter is refused, so the lettering has the marker's rough edge but no grain.
+- **Roll record:** seed `d05b4106`, direction scope, persuade mode. Round 1 assigned index 3 (the card catalogue), re-rolled by Wes. Round 2 (`--reroll 1`) assigned index 5 (the registry page), re-rolled bolder by Wes. Round 3 (`--reroll 2 --register bolder`) dealt challengers only, led by `signals-instruments-darkroom-safelight-bay`, which Wes chose.
+
 ## Direction contract
 
 THESIS: A Spec is developed, not fetched. The page is a working darkroom where a typed name becomes a fixed print with its Provenance on the back. It refuses the category default: a centred search box beside a code sample over a route table.

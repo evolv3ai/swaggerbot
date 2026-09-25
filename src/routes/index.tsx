@@ -1,8 +1,9 @@
 import { createFileRoute, useLoaderData } from "@tanstack/react-router";
 import { useEffect, useId, useRef, useState } from "react";
+import { CertaintyStrip } from "~/components/darkroom/certainty-strip";
 import { Print } from "~/components/darkroom/print";
 import { dayOf } from "~/components/darkroom/stamp";
-import { Stations } from "~/components/darkroom/stations";
+import { type ChainState, Stations } from "~/components/darkroom/stations";
 import type { IndexStats } from "~/server/index-stats";
 
 export const Route = createFileRoute("/")({
@@ -25,16 +26,23 @@ const BENCHMARK = {
 const MCP_ADD =
   "claude mcp add --transport http swaggerbot https://swaggerbot.dev/mcp";
 
+/** How long a replayed answer sits at the Index station before it's answered. */
+const CHECKING_MS = 900;
+
 function Search() {
   const facts = useLoaderData({ from: "__root__" });
   const [typing, setTyping] = useState(false);
+  // The print on show was answered by the Index, so the chain starts there.
+  const [chain, setChain] = useState<ChainState>(
+    facts?.recent.length ? "answered" : "idle",
+  );
   return (
-    <div className="grid gap-10 px-4 py-8 sm:px-8 lg:gap-14 lg:py-12">
+    <div className="grid gap-10 px-4 pt-8 sm:px-8 lg:gap-14 lg:pt-12">
       <div className="grid items-start gap-10 xl:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)]">
         <section aria-labelledby="headline" className="grid gap-6">
           <h1
             id="headline"
-            className="font-pencil text-[clamp(3.5rem,9vw,6rem)] leading-[0.92]"
+            className="font-pencil text-[clamp(3.25rem,8.5vw,6rem)] uppercase leading-[0.95]"
           >
             No fake Specs.
           </h1>
@@ -42,10 +50,13 @@ function Search() {
             Name an API. SwaggerBot hands you its OpenAPI Spec, where it came
             from and how sure it is, or tells you straight why there isn't one.
           </p>
-          <SearchForm onType={() => setTyping(true)} />
+          <SearchForm
+            onType={() => setTyping(true)}
+            onSubmit={() => setChain("checking")}
+          />
         </section>
         {facts && facts.recent.length > 0 ? (
-          <Replay recent={facts.recent} stopped={typing} />
+          <Replay recent={facts.recent} stopped={typing} onChain={setChain} />
         ) : null}
       </div>
 
@@ -61,7 +72,7 @@ function Search() {
             From the Index, anyone. Past it, Discovery, with an API key.
           </p>
         </div>
-        <Stations active={0} />
+        <Stations state={chain} />
       </section>
 
       <StatusBar facts={facts} />
@@ -69,15 +80,22 @@ function Search() {
   );
 }
 
-function SearchForm({ onType }: { onType: () => void }) {
+function SearchForm({
+  onType,
+  onSubmit,
+}: {
+  onType: () => void;
+  onSubmit: () => void;
+}) {
   const id = useId();
   return (
-    <search>
+    <search className="grid max-w-[40rem] gap-5">
       <form
         action="/lookup"
         method="get"
-        className="grid max-w-[40rem] gap-3"
+        className="grid gap-3"
         onInput={onType}
+        onSubmit={onSubmit}
       >
         <label
           htmlFor={`${id}-name`}
@@ -97,7 +115,7 @@ function SearchForm({ onType }: { onType: () => void }) {
           />
           <button
             type="submit"
-            className="min-h-12 rounded-[3px] border-2 border-ink bg-lamp px-7 font-caps text-lg font-bold uppercase tracking-[0.14em] text-[#0e0e0e] shadow-[0_3px_0_0_var(--rule)] transition-[transform,box-shadow] hover:-translate-y-px active:translate-y-0.5 active:shadow-none"
+            className="min-h-12 rounded-none border-2 border-b-[5px] border-[#0e0e0e] bg-lamp px-7 font-caps text-lg font-bold uppercase tracking-[0.14em] text-[#0e0e0e] transition-[border-width,transform] duration-100 hover:brightness-105 active:translate-y-[3px] active:border-b-2"
           >
             Develop
           </button>
@@ -135,23 +153,30 @@ function SearchForm({ onType }: { onType: () => void }) {
           </div>
         </details>
       </form>
+      <CertaintyStrip />
     </search>
   );
 }
 
 /**
- * Attract mode: the APIs the Index verified most recently, each coming up as
- * a print in turn. Real answers from the Index, read when the page was
- * served. Stops for good once the visitor types, pauses on hover and focus,
+ * Attract mode: a replay of the Index's real answers for the APIs it verified
+ * most recently (the newest is in the rail), read when the page was served.
+ * Each print comes up in turn while the chain above lights its Index
+ * station. Stops for good once the visitor types, pauses on hover and focus,
  * has its own pause control, and stays still under reduced motion.
  */
 function Replay({
   recent,
   stopped,
+  onChain,
 }: {
   recent: IndexStats["recent"];
   stopped: boolean;
+  onChain: (state: ChainState) => void;
 }) {
+  // The newest print is in the rail; the replay runs through the rest.
+  const offset = recent.length > 1 ? 1 : 0;
+  const prints = recent.slice(offset);
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const [held, setHeld] = useState(false);
@@ -168,17 +193,24 @@ function Replay({
     return () => query.removeEventListener("change", update);
   }, []);
 
-  const running = !stopped && !paused && !held && !still && recent.length > 1;
+  const running = !stopped && !paused && !held && !still && prints.length > 1;
   useEffect(() => {
     if (!running) return;
+    let answered: number | undefined;
     const timer = window.setInterval(() => {
       setChanged(true);
-      setIndex((i) => (i + 1) % recent.length);
+      setIndex((i) => (i + 1) % prints.length);
+      onChain("checking");
+      answered = window.setTimeout(() => onChain("answered"), CHECKING_MS);
     }, 6000);
-    return () => window.clearInterval(timer);
-  }, [running, recent.length]);
+    return () => {
+      window.clearInterval(timer);
+      window.clearTimeout(answered);
+      onChain("answered");
+    };
+  }, [running, prints.length, onChain]);
 
-  const print = recent[index] ?? recent[0];
+  const print = prints[index] ?? prints[0];
   if (!print) return null;
   return (
     <section
@@ -192,30 +224,31 @@ function Replay({
         if (!region.current?.contains(e.relatedTarget as Node)) setHeld(false);
       }}
     >
-      <div className="flex items-baseline justify-between gap-4">
+      <div className="flex items-center justify-between gap-4">
         <h2
           id="replay"
           className="font-caps text-sm font-semibold uppercase tracking-[0.14em] text-ink-2"
         >
-          Recently verified, from the Index
+          Replay: real answers from the Index
         </h2>
-        {recent.length > 1 && !still && !stopped ? (
+        {prints.length > 1 && !still && !stopped ? (
           <button
             type="button"
             onClick={() => setPaused((p) => !p)}
-            className="rounded-[3px] border border-rule px-2.5 py-1 font-caps text-xs font-semibold uppercase tracking-[0.12em] hover:border-ink"
+            className="rounded-[3px] border border-ink bg-ink px-3 py-1 font-caps text-xs font-semibold uppercase tracking-[0.12em] text-bay hover:brightness-110"
           >
             {paused ? "Play" : "Pause"}
           </button>
         ) : null}
       </div>
-      <Print print={print} developing={changed && !still} />
+      <Print
+        print={print}
+        rank={index + offset}
+        developing={changed && !still}
+      />
       <p className="text-sm text-ink-2">
-        Answered from the Index in{" "}
-        <span className="font-mono">{print.ms.toFixed(1)} ms</span>, as{" "}
-        {recent.length > 1
-          ? `${index + 1} of the ${recent.length} most recently verified.`
-          : "the most recently verified."}
+        {index + offset + 1} of the {recent.length} APIs the Index verified most
+        recently, as a default Lookup answers them.
       </p>
     </section>
   );
@@ -234,11 +267,11 @@ function StatusBar({ facts }: { facts: IndexStats | null }) {
   };
   return (
     <section
-      aria-label="The Index and the Benchmark"
-      className="grid gap-6 rounded-[3px] border border-rule bg-bay-deep p-5 sm:p-6 xl:grid-cols-[auto_minmax(0,1fr)_minmax(0,1.2fr)] xl:items-center xl:gap-10"
+      aria-label="The Index, the Benchmark and Claude Code"
+      className="-mx-4 grid gap-6 border-t border-rule bg-bay-deep px-4 py-6 sm:-mx-8 sm:px-8 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] xl:items-center xl:gap-12"
     >
       {facts ? (
-        <dl className="flex flex-wrap gap-x-8 gap-y-3">
+        <dl className="flex flex-wrap gap-x-8 gap-y-3 lg:hidden">
           {(
             [
               ["Vendors", facts.vendors],

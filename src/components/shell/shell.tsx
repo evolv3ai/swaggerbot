@@ -1,4 +1,4 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { ProvenanceMark } from "~/components/darkroom/provenance-mark";
 import { VerifiedStamp } from "~/components/darkroom/stamp";
@@ -21,11 +21,7 @@ export function Shell({
   facts: IndexStats | null;
   children: ReactNode;
 }) {
-  // Search shows the recent prints itself, so the rail doesn't repeat them.
-  const onSearch = useRouterState({
-    select: (state) => state.location.pathname === "/",
-  });
-  const last = onSearch ? undefined : facts?.recent[0];
+  const last = facts?.recent[0];
   return (
     <div className="min-h-dvh lg:grid lg:grid-cols-[16rem_minmax(0,1fr)]">
       <a
@@ -84,6 +80,38 @@ export function Shell({
                 on="bay"
               />
             </p>
+          </section>
+        ) : null}
+        {facts ? (
+          <section
+            aria-labelledby="index-counts"
+            className="hidden border-t border-rule pt-5 lg:grid lg:gap-3"
+          >
+            <h2
+              id="index-counts"
+              className="font-caps text-sm font-semibold uppercase tracking-[0.14em] text-ink-2"
+            >
+              In the Index
+            </h2>
+            <dl className="grid gap-3">
+              {(
+                [
+                  ["Vendors", facts.vendors],
+                  ["APIs", facts.apis],
+                  ["Specs", facts.specs],
+                ] as const
+              ).map(([label, n]) => (
+                <div
+                  key={label}
+                  className="flex items-baseline justify-between gap-3"
+                >
+                  <dt className="font-caps text-sm font-semibold uppercase tracking-[0.14em]">
+                    {label}
+                  </dt>
+                  <dd className="font-segment text-2xl leading-none">{n}</dd>
+                </div>
+              ))}
+            </dl>
           </section>
         ) : null}
         <HealthLamp className="lg:mt-auto" />
