@@ -110,7 +110,7 @@ Index browsing (Vendors → APIs) needs the list of Vendors, and only `GET /api/
 Search (`/`, built in backlog O1) submits a name to `/lookup`, which doesn't exist. The PRD's Lookup result has a distinct view for each Outcome. Design: `DESIGN.md` and `PRODUCT.md`; build it as an extension of the shell and Search, in their components and tokens (Impeccable: `.claude/skills/impeccable/`, an extension inside an established world).
 
 ## Change
-- **`/lookup?name=…[&apiVersion=…][&allowCommunity=1]`**: a server function runs the Lookup core **with no key** (backlog D5), so only Index answers resolve. One view per Outcome, each with a heading that names the Outcome:
+- **`/lookup?name=…[&apiVersion=…][&allowCommunity=1]`**: a server function runs the Lookup core **with no key** (backlog D5), so only Index answers resolve. The Search form sends `apiVersion` even when it's blank: a blank `apiVersion` means none. Reuse the darkroom components O1 built (`src/components/darkroom/`: the print, Provenance mark, verified stamp, certainty strip, stations) rather than new ones; the Outcome's density on the certainty strip is its visual weight. One view per Outcome, each with a heading that names the Outcome:
   - **Resolved:** the API, its Vendor, the Current Spec's Provenance and `verifiedAt`, the two download links, Alternate Specs, and a link to the Spec viewer (`/specs/{specId}`).
   - **Ambiguous:** the candidate APIs, each a link that retries the Lookup with that name.
   - **Unconfirmed**, **NoSpec** and **Unknown** (`src/domain/outcome.ts`): what was found, or why nothing was, in the Outcome's own words and fields.
