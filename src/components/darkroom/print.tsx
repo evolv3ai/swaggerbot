@@ -9,7 +9,8 @@ const DENSITY = [
   { field: "bg-strip-4", text: "text-print" },
   { field: "bg-strip-3", text: "text-[#0e0e0e]" },
 ] as const;
-const WASHED = { field: "bg-strip-2", text: "text-[#0e0e0e]" } as const;
+/** A Stale print: warm, washed silver, a tone the certainty strip doesn't use. */
+const WASHED = { field: "bg-[#a39c8f]", text: "text-[#0e0e0e]" } as const;
 
 /**
  * One API's Current Spec as a print. The image is a density field (recency:

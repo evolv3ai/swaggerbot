@@ -2,14 +2,15 @@ import { cn } from "~/lib/utils";
 
 /**
  * The test strip as the scale of how sure an answer is: one density per
- * Outcome, densest for Resolved. The same ladder prints use.
+ * Outcome, densest for Resolved; Unknown is an empty cell.
  */
 const STEPS = [
   { outcome: "Resolved", swatch: "bg-strip-5" },
   { outcome: "Unconfirmed", swatch: "bg-strip-4" },
   { outcome: "Ambiguous", swatch: "bg-strip-3" },
   { outcome: "No Spec", swatch: "bg-strip-2" },
-  { outcome: "Unknown", swatch: "bg-strip-1" },
+  // Nothing developed: an empty cell, not enamel (reserved for prints).
+  { outcome: "Unknown", swatch: "bg-transparent" },
 ] as const;
 
 export function CertaintyStrip({ className }: { className?: string }) {
