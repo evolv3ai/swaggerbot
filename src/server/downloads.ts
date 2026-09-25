@@ -6,6 +6,11 @@ import { PENDING_RETRY_AFTER_SECONDS } from "~/spec-forms/http";
 /** A Spec id: the lowercase hex sha256 of its Published Form. */
 const SPEC_ID = /^[0-9a-f]{64}$/;
 
+/** Whether `specId` has a Spec id's shape (64 lowercase hex characters). */
+export function isSpecId(specId: string): boolean {
+  return SPEC_ID.test(specId);
+}
+
 const CONTENT_TYPES = {
   json: "application/json",
   yaml: "application/yaml",
@@ -14,9 +19,41 @@ const CONTENT_TYPES = {
 /**
  * `GET /api/specs/{specId}/published`: the Published Form, byte for byte.
  * A Spec id names its bytes, so the answer never changes: it is cached for
- * a year, and a matching `If-None-Match` gets 304.
+ * a year, and a matching `If-None-Match` gets 304. Readable from any origin
+ * (`anyOrigin`).
  */
 export function publishedResponse(
+  request: Request,
+  specId: string,
+  getDb: () => Db,
+): Response {
+  return anyOrigin(published(request, specId, getDb));
+}
+
+/**
+ * `GET /api/specs/{specId}/normalized`: the Normalized Form once it is
+ * built; 409 while it is pending, 422 when its build failed. Cached for a
+ * day only, as a later builder may rebuild it. Readable from any origin
+ * (`anyOrigin`).
+ */
+export function normalizedResponse(specId: string, getDb: () => Db): Response {
+  return anyOrigin(normalized(specId, getDb));
+}
+
+/**
+ * Lets any origin read the answer. The downloads are public already; the one
+ * that needs this is the Spec viewer's frame (`/embed/specs/…`), which is
+ * sandboxed to an opaque origin, so its `fetch` of the Spec is cross-origin.
+ * `nosniff` because the bytes are a vendor's, not ours: a browser must never
+ * run a YAML or JSON Spec as a script, even from a page of our own origin.
+ */
+function anyOrigin(response: Response): Response {
+  response.headers.set("access-control-allow-origin", "*");
+  response.headers.set("x-content-type-options", "nosniff");
+  return response;
+}
+
+function published(
   request: Request,
   specId: string,
   getDb: () => Db,
@@ -41,12 +78,7 @@ export function publishedResponse(
   });
 }
 
-/**
- * `GET /api/specs/{specId}/normalized`: the Normalized Form once it is
- * built; 409 while it is pending, 422 when its build failed. Cached for a
- * day only, as a later builder may rebuild it.
- */
-export function normalizedResponse(specId: string, getDb: () => Db): Response {
+function normalized(specId: string, getDb: () => Db): Response {
   const bad = checkSpecId(specId);
   if (bad) return bad;
   const db = getDb();
@@ -85,7 +117,7 @@ function body(bytes: Uint8Array): Uint8Array<ArrayBuffer> {
 }
 
 function checkSpecId(specId: string): Response | undefined {
-  if (SPEC_ID.test(specId)) return undefined;
+  if (isSpecId(specId)) return undefined;
   return Response.json(
     { error: "A Spec id is 64 lowercase hex characters." },
     { status: 400 },

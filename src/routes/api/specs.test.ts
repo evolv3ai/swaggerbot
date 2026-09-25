@@ -211,6 +211,13 @@ describe.each([
   it("answers 404 for an unknown id", async () => {
     expect((await get(route, "0".repeat(64))).status).toBe(404);
   });
+
+  it("lets any origin read it (the Spec viewer's sandboxed frame)", async () => {
+    for (const id of [jsonId, "0".repeat(64)])
+      expect(
+        (await get(route, id)).headers.get("access-control-allow-origin"),
+      ).toBe("*");
+  });
 });
 
 describe("the per-IP rate limit", () => {

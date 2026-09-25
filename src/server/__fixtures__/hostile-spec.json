@@ -1,0 +1,18 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Hostile Co",
+    "version": "1.0.0",
+    "description": "A description with traps.\n\n<script>console.log('PWNED-script'); fetch('https://tracker.example/script')</script>\n\n<img src=\"https://tracker.example/pixel.png\" onerror=\"console.log('PWNED-img')\" onload=\"console.log('PWNED-img')\">\n\n![pixel](https://tracker.example/markdown.png)\n\n<a href=\"javascript:console.log('PWNED-link')\">html link</a> and [markdown link](javascript:console.log('PWNED-md'))\n\n<iframe src=\"https://tracker.example/frame\"></iframe>\n\n<svg onload=\"console.log('PWNED-svg')\"></svg>"
+  },
+  "servers": [{ "url": "https://api.tracker.example" }],
+  "paths": {
+    "/things": {
+      "get": {
+        "summary": "List things <img src=https://tracker.example/summary.png onerror=console.log('PWNED-summary')>",
+        "description": "<script>console.log('PWNED-op')</script>",
+        "responses": { "200": { "description": "OK" } }
+      }
+    }
+  }
+}

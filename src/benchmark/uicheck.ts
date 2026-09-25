@@ -480,6 +480,15 @@ export async function walkKeyboard(
 
 const CSP_MESSAGE = /Content Security Policy/i;
 
+/**
+ * The Spec viewer's sandboxed frame (`/embed/…`). Its content is Scalar's
+ * rendering of an untrusted Spec, checked by the operator's audit (Slice 6
+ * O3), not here: axe skips it, and a CSP refusal inside it is its own
+ * policy at work, not a fault of the page.
+ */
+export const EMBED_FRAME = 'iframe[src^="/embed/"]';
+const EMBED_PATH = /^[a-z]+:\/\/[^/]+\/embed\//;
+
 /** Checks one route at one viewport in a fresh context of `browser`. */
 export async function checkRun(
   browser: Browser,
@@ -494,7 +503,11 @@ export async function checkRun(
   const page = await context.newPage();
   const cspViolations: string[] = [];
   page.on("console", (message) => {
-    if (CSP_MESSAGE.test(message.text())) cspViolations.push(message.text());
+    if (
+      CSP_MESSAGE.test(message.text()) &&
+      !EMBED_PATH.test(message.location().url)
+    )
+      cspViolations.push(message.text());
   });
   const screenshot = join(
     options.out,
@@ -505,7 +518,10 @@ export async function checkRun(
       waitUntil: "networkidle",
     });
     await page.evaluate(() => document.fonts.ready.then(() => undefined));
-    const axe = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze();
+    const axe = await new AxeBuilder({ page })
+      .withTags(AXE_TAGS)
+      .exclude(EMBED_FRAME)
+      .analyze();
     const violations: AxeViolation[] = axe.violations.map((v) => ({
       id: v.id,
       impact: v.impact ?? null,

@@ -15,10 +15,12 @@ import { Route as McpRouteImport } from './routes/mcp'
 import { Route as ApiSplatRouteImport } from './routes/api/$'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as ApiLookupRouteImport } from './routes/api/lookup'
+import { Route as SpecsSpecIdRouteImport } from './routes/specs/$specId'
 import { Route as VendorsIndexRouteImport } from './routes/vendors/index'
 import { Route as VendorsVendorIdRouteImport } from './routes/vendors/$vendorId'
 import { Route as ApiApisSplatRouteImport } from './routes/api/apis/$'
 import { Route as ApiVendorsIndexRouteImport } from './routes/api/vendors/index'
+import { Route as EmbedSpecsSpecIdRouteImport } from './routes/embed/specs/$specId'
 import { Route as ApiSpecsSpecIdNormalizedRouteImport } from './routes/api/specs/$specId/normalized'
 import { Route as ApiSpecsSpecIdPublishedRouteImport } from './routes/api/specs/$specId/published'
 import { Route as ApiVendorsVendorApisRouteImport } from './routes/api/vendors/$vendor/apis'
@@ -53,6 +55,11 @@ const ApiLookupRoute = ApiLookupRouteImport.update({
   path: '/api/lookup',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SpecsSpecIdRoute = SpecsSpecIdRouteImport.update({
+  id: '/specs/$specId',
+  path: '/specs/$specId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const VendorsIndexRoute = VendorsIndexRouteImport.update({
   id: '/vendors/',
   path: '/vendors/',
@@ -71,6 +78,11 @@ const ApiApisSplatRoute = ApiApisSplatRouteImport.update({
 const ApiVendorsIndexRoute = ApiVendorsIndexRouteImport.update({
   id: '/api/vendors/',
   path: '/api/vendors/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EmbedSpecsSpecIdRoute = EmbedSpecsSpecIdRouteImport.update({
+  id: '/embed/specs/$specId',
+  path: '/embed/specs/$specId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiSpecsSpecIdNormalizedRoute =
@@ -97,9 +109,11 @@ export interface FileRoutesByFullPath {
   '/api/$': typeof ApiSplatRoute
   '/api/health': typeof ApiHealthRoute
   '/api/lookup': typeof ApiLookupRoute
+  '/specs/$specId': typeof SpecsSpecIdRoute
   '/vendors/$vendorId': typeof VendorsVendorIdRoute
   '/vendors/': typeof VendorsIndexRoute
   '/api/apis/$': typeof ApiApisSplatRoute
+  '/embed/specs/$specId': typeof EmbedSpecsSpecIdRoute
   '/api/vendors/': typeof ApiVendorsIndexRoute
   '/api/specs/$specId/normalized': typeof ApiSpecsSpecIdNormalizedRoute
   '/api/specs/$specId/published': typeof ApiSpecsSpecIdPublishedRoute
@@ -112,9 +126,11 @@ export interface FileRoutesByTo {
   '/api/$': typeof ApiSplatRoute
   '/api/health': typeof ApiHealthRoute
   '/api/lookup': typeof ApiLookupRoute
+  '/specs/$specId': typeof SpecsSpecIdRoute
   '/vendors/$vendorId': typeof VendorsVendorIdRoute
   '/vendors': typeof VendorsIndexRoute
   '/api/apis/$': typeof ApiApisSplatRoute
+  '/embed/specs/$specId': typeof EmbedSpecsSpecIdRoute
   '/api/vendors': typeof ApiVendorsIndexRoute
   '/api/specs/$specId/normalized': typeof ApiSpecsSpecIdNormalizedRoute
   '/api/specs/$specId/published': typeof ApiSpecsSpecIdPublishedRoute
@@ -128,9 +144,11 @@ export interface FileRoutesById {
   '/api/$': typeof ApiSplatRoute
   '/api/health': typeof ApiHealthRoute
   '/api/lookup': typeof ApiLookupRoute
+  '/specs/$specId': typeof SpecsSpecIdRoute
   '/vendors/$vendorId': typeof VendorsVendorIdRoute
   '/vendors/': typeof VendorsIndexRoute
   '/api/apis/$': typeof ApiApisSplatRoute
+  '/embed/specs/$specId': typeof EmbedSpecsSpecIdRoute
   '/api/vendors/': typeof ApiVendorsIndexRoute
   '/api/specs/$specId/normalized': typeof ApiSpecsSpecIdNormalizedRoute
   '/api/specs/$specId/published': typeof ApiSpecsSpecIdPublishedRoute
@@ -145,9 +163,11 @@ export interface FileRouteTypes {
     | '/api/$'
     | '/api/health'
     | '/api/lookup'
+    | '/specs/$specId'
     | '/vendors/$vendorId'
     | '/vendors/'
     | '/api/apis/$'
+    | '/embed/specs/$specId'
     | '/api/vendors/'
     | '/api/specs/$specId/normalized'
     | '/api/specs/$specId/published'
@@ -160,9 +180,11 @@ export interface FileRouteTypes {
     | '/api/$'
     | '/api/health'
     | '/api/lookup'
+    | '/specs/$specId'
     | '/vendors/$vendorId'
     | '/vendors'
     | '/api/apis/$'
+    | '/embed/specs/$specId'
     | '/api/vendors'
     | '/api/specs/$specId/normalized'
     | '/api/specs/$specId/published'
@@ -175,9 +197,11 @@ export interface FileRouteTypes {
     | '/api/$'
     | '/api/health'
     | '/api/lookup'
+    | '/specs/$specId'
     | '/vendors/$vendorId'
     | '/vendors/'
     | '/api/apis/$'
+    | '/embed/specs/$specId'
     | '/api/vendors/'
     | '/api/specs/$specId/normalized'
     | '/api/specs/$specId/published'
@@ -191,9 +215,11 @@ export interface RootRouteChildren {
   ApiSplatRoute: typeof ApiSplatRoute
   ApiHealthRoute: typeof ApiHealthRoute
   ApiLookupRoute: typeof ApiLookupRoute
+  SpecsSpecIdRoute: typeof SpecsSpecIdRoute
   VendorsVendorIdRoute: typeof VendorsVendorIdRoute
   VendorsIndexRoute: typeof VendorsIndexRoute
   ApiApisSplatRoute: typeof ApiApisSplatRoute
+  EmbedSpecsSpecIdRoute: typeof EmbedSpecsSpecIdRoute
   ApiVendorsIndexRoute: typeof ApiVendorsIndexRoute
   ApiSpecsSpecIdNormalizedRoute: typeof ApiSpecsSpecIdNormalizedRoute
   ApiSpecsSpecIdPublishedRoute: typeof ApiSpecsSpecIdPublishedRoute
@@ -244,6 +270,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiLookupRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/specs/$specId': {
+      id: '/specs/$specId'
+      path: '/specs/$specId'
+      fullPath: '/specs/$specId'
+      preLoaderRoute: typeof SpecsSpecIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/vendors/': {
       id: '/vendors/'
       path: '/vendors'
@@ -270,6 +303,13 @@ declare module '@tanstack/react-router' {
       path: '/api/vendors'
       fullPath: '/api/vendors/'
       preLoaderRoute: typeof ApiVendorsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/embed/specs/$specId': {
+      id: '/embed/specs/$specId'
+      path: '/embed/specs/$specId'
+      fullPath: '/embed/specs/$specId'
+      preLoaderRoute: typeof EmbedSpecsSpecIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/specs/$specId/normalized': {
@@ -303,9 +343,11 @@ const rootRouteChildren: RootRouteChildren = {
   ApiSplatRoute: ApiSplatRoute,
   ApiHealthRoute: ApiHealthRoute,
   ApiLookupRoute: ApiLookupRoute,
+  SpecsSpecIdRoute: SpecsSpecIdRoute,
   VendorsVendorIdRoute: VendorsVendorIdRoute,
   VendorsIndexRoute: VendorsIndexRoute,
   ApiApisSplatRoute: ApiApisSplatRoute,
+  EmbedSpecsSpecIdRoute: EmbedSpecsSpecIdRoute,
   ApiVendorsIndexRoute: ApiVendorsIndexRoute,
   ApiSpecsSpecIdNormalizedRoute: ApiSpecsSpecIdNormalizedRoute,
   ApiSpecsSpecIdPublishedRoute: ApiSpecsSpecIdPublishedRoute,

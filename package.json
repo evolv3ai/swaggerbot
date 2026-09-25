@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/server": "2.1.0",
+    "@scalar/api-reference": "~1.72.1",
     "@scalar/json-magic": "^0.15.0",
     "@scalar/openapi-parser": "^0.29.5",
     "@tanstack/react-router": "^1.170.38",

@@ -380,6 +380,19 @@ export function createSpecForms(db: Db) {
       };
     },
 
+    /**
+     * The size in bytes of a `ready` Spec's Normalized Form, read without
+     * the bytes themselves; else `undefined`.
+     */
+    getNormalizedByteLength(specId: string): number | undefined {
+      const row = db
+        .select({ n: sql<number | null>`length(${specForms.normalizedBytes})` })
+        .from(specForms)
+        .where(and(eq(specForms.specId, specId), eq(specForms.status, "ready")))
+        .get();
+      return row?.n ?? undefined;
+    },
+
     /** The Normalized Form of a `ready` Spec, as minified JSON; else `undefined`. */
     getNormalizedBytes(specId: string): Uint8Array | undefined {
       const row = db
