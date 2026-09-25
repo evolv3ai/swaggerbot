@@ -24,8 +24,8 @@ Slice 5 is accepted (production `f6b9bf3`, `main` `2299aef`). The UI has these p
 ## Decisions
 
 - **D1. Impeccable: install it in the repo, pinned.** *Taken; done 2026-09-25:* skill 4.3.1 (engine 0.1.5) with its four agents, in `.claude/skills/impeccable/` and `.claude/agents/`, installed with `--no-hooks`. The engine binary is git-ignored; the launcher downloads it to `~/.impeccable/bin/` on first use. Update it with `npx impeccable update` as a deliberate commit. *As recommended:* the operator runs `npx impeccable install --providers=claude --scope=project` in swagger.bot, checks what it wrote, and commits the skill (pinned at the version installed) so every factory worktree has it. **Hooks off in the repo:** the detector runs where we choose (issue Done-when lists, `uicheck`, and O3), not on every edit a factory agent makes, so a PR's diff and timing stay predictable. The alternative is a global install on this machine only, with the factory building from `PRODUCT.md` and `DESIGN.md` alone; that's simpler but factory agents couldn't run `craft` against the design.
-- **D2. Who does what: Impeccable's interactive steps are operator work.** `init` interviews the product owner (who uses it, what it's for, constraints), and the visual direction (`DESIGN.md`, through `shape`) is a design decision. *Recommended:* O1 is a session with Wes that produces `PRODUCT.md`, `DESIGN.md` and a short shape brief for each of the five screens, committed under `docs/design/`. The factory issues then build screens against those files with `/impeccable craft`. `polish` and `audit` are operator passes (O3), whose fixes go out as small PRs.
-- **D3. Styling: Tailwind v4 + shadcn, as the PRD says.** *Recommended:* Tailwind 4 through its Vite plugin, and `shadcn` (the CLI, current 4.x) with components copied into `src/components/ui/`, so we own them and they carry Radix's keyboard and ARIA behaviour. Theme tokens (colour, type, radius, spacing) come from `DESIGN.md`, as CSS variables for light and dark. `site.css` stays for `/` until issue #3 replaces the page, and is then deleted. The alternative is plain CSS with Radix primitives; it's leaner, but it drops the PRD's shadcn and the factory's familiarity with it.
+- **D2. Who does what: Impeccable's interactive steps are operator work.** `init` interviews the product owner (who uses it, what it's for, constraints), and the visual direction (`DESIGN.md`, through `shape`) is a design decision. *Recommended:* O1 is a session with Wes that produces `PRODUCT.md`, `DESIGN.md` and a short shape brief for each of the five screens, committed under `docs/design/`. The factory issues then build screens against those files with `/impeccable craft`. `polish` and `audit` are operator passes (O3), whose fixes go out as small PRs. *Amended by Wes, 2026-09-25, after `init`:* Impeccable writes `DESIGN.md` at the end of the first build, from what was built, not before it. So O1 is the direction round with Wes, then the operator builds the shell and Search through Impeccable (its finish review, then its documenter writes `DESIGN.md` and `.impeccable/design.json`). The other screens are extensions of that world, built by the factory against `DESIGN.md`. Issue #1 is narrowed to plumbing, and Search moves from #3 into O1.
+- **D3. Styling: Tailwind v4 + shadcn, as the PRD says.** *Recommended:* Tailwind 4 through its Vite plugin, and `shadcn` (the CLI, current 4.x) with components copied into `src/components/ui/`, so we own them and they carry Radix's keyboard and ARIA behaviour. Theme tokens (colour, type, radius, spacing) come from `DESIGN.md`, as CSS variables for light and dark. `site.css` stays for `/` until O1's Search replaces the page, and is then deleted. The alternative is plain CSS with Radix primitives; it's leaner, but it drops the PRD's shadcn and the factory's familiarity with it.
 - **D4. Rendering: server-rendered pages that read the Index directly.** *Recommended:* each screen is a TanStack Start route whose loader calls a server function over the same answer functions the HTTP API uses (`answerVendorApis`, the Lookup core, `pageOutline`, …), not a `fetch` to our own `/api/…`. Pages render on the server, so the first paint has the content, and links are real links, which is good for the keyboard and for a crawler. Client JavaScript is for the search form, the Published/Normalized switch and the Spec viewer.
 - **D5. Search and Lookup: the UI answers from the Index only.** The UI has no API key, and Discovery needs one (Slice 3). *Recommended:* the search form sends a Lookup with no key. An Index answer shows the Lookup result. A name the Index doesn't know shows its own view, "Not in the Index yet", with the `curl` or MCP call that runs Discovery with a key, and the "request a key" link (D9). No key is ever stored in the browser, and there is no `fresh`. Rate limits apply per IP as for any Caller.
 - **D6. Spec viewer: Scalar in a sandboxed frame, under its own CSP.** Spec content is untrusted (PRD): descriptions carry Markdown and HTML, and a Spec names servers. *Recommended:*
@@ -55,40 +55,38 @@ The shell (header with the five destinations, footer with health, the skip link)
 
 | # | Linear | Issue | Depends on | Wave |
 |---|---|---|---|---|
-| 1 | WTR-136 | The UI foundation: Tailwind, shadcn, the shell, security headers, `uicheck` | O1 | 1 |
+| 1 | WTR-136 | The UI plumbing: Tailwind, shadcn, security headers, `uicheck` | — | 1 |
 | 2 | WTR-137 | `GET /api/vendors`: the Vendor list, paged | — | 1 |
-| 3 | WTR-138 | Search and the Lookup result | 1 | 2 |
-| 4 | WTR-139 | The Spec viewer: Scalar, sandboxed, in our frame | 1 | 2 |
-| 5 | WTR-140 | Index browsing: Vendors → APIs | 1, 2 | 2 |
-| 6 | WTR-141 | The docs page and "request a key"; the landing page retired | 1, 3 | 3 |
+| 3 | WTR-138 | The Lookup result | 1, O1 | 2 |
+| 4 | WTR-139 | The Spec viewer: Scalar, sandboxed, in our frame | 1, O1 | 2 |
+| 5 | WTR-140 | Index browsing: Vendors → APIs | 1, 2, O1 | 2 |
+| 6 | WTR-141 | The docs page and "request a key"; the landing page's content retired | 1, 3, O1 | 3 |
 
-Wave 1: WTR-137 (#2, no UI) was queued on filing; WTR-136 (#1) is queued once O1 is merged. Later waves wait in Backlog with `swaggerbot` only. Wave 2 is queued when #1 merges. Each wave-2 issue adds one route file and one line to the nav list in `src/components/shell/nav.ts`, a mechanical conflict: wave 2 is merged one PR at a time, merging `main` into each, as in Slice 5.
+Wave 1: WTR-137 (#2) was queued on filing, and WTR-136 (#1) on 2026-09-25 once it was narrowed; neither needs the design. Wave 2 is queued when #1 and O1's PR have merged; later waves wait in Backlog with `swaggerbot` only. Each wave-2 issue adds one route file and one line to the nav list the shell defines (O1), a mechanical conflict: wave 2 is merged one PR at a time, merging `main` into each, as in Slice 5.
 
 ## Operator steps (not factory issues)
 
-- **O1. Impeccable and the design, with Wes** (D1, D2). Install Impeccable (D1). `/impeccable init` → `PRODUCT.md` (Wes answers its interview). Then the visual direction → `DESIGN.md`, and `/impeccable shape` for each of the five screens → `docs/design/<screen>.md`. Commit all of it, and update `.weawr/instructions.md`: point it at this backlog and `docs/design/`, and name the dependencies Slice 6 adds (Tailwind, shadcn's, `@scalar/api-reference`, Playwright, axe).
+- **O1. Impeccable, the direction and the first surface, with Wes** (D1, D2 as amended). Done: install (D1), `/impeccable init` → `PRODUCT.md` (Wes's answers). Then: the direction round on Impeccable's decision page (Wes picks, steers or re-rolls); the direction contract in the Search surface brief (`.impeccable/surfaces/src-routes-index-tsx.md`); the operator builds, code-led (no image generation here), on top of #1's plumbing: the shell (`src/components/shell/`: header with the SwaggerBot mark and the nav list in `nav.ts`, a footer with `/api/health`, the skip link, `<main id="content">`, rendered by `__root.tsx` around every route except `/embed/…`) and **Search at `/`**, replacing the landing page (a labelled field for the name of an API, optional API Version, "Include Community Specs", a GET to `/lookup`; `site.css` deleted). Then Impeccable's finish review, and its documenter writes `DESIGN.md` and `.impeccable/design.json`. One PR, verified with `uicheck` and `impeccable detect`, merged before wave 2.
 - **O2. Deploy after each wave**, keeping `docs/deploy.md` current, with `mcpcheck` and `formscheck` after each. After wave 2, headless screenshots of every screen on production.
 - **O3. Polish and audit.** `/impeccable polish` and `/impeccable audit` over the whole UI once wave 3 is merged. Fixes go out as small PRs (by the operator, or filed for the factory if they're more than a few lines).
 - **O4. Acceptance** (D8), recorded in `docs/slices/slice-6-result.md`: the audit's scores and findings, `uicheck`'s output, `npx impeccable detect`'s output, a keyboard walk of every screen, and screenshots at 390 and 1280 in light and dark. Then Wes looks at it.
 
 ---
 
-## 1. swaggerbot: the UI foundation: Tailwind, shadcn, the app shell, security headers and `uicheck`
+## 1. swaggerbot: the UI plumbing: Tailwind, shadcn, security headers and `uicheck`
 
 ## Problem
-Slice 6 builds five screens (PRD "Surfaces → Web UI"). They need one styling system, one shell, security headers on every page, and a way to check each screen for WCAG AA and keyboard use in its own PR. The visual direction is set in `DESIGN.md` and the product in `PRODUCT.md` (both at the repo root); the shell's shape is in `docs/design/shell.md`.
+Slice 6 builds five screens (PRD "Surfaces → Web UI"). They need one styling system, security headers on every page, and a way to check each screen for WCAG AA and keyboard use in its own PR. The look is set later, by the operator's first surface (backlog O1), which writes `DESIGN.md`; this issue is the plumbing under it and sets no visual design.
 
 ## Change
-- **Styling:** add `tailwindcss` 4 and `@tailwindcss/vite`, and set up `shadcn` (the CLI's `init` for Vite + React, components under `src/components/ui/`, the `cn` helper under `src/lib/`). Theme tokens as CSS variables in `src/styles/app.css`, light and dark (`prefers-color-scheme`), taken from `DESIGN.md`. Add only the shadcn components the shell uses. Fonts are self-hosted (no Google Fonts request), because the CSP below allows `'self'` only.
-- **The shell** (`src/components/shell/`): a header with the product mark and the nav, a footer showing `/api/health`, a "Skip to content" link as the first focusable element, and `<main id="content">`. The nav is a list in `src/components/shell/nav.ts`; this issue adds Search (`/`) only. `__root.tsx` renders the shell around `<Outlet />`, except for routes under `/embed/`.
-- **`/` keeps the landing page** for now, with `site.css`; it moves inside the shell. Issue #3 replaces it.
-- **Security headers on every HTML response** (a Nitro plugin or middleware in `src/server/`): `Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'`, plus `X-Content-Type-Options: nosniff` and `Referrer-Policy: strict-origin-when-cross-origin`. If TanStack Start's hydration needs an inline script, use a per-request nonce, not `'unsafe-inline'`. `/api/…`, `/mcp` and downloads keep their current headers. `/embed/…` gets its own policy in issue #4.
-- **`scripts/uicheck.ts <baseUrl> [--routes /,/docs,…] [--json]`** (`playwright` and `@axe-core/playwright`, dev dependencies, Chromium only): for each route, at 390 and 1280 wide and in light and dark, run axe with the tags `wcag2a wcag2aa wcag21aa wcag22aa` and fail on any violation; then press Tab until focus returns to the start, and fail if an interactive element is never reached, if focus is trapped, or if a focused element has no visible focus indicator (its outline or box-shadow is unchanged from unfocused). Also fail on any CSP violation in the console. Save a screenshot of each run under `--out` (default `uicheck-out/`, git-ignored). Exit 1 on any failure.
+- **Styling:** add `tailwindcss` 4 and `@tailwindcss/vite`, and set up `shadcn` (the CLI's `init` for Vite + React, components under `src/components/ui/`, the `cn` helper under `src/lib/`). Theme tokens as CSS variables in `src/styles/app.css`, light and dark (`prefers-color-scheme`), with shadcn's neutral defaults as placeholders: O1 replaces their values. Add no components yet. The existing landing page (`src/routes/index.tsx` with `site.css`) must look exactly as it does today: keep Tailwind's preflight from changing it (for example by loading `app.css` only where it's used, or checking the page's screenshots before and after).
+- **Security headers on every HTML response** (a Nitro plugin or middleware in `src/server/`): `Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'`, plus `X-Content-Type-Options: nosniff` and `Referrer-Policy: strict-origin-when-cross-origin`. If TanStack Start's hydration needs an inline script, use a per-request nonce, not `'unsafe-inline'`. The landing page loads Google Fonts today: self-host those two faces (Inter, JetBrains Mono) under `public/fonts/` so the page still renders the same under this policy. `/api/…`, `/mcp` and downloads keep their current headers. `/embed/…` will get its own policy (issue #4).
+- **`scripts/uicheck.ts <baseUrl> [--routes /,/docs,…] [--json] [--out dir]`** (`playwright` and `@axe-core/playwright`, dev dependencies, Chromium only): for each route, at 390 and 1280 wide and in light and dark, run axe with the tags `wcag2a wcag2aa wcag21aa wcag22aa` and fail on any violation; then press Tab until focus returns to the start, and fail if an interactive element is never reached, if focus is trapped, or if a focused element has no visible focus indicator (its outline or box-shadow is unchanged from unfocused). Also fail on any CSP violation in the console. Save a screenshot of each run under `--out` (default `uicheck-out/`, git-ignored). Exit 1 on any failure.
 
 ## Done when
 - Tests: the header plugin sets the CSP on an HTML response and not on `/api/health`; `uicheck`'s pass/fail logic on a small fixture page (a missing label, a focus trap).
 - `pnpm check` and `pnpm build` green; `uicheck --help`.
-- The manual check in the PR: `uicheck` against the built server passes on `/`, output pasted, and the four screenshots attached. The page loads with no CSP violation in the console.
+- The manual check in the PR: `uicheck` against the built server on `/`, output pasted (a violation it finds on today's landing page is reported, not fixed: list it in the PR), and screenshots of `/` at 390 and 1280 before and after this change, which must match. The page loads with no CSP violation in the console.
 
 ## 2. swaggerbot: `GET /api/vendors`, the Vendor list, paged
 
@@ -106,13 +104,12 @@ Index browsing (Vendors → APIs) needs the list of Vendors, and only `GET /api/
 - `pnpm check` and `pnpm build` green.
 - The manual check in the PR: `curl` `/api/vendors` and `/api/vendors?query=str` on the built server with a copy of an Index, output pasted.
 
-## 3. swaggerbot: the Search screen and the Lookup result
+## 3. swaggerbot: the Lookup result
 
 ## Problem
-A person with the name of an API has no way to look it up in a browser. The PRD's Search and Lookup result screens are the UI's front door; the Lookup result has a distinct view for each Outcome. Design: `docs/design/search.md` and `docs/design/lookup-result.md`.
+Search (`/`, built in backlog O1) submits a name to `/lookup`, which doesn't exist. The PRD's Lookup result has a distinct view for each Outcome. Design: `DESIGN.md` and `PRODUCT.md`; build it as an extension of the shell and Search, in their components and tokens (Impeccable: `.claude/skills/impeccable/`, an extension inside an established world).
 
 ## Change
-- **`/` becomes Search**, replacing the landing page: a labelled search field (the name of an API) with optional API Version and a "Include Community Specs" checkbox (`allowCommunity`), submitting with a GET to `/lookup`. A short line on what swagger.bot does, and links to `/vendors` and `/docs`. Delete `src/styles/site.css` and anything only the landing page used.
 - **`/lookup?name=…[&apiVersion=…][&allowCommunity=1]`**: a server function runs the Lookup core **with no key** (backlog D5), so only Index answers resolve. One view per Outcome, each with a heading that names the Outcome:
   - **Resolved:** the API, its Vendor, the Current Spec's Provenance and `verifiedAt`, the two download links, Alternate Specs, and a link to the Spec viewer (`/specs/{specId}`).
   - **Ambiguous:** the candidate APIs, each a link that retries the Lookup with that name.
@@ -123,13 +120,13 @@ A person with the name of an API has no way to look it up in a browser. The PRD'
 
 ## Done when
 - Tests: the server function for each Outcome (fake Index), that no key is ever sent, and that `name` is required.
-- `pnpm check` and `pnpm build` green; `uicheck` passes on `/` and on `/lookup` for each Outcome that the Index copy can produce.
+- `pnpm check` and `pnpm build` green; `uicheck` passes on `/lookup` for each Outcome that the Index copy can produce.
 - The manual check in the PR, on a copy of an Index: Stripe (Resolved), a name the copy holds as Ambiguous, and a name it doesn't know, each screenshotted at 390 and 1280.
 
 ## 4. swaggerbot: the Spec viewer: Scalar, sandboxed, in our frame
 
 ## Problem
-A person who has found a Spec wants to read it. The PRD's Spec viewer embeds Scalar with "try it" disabled, inside our frame, and all Spec content is untrusted: it must not be able to run script, load remote content or call any server. Design: `docs/design/spec-viewer.md`. The decision is backlog D6.
+A person who has found a Spec wants to read it. The PRD's Spec viewer embeds Scalar with "try it" disabled, inside our frame, and all Spec content is untrusted: it must not be able to run script, load remote content or call any server. Design: `DESIGN.md` and `PRODUCT.md`; build it as an extension of the shell and Search, in their components and tokens. The decision is backlog D6.
 
 ## Change
 - Add `@scalar/api-reference` (1.72.x). Its browser bundle is served from our own build.
@@ -147,7 +144,7 @@ A person who has found a Spec wants to read it. The PRD's Spec viewer embeds Sca
 ## 5. swaggerbot: Index browsing: Vendors → APIs
 
 ## Problem
-A person can't see what the Index already holds. The PRD's Index browsing screen lists Vendors, then a Vendor's APIs. Design: `docs/design/index-browsing.md`.
+A person can't see what the Index already holds. The PRD's Index browsing screen lists Vendors, then a Vendor's APIs. Design: `DESIGN.md` and `PRODUCT.md`; build it as an extension of the shell and Search, in their components and tokens.
 
 ## Change
 - **`/vendors[?query=…&cursor=…]`**: a server function over `listVendors` (issue #2): a filter field (GET form), the Vendors with their API counts as links, and "Next page" / "Previous page" links.
@@ -162,7 +159,7 @@ A person can't see what the Index already holds. The PRD's Index browsing screen
 ## 6. swaggerbot: the docs page, "request a key", and the landing page's content retired
 
 ## Problem
-The PRD's API and MCP docs page, with the "request a key" link, doesn't exist; the interim landing page carried the route table and the Claude Code block, and issue #3 has replaced it. Design: `docs/design/docs.md`.
+The PRD's API and MCP docs page, with the "request a key" link, doesn't exist; the interim landing page carried the route table and the Claude Code block, and O1 has replaced it with Search. Design: `DESIGN.md` and `PRODUCT.md`; build it as an extension of the shell and Search, in their components and tokens.
 
 ## Change
 - **`/docs`**: the HTTP API (each route, `GET /api/vendors` included, with a `curl` example and its answer, the route table), MCP (the endpoint, the `claude mcp add` command, the five tools, result sizes), the key rules (a key is optional for Index answers; Discovery and `fresh` need one; quotas and the per-IP limit), and a **Keys** section (`#keys`) with the "request a key" link (backlog D9). Each code block has a Copy button that works by keyboard and says it copied (`aria-live`).
