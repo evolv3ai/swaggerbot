@@ -17,3 +17,6 @@ data/
 
 # uicheck screenshots
 uicheck-out/
+
+# Impeccable decision-page logs
+.impeccable/questions/
