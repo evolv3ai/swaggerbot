@@ -3,12 +3,15 @@ import {
   HeadContent,
   Outlet,
   Scripts,
+  useRouterState,
 } from "@tanstack/react-router";
 import type { ReactNode } from "react";
+import { Shell } from "~/components/shell/shell";
+import { getShellFacts } from "~/server/shell-facts";
+import appCss from "~/styles/app.css?url";
 import fontsCss from "~/styles/fonts.css?url";
-import siteCss from "~/styles/site.css?url";
 
-const TITLE = "swagger.bot: the verified OpenAPI Spec for any API, by name";
+const TITLE = "SwaggerBot: the verified OpenAPI Spec for any API, by name";
 const DESCRIPTION =
   "Send the name of an API and get back its OpenAPI or Swagger Spec, with where it came from and how sure we are, or an honest answer about why there isn't one.";
 
@@ -19,9 +22,10 @@ export const Route = createRootRoute({
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: TITLE },
       { name: "description", content: DESCRIPTION },
-      { name: "theme-color", content: "#004e92" },
+      // One value: the router's head keeps one meta per name.
+      { name: "theme-color", content: "#dc9530" },
       { property: "og:type", content: "website" },
-      { property: "og:site_name", content: "swagger.bot" },
+      { property: "og:site_name", content: "SwaggerBot" },
       { property: "og:title", content: TITLE },
       { property: "og:description", content: DESCRIPTION },
       { property: "og:url", content: "https://swaggerbot.dev/" },
@@ -32,17 +36,35 @@ export const Route = createRootRoute({
     ],
     links: [
       { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
+      {
+        rel: "preload",
+        href: "/fonts/permanent-marker-400-latin.woff2",
+        as: "font",
+        type: "font/woff2",
+        crossOrigin: "anonymous",
+      },
       { rel: "stylesheet", href: fontsCss },
-      { rel: "stylesheet", href: siteCss },
+      { rel: "stylesheet", href: appCss },
     ],
   }),
+  loader: () => getShellFacts(),
   component: RootComponent,
 });
 
 function RootComponent() {
+  const facts = Route.useLoaderData();
+  const bare = useRouterState({
+    select: (s) => s.location.pathname.startsWith("/embed/"),
+  });
   return (
     <RootDocument>
-      <Outlet />
+      {bare ? (
+        <Outlet />
+      ) : (
+        <Shell facts={facts}>
+          <Outlet />
+        </Shell>
+      )}
     </RootDocument>
   );
 }
