@@ -278,61 +278,31 @@
         "role": "tertiary",
         "displayName": "Test Strip 1: Enamel",
         "canonical": "#f6f1e6",
-        "tonalRamp": [
-          "#0e0e0e",
-          "#3a3a3a",
-          "#8c8c8c",
-          "#c9c4b8",
-          "#f6f1e6"
-        ]
+        "tonalRamp": ["#0e0e0e", "#3a3a3a", "#8c8c8c", "#c9c4b8", "#f6f1e6"]
       },
       "strip-2": {
         "role": "tertiary",
         "displayName": "Test Strip 2: Silver",
         "canonical": "#c9c4b8",
-        "tonalRamp": [
-          "#0e0e0e",
-          "#3a3a3a",
-          "#8c8c8c",
-          "#c9c4b8",
-          "#f6f1e6"
-        ]
+        "tonalRamp": ["#0e0e0e", "#3a3a3a", "#8c8c8c", "#c9c4b8", "#f6f1e6"]
       },
       "strip-3": {
         "role": "tertiary",
         "displayName": "Test Strip 3: Darkroom Grey",
         "canonical": "#8c8c8c",
-        "tonalRamp": [
-          "#0e0e0e",
-          "#3a3a3a",
-          "#8c8c8c",
-          "#c9c4b8",
-          "#f6f1e6"
-        ]
+        "tonalRamp": ["#0e0e0e", "#3a3a3a", "#8c8c8c", "#c9c4b8", "#f6f1e6"]
       },
       "strip-4": {
         "role": "tertiary",
         "displayName": "Test Strip 4",
         "canonical": "#3a3a3a",
-        "tonalRamp": [
-          "#0e0e0e",
-          "#3a3a3a",
-          "#8c8c8c",
-          "#c9c4b8",
-          "#f6f1e6"
-        ]
+        "tonalRamp": ["#0e0e0e", "#3a3a3a", "#8c8c8c", "#c9c4b8", "#f6f1e6"]
       },
       "strip-5": {
         "role": "tertiary",
         "displayName": "Test Strip 5: Dense Black",
         "canonical": "#0e0e0e",
-        "tonalRamp": [
-          "#0e0e0e",
-          "#3a3a3a",
-          "#8c8c8c",
-          "#c9c4b8",
-          "#f6f1e6"
-        ]
+        "tonalRamp": ["#0e0e0e", "#3a3a3a", "#8c8c8c", "#c9c4b8", "#f6f1e6"]
       },
       "stale-wash": {
         "role": "tertiary",
