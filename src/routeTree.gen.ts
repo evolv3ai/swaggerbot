@@ -15,6 +15,8 @@ import { Route as McpRouteImport } from './routes/mcp'
 import { Route as ApiSplatRouteImport } from './routes/api/$'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as ApiLookupRouteImport } from './routes/api/lookup'
+import { Route as VendorsIndexRouteImport } from './routes/vendors/index'
+import { Route as VendorsVendorIdRouteImport } from './routes/vendors/$vendorId'
 import { Route as ApiApisSplatRouteImport } from './routes/api/apis/$'
 import { Route as ApiVendorsIndexRouteImport } from './routes/api/vendors/index'
 import { Route as ApiSpecsSpecIdNormalizedRouteImport } from './routes/api/specs/$specId/normalized'
@@ -51,6 +53,16 @@ const ApiLookupRoute = ApiLookupRouteImport.update({
   path: '/api/lookup',
   getParentRoute: () => rootRouteImport,
 } as any)
+const VendorsIndexRoute = VendorsIndexRouteImport.update({
+  id: '/vendors/',
+  path: '/vendors/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VendorsVendorIdRoute = VendorsVendorIdRouteImport.update({
+  id: '/vendors/$vendorId',
+  path: '/vendors/$vendorId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiApisSplatRoute = ApiApisSplatRouteImport.update({
   id: '/api/apis/$',
   path: '/api/apis/$',
@@ -85,6 +97,8 @@ export interface FileRoutesByFullPath {
   '/api/$': typeof ApiSplatRoute
   '/api/health': typeof ApiHealthRoute
   '/api/lookup': typeof ApiLookupRoute
+  '/vendors/$vendorId': typeof VendorsVendorIdRoute
+  '/vendors/': typeof VendorsIndexRoute
   '/api/apis/$': typeof ApiApisSplatRoute
   '/api/vendors/': typeof ApiVendorsIndexRoute
   '/api/specs/$specId/normalized': typeof ApiSpecsSpecIdNormalizedRoute
@@ -98,6 +112,8 @@ export interface FileRoutesByTo {
   '/api/$': typeof ApiSplatRoute
   '/api/health': typeof ApiHealthRoute
   '/api/lookup': typeof ApiLookupRoute
+  '/vendors/$vendorId': typeof VendorsVendorIdRoute
+  '/vendors': typeof VendorsIndexRoute
   '/api/apis/$': typeof ApiApisSplatRoute
   '/api/vendors': typeof ApiVendorsIndexRoute
   '/api/specs/$specId/normalized': typeof ApiSpecsSpecIdNormalizedRoute
@@ -112,6 +128,8 @@ export interface FileRoutesById {
   '/api/$': typeof ApiSplatRoute
   '/api/health': typeof ApiHealthRoute
   '/api/lookup': typeof ApiLookupRoute
+  '/vendors/$vendorId': typeof VendorsVendorIdRoute
+  '/vendors/': typeof VendorsIndexRoute
   '/api/apis/$': typeof ApiApisSplatRoute
   '/api/vendors/': typeof ApiVendorsIndexRoute
   '/api/specs/$specId/normalized': typeof ApiSpecsSpecIdNormalizedRoute
@@ -127,6 +145,8 @@ export interface FileRouteTypes {
     | '/api/$'
     | '/api/health'
     | '/api/lookup'
+    | '/vendors/$vendorId'
+    | '/vendors/'
     | '/api/apis/$'
     | '/api/vendors/'
     | '/api/specs/$specId/normalized'
@@ -140,6 +160,8 @@ export interface FileRouteTypes {
     | '/api/$'
     | '/api/health'
     | '/api/lookup'
+    | '/vendors/$vendorId'
+    | '/vendors'
     | '/api/apis/$'
     | '/api/vendors'
     | '/api/specs/$specId/normalized'
@@ -153,6 +175,8 @@ export interface FileRouteTypes {
     | '/api/$'
     | '/api/health'
     | '/api/lookup'
+    | '/vendors/$vendorId'
+    | '/vendors/'
     | '/api/apis/$'
     | '/api/vendors/'
     | '/api/specs/$specId/normalized'
@@ -167,6 +191,8 @@ export interface RootRouteChildren {
   ApiSplatRoute: typeof ApiSplatRoute
   ApiHealthRoute: typeof ApiHealthRoute
   ApiLookupRoute: typeof ApiLookupRoute
+  VendorsVendorIdRoute: typeof VendorsVendorIdRoute
+  VendorsIndexRoute: typeof VendorsIndexRoute
   ApiApisSplatRoute: typeof ApiApisSplatRoute
   ApiVendorsIndexRoute: typeof ApiVendorsIndexRoute
   ApiSpecsSpecIdNormalizedRoute: typeof ApiSpecsSpecIdNormalizedRoute
@@ -218,6 +244,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiLookupRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/vendors/': {
+      id: '/vendors/'
+      path: '/vendors'
+      fullPath: '/vendors/'
+      preLoaderRoute: typeof VendorsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/vendors/$vendorId': {
+      id: '/vendors/$vendorId'
+      path: '/vendors/$vendorId'
+      fullPath: '/vendors/$vendorId'
+      preLoaderRoute: typeof VendorsVendorIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/apis/$': {
       id: '/api/apis/$'
       path: '/api/apis/$'
@@ -263,6 +303,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiSplatRoute: ApiSplatRoute,
   ApiHealthRoute: ApiHealthRoute,
   ApiLookupRoute: ApiLookupRoute,
+  VendorsVendorIdRoute: VendorsVendorIdRoute,
+  VendorsIndexRoute: VendorsIndexRoute,
   ApiApisSplatRoute: ApiApisSplatRoute,
   ApiVendorsIndexRoute: ApiVendorsIndexRoute,
   ApiSpecsSpecIdNormalizedRoute: ApiSpecsSpecIdNormalizedRoute,
