@@ -143,6 +143,18 @@ The deploys of 2026-09-23:
 - Claude Code 2.1.282 on Haiku, asked to quote what production `lookup_api` returned, got a tool result beginning `{"summary":"Resolved: Stripe API by stripe.com, apiId "stripe.com/stripe-api". … Download the Spec: https://swaggerbot.dev/api/specs/…/published`.
 - Watch: `tools/list` at 28.4 kB is near `mcpcheck`'s 30 kB bound. The Outcome's schema alone is 13.2 kB.
 
+## Slice 6: the Web UI
+
+### `9f35dbd` (2026-09-25): wave 1, the Vendor list and the UI plumbing
+
+**Deployed at 02:07 CDT** (deployment `189ev757km2j3rselmodi9sn`). It carries #88 (WTR-137, `GET /api/vendors`) and #89 (WTR-136: Tailwind 4, shadcn, the security headers with a per-request script nonce, self-hosted fonts, `scripts/uicheck.ts`). The landing page looks as before. No new env vars.
+
+**Live checks:**
+- `/` carries `Content-Security-Policy` (`script-src 'self' 'nonce-…'`) and `X-Content-Type-Options: nosniff`; the API, `/mcp` and download responses don't.
+- `GET /api/vendors?limit=3`: 3 of 21 Vendors, `nextCursor` `"3"`.
+- `mcpcheck` PASS: largest result 28.4 kB, slowest call 577 ms.
+- `formscheck` PASS: outline p90 299 ms, operation p90 355 ms, 0 non-2xx.
+
 ## Gotchas
 
 - Coolify's application health check runs `curl`/`wget` **inside** the container. An image without them is rolled back as unhealthy, even when its own Docker `HEALTHCHECK` passes.
