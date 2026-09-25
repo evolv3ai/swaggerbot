@@ -104,6 +104,17 @@ To check the forms and the navigation on a deployment, run `pnpm tsx scripts/for
 | 405 | Any method but `POST`, with `Allow: POST`. |
 | 429 | `Rate limit exceeded.` for the IP, or `Daily quota used.` with `limit` and `used` for the key. `Retry-After` gives the seconds to wait: until a request is allowed again, or until UTC midnight. |
 
+The routes, all but `GET /api/health` under the per-IP limit:
+
+| Route | Gives | Key |
+|---|---|---|
+| `POST /api/lookup` | The Outcome. | For Discovery and `fresh` |
+| `GET /api/specs/{specId}/published`, `…/normalized` | The Spec's Published Form or Normalized Form. | No |
+| `GET /api/apis/{apiId}/outline`, `…/operation`, `…/schema` | The Spec Outline (paged with `tag`, `query`, `cursor`, `limit`), one operation, one component schema. | No |
+| `GET /api/vendors[?query=&cursor=&limit=]` | The Vendors with at least one API in the Index, by name, each with its `id`, `name` and `apiCount`: 50 a page by default (`limit` at most 200), `query` a substring of the id or name ignoring case, with `total` and `nextCursor` (null on the last page). 400 for a bad `limit` or `cursor`. | No |
+| `GET /api/vendors/{vendor}/apis` | A Vendor's APIs in the Index, each with its Current Spec. | No |
+| `GET /api/health` | `{"ok":true}`. | No |
+
 Every API route answers a method it doesn't take with 405 and an `Allow` header, and a path under `/api/` that no route serves with a JSON 404, never the web page.
 
 ## API keys
