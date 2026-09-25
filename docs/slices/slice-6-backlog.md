@@ -55,14 +55,14 @@ The shell (header with the five destinations, footer with health, the skip link)
 
 | # | Linear | Issue | Depends on | Wave |
 |---|---|---|---|---|
-| 1 | — | The UI foundation: Tailwind, shadcn, the shell, security headers, `uicheck` | O1 | 1 |
-| 2 | — | `GET /api/vendors`: the Vendor list, paged | — | 1 |
-| 3 | — | Search and the Lookup result | 1 | 2 |
-| 4 | — | The Spec viewer: Scalar, sandboxed, in our frame | 1 | 2 |
-| 5 | — | Index browsing: Vendors → APIs | 1, 2 | 2 |
-| 6 | — | The docs page and "request a key"; the landing page retired | 1, 3 | 3 |
+| 1 | WTR-136 | The UI foundation: Tailwind, shadcn, the shell, security headers, `uicheck` | O1 | 1 |
+| 2 | WTR-137 | `GET /api/vendors`: the Vendor list, paged | — | 1 |
+| 3 | WTR-138 | Search and the Lookup result | 1 | 2 |
+| 4 | WTR-139 | The Spec viewer: Scalar, sandboxed, in our frame | 1 | 2 |
+| 5 | WTR-140 | Index browsing: Vendors → APIs | 1, 2 | 2 |
+| 6 | WTR-141 | The docs page and "request a key"; the landing page retired | 1, 3 | 3 |
 
-Wave 1 is queued once O1 is merged (#2 can go at once: it has no UI). Wave 2 is queued when #1 merges. Each wave-2 issue adds one route file and one line to the nav list in `src/components/shell/nav.ts`, a mechanical conflict: wave 2 is merged one PR at a time, merging `main` into each, as in Slice 5.
+Wave 1: WTR-137 (#2, no UI) was queued on filing; WTR-136 (#1) is queued once O1 is merged. Later waves wait in Backlog with `swaggerbot` only. Wave 2 is queued when #1 merges. Each wave-2 issue adds one route file and one line to the nav list in `src/components/shell/nav.ts`, a mechanical conflict: wave 2 is merged one PR at a time, merging `main` into each, as in Slice 5.
 
 ## Operator steps (not factory issues)
 
