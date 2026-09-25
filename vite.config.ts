@@ -1,3 +1,4 @@
+import tailwindcss from "@tailwindcss/vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
 import { nitro } from "nitro/vite";
@@ -10,5 +11,6 @@ export default defineConfig({
     // Opens the Index and starts the workers at start-up; see src/server/open-index.ts.
     nitro({ plugins: ["./src/server/open-index.ts"] }),
     viteReact(),
+    tailwindcss(),
   ],
 });

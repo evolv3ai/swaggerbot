@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A focus trap</title>
+<style>
+  body { font: 16px/1.5 sans-serif; color: #111; background: #fff; }
+  a, button, input { color: #0043ce; }
+  :focus-visible { outline: 2px solid #0043ce; outline-offset: 2px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>A focus trap</h1>
+  <p><a href="/before">Before the trap</a></p>
+  <div id="trap">
+    <button type="button">First</button>
+    <button type="button">Second</button>
+  </div>
+  <p><a href="/after">After the trap</a></p>
+</main>
+<script>
+  // Tab from the last button goes back to the first, never out.
+  const [first, second] = document.querySelectorAll("#trap button");
+  second.addEventListener("keydown", (event) => {
+    if (event.key === "Tab" && !event.shiftKey) {
+      event.preventDefault();
+      first.focus();
+    }
+  });
+</script>
+</body>
+</html>

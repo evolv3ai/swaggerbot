@@ -175,4 +175,14 @@ It also caps a fetched body at 64 MB, counted as it streams in (after decompress
 pnpm check   # Biome lint, tsc --noEmit, vitest run; stops at the first failure
 ```
 
+`uicheck`'s tests drive a headless Chromium: install it once with `pnpm exec playwright install chromium`.
+
 The same `pnpm check` and `pnpm build` run in CI (`.github/workflows/ci.yml`) on every PR and push to `main`.
+
+## Web UI
+
+The pages are server-rendered TanStack Start routes. Their styles are Tailwind 4 with [shadcn](https://ui.shadcn.com) (`components.json`; components go in `src/components/ui/`, the `cn` helper is `src/lib/utils.ts`), and the theme tokens are CSS variables in `src/styles/app.css`, light and dark by `prefers-color-scheme`. A route loads `app.css` itself (`import appCss from "~/styles/app.css?url"` in its `head` links), so Tailwind's preflight reaches only the pages that use it. Inter and JetBrains Mono are self-hosted under `public/fonts/` (`src/styles/fonts.css`).
+
+Every HTML page is served with a Content Security Policy that allows only this origin, `X-Content-Type-Options: nosniff` and `Referrer-Policy: strict-origin-when-cross-origin` (`src/server/security-headers.ts`, a request middleware listed in `src/start.ts`). The inline scripts TanStack Start writes for hydration carry a per-request nonce. `/api/…` and `/mcp` keep their own headers.
+
+To check pages for WCAG AA and keyboard use, run `pnpm tsx scripts/uicheck.ts http://localhost:3000 --routes /,/docs` (`/` by default, `--json` for the whole report, `--out` for the screenshots, `uicheck-out/` by default; `--help` for the rest). For each route, at 390 and 1280 wide and in light and dark, it runs axe-core with the tags `wcag2a wcag2aa wcag21aa wcag22aa`, tabs through the page until focus comes back to the start (every interactive element must be reached, none may trap focus, and each needs a visible focus indicator), watches the console for Content Security Policy violations and saves a screenshot. It exits 0 when every run passed; otherwise 1, naming what failed.
