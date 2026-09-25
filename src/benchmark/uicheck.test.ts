@@ -221,7 +221,13 @@ describe("runFailures and uicheckLines", () => {
   });
 });
 
-describe("checkRun on fixture pages", () => {
+// These tests drive a real Chromium. Without one (a fresh machine before
+// `pnpm exec playwright install chromium`), they are skipped, except in CI,
+// where the browser is installed and a missing one is a failure.
+const probe = await chromium.launch().catch(() => undefined);
+await probe?.close();
+
+describe.skipIf(!probe && !process.env.CI)("checkRun on fixture pages", () => {
   const FIXTURES = join(import.meta.dirname, "__fixtures__", "uicheck");
   let server: FixtureServer;
   let browser: Browser;

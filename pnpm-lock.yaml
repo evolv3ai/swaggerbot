@@ -56,9 +56,6 @@ importers:
       robots-parser:
         specifier: ^3.0.1
         version: 3.0.1
-      shadcn:
-        specifier: ^4.21.0
-        version: 4.21.0(typescript@5.9.3)
       tldts:
         specifier: ^7.4.14
         version: 7.4.14
@@ -105,6 +102,9 @@ importers:
       playwright:
         specifier: ^1.63.0
         version: 1.63.0
+      shadcn:
+        specifier: ^4.21.0
+        version: 4.21.0(typescript@5.9.3)
       tailwindcss:
         specifier: ^4.3.3
         version: 4.3.3
