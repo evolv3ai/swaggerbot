@@ -6,12 +6,15 @@ import type { SpecOutline } from "~/domain/spec-forms";
 import { openDb } from "~/index-store/db";
 import { createKeys } from "~/index-store/keys";
 import { createRepo } from "~/index-store/repo";
-import { createSpecForms } from "~/index-store/spec-forms";
+import { createSpecForms, MAX_FORMS_ATTEMPTS } from "~/index-store/spec-forms";
 import type { IndexedLookup } from "~/lookup/lookup";
 import { createRateLimiter } from "~/lookup/rate-limit";
 import { createNormalizedCache } from "~/spec-forms/operation-http";
+import { expectGuided } from "../__fixtures__/guided";
 import { handleMcpRequest } from "../http";
 import { createSwaggerbotMcpHandler } from "../server";
+import { GetOperationOutput } from "./get-operation";
+import { GetSchemaOutput, missingSchemaText } from "./get-schema";
 
 const dir = mkdtempSync(join(tmpdir(), "swaggerbot-mcp-operation-"));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -139,6 +142,18 @@ forms.saveBuilt(
   AT,
 );
 
+/** Two more Specs of the API: one whose forms are pending, one whose build failed. */
+const specOf = (n: number) =>
+  repo.putSpec(API, new TextEncoder().encode(`{"n":${n}}`), {
+    specVersion: "3.1.0",
+    apiVersion: `${n}.0.0`,
+    format: "json",
+  }).id;
+const pendingSpecId = specOf(2);
+const failedSpecId = specOf(3);
+for (let i = 0; i < MAX_FORMS_ATTEMPTS; i++)
+  forms.saveFailure(failedSpecId, new Error("Unresolvable $ref #/x"), AT);
+
 const lookup = Object.assign(() => Promise.reject(new Error("no Discovery")), {
   fromIndex: () => null,
   currentFromIndex: (apiId: string) =>
@@ -205,7 +220,10 @@ describe("get_operation", () => {
       path: "/v1/customers/{customer}",
     });
 
-    expect(result.isError).toBeFalsy();
+    expect(expectGuided(result, GetOperationOutput)).toEqual({
+      summary: `GET /v1/customers/{customer} of ${API} (operationId "GetCustomer"). Every reference is inlined. 1 schema recurs within itself; where it does it is { $ref, "x-circular": true }, and circular holds it once.`,
+      next: [],
+    });
     expect(result.structuredContent).toMatchObject({
       apiId: API,
       specId,
@@ -213,9 +231,6 @@ describe("get_operation", () => {
       path: "/v1/customers/{customer}",
       truncated: false,
     });
-    expect(textOf(result)).toMatch(
-      /^GET \/v1\/customers\/\{customer\} of payco\.com\/payco-api \(operationId "GetCustomer"\)\. Every reference is inlined\./,
-    );
   });
 
   it("stays under 30 kB, and a reference it leaves is followed with get_schema", async () => {
@@ -225,16 +240,16 @@ describe("get_operation", () => {
       path: "/v1/account",
     });
 
-    expect(result.isError).toBeFalsy();
+    const guidance = expectGuided(result, GetOperationOutput);
     expect(result.structuredContent?.truncated).toBe(true);
     expect(sizeOf(result)).toBeLessThan(30_000);
-    const text = textOf(result);
-    expect(text).toMatch(
+    expect(guidance.summary).toMatch(
       /1 reference was left as \{ \$ref, "x-truncated": true \}/,
     );
+    expect(guidance.next).toHaveLength(1);
     const next =
-      /Next: get_schema\(apiId: "payco\.com\/payco-api", name: "(level\d+)"\)/.exec(
-        text,
+      /^get_schema\(apiId: "payco\.com\/payco-api", name: "(level\d+)"\)$/.exec(
+        guidance.next[0] ?? "",
       );
     expect(next).not.toBeNull();
     const name = next?.[1] as string;
@@ -244,7 +259,7 @@ describe("get_operation", () => {
       name: `#/components/schemas/${name}`,
     });
 
-    expect(followed.isError).toBeFalsy();
+    const followedGuidance = expectGuided(followed, GetSchemaOutput);
     expect(followed.structuredContent).toMatchObject({
       apiId: API,
       specId,
@@ -252,7 +267,7 @@ describe("get_operation", () => {
       schema: { type: "object", properties: { field_0: { type: "string" } } },
     });
     expect(sizeOf(followed)).toBeLessThan(30_000);
-    expect(textOf(followed)).toMatch(
+    expect(followedGuidance.summary).toMatch(
       new RegExp(`^Schema "${name}" of ${API}\\.`),
     );
   });
@@ -312,7 +327,7 @@ describe("get_schema", () => {
   it("keeps a schema that recurs within itself as x-circular", async () => {
     const result = await call("get_schema", { apiId: API, name: "node" });
 
-    expect(result.isError).toBeFalsy();
+    const { summary } = expectGuided(result, GetSchemaOutput);
     expect(result.structuredContent).toMatchObject({
       name: "node",
       schema: {
@@ -324,7 +339,7 @@ describe("get_schema", () => {
       },
       circular: { node: { type: "object" } },
     });
-    expect(textOf(result)).toContain("1 schema recurs within itself");
+    expect(summary).toContain("1 schema recurs within itself");
   });
 
   it("gives the nearest names for a name not in the Spec", async () => {
@@ -337,5 +352,52 @@ describe("get_schema", () => {
     expect(textOf(result)).toContain(
       `Next: get_schema(apiId: "${API}", name: "customer")`,
     );
+  });
+
+  it("points to get_spec_outline and get_operation when no name is near", () => {
+    expect(missingSchemaText(API, undefined, "Customers", [])).toBe(
+      `This Spec has no schema "Customers" in components.schemas. No name in it is near. Next: get_spec_outline(apiId: "${API}") to find an operation, then get_operation for it, which inlines the schemas it uses.`,
+    );
+  });
+});
+
+describe.each([
+  ["get_operation", { method: "get", path: "/v1/account" }],
+  ["get_schema", { name: "customer" }],
+])("%s on a Spec without a Normalized Form", (tool, args) => {
+  it("is an error saying to retry while the Normalized Form is pending", async () => {
+    const result = await call(tool, {
+      apiId: API,
+      specId: pendingSpecId,
+      ...args,
+    });
+
+    expect(result).toEqual({
+      isError: true,
+      content: [
+        {
+          type: "text",
+          text: "The Spec's Normalized Form is still being built. Retry in 10 s.",
+        },
+      ],
+    });
+  });
+
+  it("is an error pointing to the Published Form when the build failed", async () => {
+    const result = await call(tool, {
+      apiId: API,
+      specId: failedSpecId,
+      ...args,
+    });
+
+    expect(result).toEqual({
+      isError: true,
+      content: [
+        {
+          type: "text",
+          text: "The Spec's Normalized Form could not be built (Unresolvable $ref #/x), so its operations and schemas can't be expanded. Its Published Form can still be downloaded: lookup_api gives the URL.",
+        },
+      ],
+    });
   });
 });

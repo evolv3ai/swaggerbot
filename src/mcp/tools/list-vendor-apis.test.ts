@@ -8,7 +8,9 @@ import { createRepo } from "~/index-store/repo";
 import { FakeJudge } from "~/judge/fake";
 import type { Gate } from "~/lookup/http";
 import { createLookup } from "~/lookup/lookup";
+import { expectGuided } from "../__fixtures__/guided";
 import { createSwaggerbotMcpHandler } from "../server";
+import { ListVendorApisOutput, vendorApisGuidance } from "./list-vendor-apis";
 
 const dir = mkdtempSync(join(tmpdir(), "swaggerbot-mcp-vendors-"));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -124,7 +126,7 @@ describe("list_vendor_apis", () => {
   ])("lists one Vendor's APIs by %s", async (_, vendor) => {
     const result = await listVendorApis({ vendor });
 
-    expect(result.isError).toBeFalsy();
+    const guidance = expectGuided(result, ListVendorApisOutput);
     expect(result.structuredContent?.vendor.id).toBe("atlassian.com");
     expect(
       result.structuredContent?.apis.map((a) => [a.api.id, a.currentSpec?.id]),
@@ -132,14 +134,14 @@ describe("list_vendor_apis", () => {
       ["atlassian.com/confluence", undefined],
       ["atlassian.com/jira", jiraSpec],
     ]);
-    expect(result.content[0]?.text).toBe(
-      [
+    expect(guidance).toEqual({
+      summary: [
         "Atlassian (atlassian.com) has 2 APIs in the Index:",
         '- Confluence, apiId "atlassian.com/confluence": no confirmed Spec in the Index yet.',
         `- Jira, apiId "atlassian.com/jira": Current Spec ${jiraSpec}, API Version 1.0.0, Official Provenance. Download the Spec: https://swaggerbot.test/api/specs/${jiraSpec}/published (Published Form, as the Vendor serves it) or https://swaggerbot.test/api/specs/${jiraSpec}/normalized (Normalized Form, still being built: retry it in a few seconds).`,
-        'Next: get_spec_outline(apiId: "atlassian.com/jira") to find the operation you need, or the same with another apiId above.',
       ].join("\n"),
-    );
+      next: ['get_spec_outline(apiId: "atlassian.com/jira")'],
+    });
   });
 
   it("lists several Vendors as an error, to retry with an id", async () => {
@@ -165,5 +167,19 @@ describe("list_vendor_apis", () => {
     const result = await listVendorApis({ vendor: "  " });
 
     expect(result.isError).toBe(true);
+  });
+});
+
+describe("vendorApisGuidance", () => {
+  it("names no placeholder call for a Vendor with no APIs, and says how to add one", () => {
+    const { summary, next } = vendorApisGuidance({
+      vendor: { id: "twilio.dev", name: "Twilio Dev", domain: "twilio.dev" },
+      apis: [],
+    });
+
+    expect(next).toEqual([]);
+    expect(summary).toBe(
+      "Twilio Dev (twilio.dev) has 0 APIs in the Index. lookup_api with the name of the API you want finds it and adds it, with its Vendor, to the Index.",
+    );
   });
 });

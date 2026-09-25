@@ -6,13 +6,14 @@ import {
   type OperationAnswer,
   operationAnswer,
 } from "~/spec-forms/operation-http";
+import { type Guidance, toolResult, withGuidance } from "../result";
 import type { McpTool } from "../server";
 import {
   ApiIdInput,
   JsonObject,
   MCP_EXPANDED_MAX_BYTES,
   openForTool,
-  referencesText,
+  referencesGuidance,
   SpecIdInput,
   toolError,
 } from "./expanded";
@@ -38,16 +39,18 @@ const GetOperationInput = z.object({
   specId: SpecIdInput,
 });
 
-const GetOperationOutput = z.object({
-  apiId: z.string(),
-  specId: z.string(),
-  method: z.string(),
-  path: z.string(),
-  operation: JsonObject,
-  circular: JsonObject,
-  securitySchemes: JsonObject,
-  truncated: z.boolean(),
-});
+export const GetOperationOutput = withGuidance(
+  z.object({
+    apiId: z.string(),
+    specId: z.string(),
+    method: z.string(),
+    path: z.string(),
+    operation: JsonObject,
+    circular: JsonObject,
+    securitySchemes: JsonObject,
+    truncated: z.boolean(),
+  }),
+);
 
 /**
  * `get_operation`: the answer of `GET /api/apis/{apiId}/operation`, expanded
@@ -89,19 +92,19 @@ export const registerGetOperation: McpTool = (server, deps) => {
           ),
         );
       }
-      return {
-        content: [{ type: "text", text: operationText(answer, specId) }],
-        structuredContent: answer,
-      };
+      return toolResult({
+        ...operationGuidance(answer, specId),
+        data: answer,
+      });
     },
   );
 };
 
 /** The sentence an agent reads first: which operation this is, and what was left. */
-export function operationText(
+export function operationGuidance(
   answer: OperationAnswer,
   specId: string | undefined,
-): string {
+): Guidance {
   const { operationId, summary } = answer.operation;
   const named = [
     typeof operationId === "string" ? `operationId "${operationId}"` : "",
@@ -109,7 +112,11 @@ export function operationText(
   ]
     .filter(Boolean)
     .join(", ");
-  return `${answer.method.toUpperCase()} ${answer.path} of ${answer.apiId}${named ? ` (${named})` : ""}. ${referencesText(answer, answer.apiId, specId)}`;
+  const references = referencesGuidance(answer, answer.apiId, specId);
+  return {
+    summary: `${answer.method.toUpperCase()} ${answer.path} of ${answer.apiId}${named ? ` (${named})` : ""}. ${references.summary}`,
+    next: references.next,
+  };
 }
 
 /** Why the operation isn't there, and the nearest ones to call instead. */

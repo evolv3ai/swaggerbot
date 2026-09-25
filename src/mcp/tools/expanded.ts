@@ -7,6 +7,7 @@ import {
   openNormalized,
   PENDING_RETRY_AFTER_SECONDS,
 } from "~/spec-forms/operation-http";
+import type { Guidance } from "../result";
 import type { McpDeps } from "../server";
 
 /**
@@ -65,12 +66,13 @@ export function toolError(text: string): CallToolResult {
  * `{ $ref, "x-truncated": true }` and the `get_schema` call that follows
  * one, and the schemas listed in `circular`.
  */
-export function referencesText(
+export function referencesGuidance(
   expanded: { circular: Record<string, unknown>; truncated: boolean },
   apiId: string,
   specId: string | undefined,
-): string {
+): Guidance {
   const parts: string[] = [];
+  const next: string[] = [];
   const left = truncatedReferences(expanded);
   if (left.length === 0) parts.push("Every reference is inlined.");
   else {
@@ -82,22 +84,26 @@ export function referencesText(
       `To keep this result small, ${left.length} reference${left.length === 1 ? " was" : "s were"} left as { $ref, "x-truncated": true }.`,
     );
     const [first] = schemas;
-    if (first !== undefined)
+    if (first !== undefined) {
       parts.push(
         `The schemas left, which get_schema returns: ${schemas
           .slice(0, NAMED_REFERENCES)
           .map((n) => `"${n}"`)
           .join(
             ", ",
-          )}${schemas.length > NAMED_REFERENCES ? ` and ${schemas.length - NAMED_REFERENCES} more` : ""}. Next: get_schema(apiId: "${apiId}", name: "${first}"${specId ? `, specId: "${specId}"` : ""}).`,
+          )}${schemas.length > NAMED_REFERENCES ? ` and ${schemas.length - NAMED_REFERENCES} more` : ""}.`,
       );
+      next.push(
+        `get_schema(apiId: "${apiId}", name: "${first}"${specId ? `, specId: "${specId}"` : ""})`,
+      );
+    }
   }
   const circular = Object.keys(expanded.circular);
   if (circular.length > 0)
     parts.push(
       `${circular.length} schema${circular.length === 1 ? " recurs" : "s recur"} within itself; where it does it is { $ref, "x-circular": true }, and circular holds it once.`,
     );
-  return parts.join(" ");
+  return { summary: parts.join(" "), next };
 }
 
 function refusalResult(

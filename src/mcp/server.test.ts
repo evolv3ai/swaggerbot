@@ -8,8 +8,10 @@ import { createKeys, type Keys } from "~/index-store/keys";
 import type { Gate } from "~/lookup/http";
 import type { IndexedLookup, LookupRequest } from "~/lookup/lookup";
 import { createRateLimiter } from "~/lookup/rate-limit";
+import { expectGuided } from "./__fixtures__/guided";
 import { handleMcpRequest } from "./http";
 import { createSwaggerbotMcpHandler } from "./server";
+import { LookupApiOutput } from "./tools/lookup-api";
 
 const NOW = new Date("2026-09-23T21:30:00.000Z");
 const SPEC_ID = "0".repeat(64);
@@ -173,6 +175,18 @@ describe("/mcp", () => {
     });
   });
 
+  it("declares every tool's outputSchema as an object with summary and next", async () => {
+    const { tools } = await resultOf(await rpc("tools/list"));
+
+    for (const tool of tools) {
+      expect(tool.outputSchema, tool.name).toMatchObject({ type: "object" });
+      expect(JSON.stringify(tool.outputSchema), tool.name).toContain(
+        '"summary":{"type":"string"',
+      );
+      expect(tool.outputSchema.properties?.result, tool.name).toBeUndefined();
+    }
+  });
+
   it("serves get_spec_outline, an API not in the Index being a tool error", async () => {
     const result = await resultOf(
       await rpc("tools/call", {
@@ -188,17 +202,17 @@ describe("/mcp", () => {
   it("resolves an indexed name without a key, using no quota", async () => {
     const result = await callLookup({ name: "Stripe" });
 
-    expect(result.isError).toBeFalsy();
-    expect(result.structuredContent).toEqual(resolved);
-    const text = result.content[0]?.text;
-    expect(text).toMatch(
+    const { summary, next } = expectGuided(result, LookupApiOutput);
+    expect(result.structuredContent).toEqual({ summary, next, ...resolved });
+    expect(summary).toMatch(
       /^Resolved: Stripe by Stripe, apiId "stripe\.com\/stripe-api"\./,
     );
-    expect(text).toContain("Official Provenance");
-    expect(text).toContain(`/api/specs/${SPEC_ID}/published`);
-    expect(text).toContain(`/api/specs/${SPEC_ID}/normalized`);
-    expect(text).toContain(
-      'Next: get_spec_outline(apiId: "stripe.com/stripe-api")',
+    expect(summary).toContain("Official Provenance");
+    expect(summary).toContain(`/api/specs/${SPEC_ID}/published`);
+    expect(summary).toContain(`/api/specs/${SPEC_ID}/normalized`);
+    expect(next).toEqual(['get_spec_outline(apiId: "stripe.com/stripe-api")']);
+    expect(result.content[0]?.text).toMatch(
+      /Next: get_spec_outline\(apiId: "stripe\.com\/stripe-api"\)\.$/,
     );
     expect(fake.run).not.toHaveBeenCalled();
   });
@@ -218,8 +232,11 @@ describe("/mcp", () => {
     const { secret } = keys.createKey("alice", 1);
 
     const first = await callLookup({ name: "newco" }, bearer(secret));
-    expect(first.isError).toBeFalsy();
+    expectGuided(first, LookupApiOutput);
     expect(first.structuredContent).toEqual({
+      summary:
+        "Unknown: no API called \"newco\" was found. Check the name, or try the Vendor's name or the API's full name.",
+      next: [],
       outcome: "Unknown",
       name: "newco",
     });
@@ -300,8 +317,11 @@ describe("/mcp", () => {
       callLookup({ name: "newco" }, bearer(spent.secret)),
     ]);
 
-    expect(a.isError).toBeFalsy();
-    expect(a.structuredContent).toEqual({ outcome: "Unknown", name: "newco" });
+    expectGuided(a, LookupApiOutput);
+    expect(a.structuredContent).toMatchObject({
+      outcome: "Unknown",
+      name: "newco",
+    });
     expect(b.isError).toBe(true);
     expect(b.content[0]?.text).toMatch(/^Daily quota used\./);
     expect(takeQuota.mock.calls.map(([id, , limit]) => [id, limit])).toEqual(

@@ -1,14 +1,14 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
 import { describe, expect, it } from "vitest";
 import type { LookupAnswer } from "~/lookup/http";
-import { lookupResult, outcomeText } from "./lookup-api";
+import { lookupResult, outcomeGuidance } from "./lookup-api";
 
 const api = { id: "payco.com/payco-api", vendorId: "payco.com", name: "PayCo" };
 const vendor = { id: "payco.com", name: "PayCo Inc", domain: "payco.com" };
 
-describe("outcomeText", () => {
+describe("outcomeGuidance", () => {
   it("lists an Ambiguous Outcome's candidate names to retry with", () => {
-    const text = outcomeText(
+    const guidance = outcomeGuidance(
       { name: "Jira" },
       {
         outcome: "Ambiguous",
@@ -23,25 +23,46 @@ describe("outcomeText", () => {
       },
     );
 
-    expect(text).toBe(
-      'Ambiguous: "Jira" could mean several APIs. Next: lookup_api again with one of these names: "Jira Cloud Platform" (Atlassian), "Jira Software".',
-    );
+    expect(guidance).toEqual({
+      summary:
+        'Ambiguous: "Jira" could mean several APIs: "Jira Cloud Platform" (Atlassian), "Jira Software".',
+      next: [
+        'lookup_api(name: "Jira Cloud Platform")',
+        'lookup_api(name: "Jira Software")',
+      ],
+    });
   });
 
   it("offers allowCommunity when a No Spec Outcome has a Community Spec", () => {
-    const text = outcomeText(
+    const { summary, next } = outcomeGuidance(
       { name: "PayCo" },
       { outcome: "NoSpec", api, vendor, communityAvailable: true },
     );
 
-    expect(text).toMatch(/^No Spec: PayCo by PayCo Inc/);
-    expect(text).toContain('lookup_api(name: "PayCo", allowCommunity: true)');
+    expect(summary).toMatch(/^No Spec: PayCo by PayCo Inc/);
+    expect(next).toEqual(['lookup_api(name: "PayCo", allowCommunity: true)']);
+  });
+
+  it("escapes a candidate name that holds a quote in the call to retry with", () => {
+    const { next } = outcomeGuidance(
+      { name: "Acme" },
+      {
+        outcome: "Ambiguous",
+        candidates: [{ name: 'Acme "Classic" API', probability: 0.5 }],
+      },
+    );
+
+    expect(next).toEqual(['lookup_api(name: "Acme \\"Classic\\" API")']);
   });
 
   it("says what an Unknown name could try instead", () => {
-    expect(
-      outcomeText({ name: "nope" }, { outcome: "Unknown", name: "nope" }),
-    ).toMatch(/^Unknown: no API called "nope" was found\./);
+    const { summary, next } = outcomeGuidance(
+      { name: "nope" },
+      { outcome: "Unknown", name: "nope" },
+    );
+
+    expect(summary).toMatch(/^Unknown: no API called "nope" was found\./);
+    expect(next).toEqual([]);
   });
 });
 
