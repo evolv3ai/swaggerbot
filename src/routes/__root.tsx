@@ -5,6 +5,7 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import type { ReactNode } from "react";
+import fontsCss from "~/styles/fonts.css?url";
 import siteCss from "~/styles/site.css?url";
 
 const TITLE = "swagger.bot: the verified OpenAPI Spec for any API, by name";
@@ -31,16 +32,7 @@ export const Route = createRootRoute({
     ],
     links: [
       { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
-      { rel: "preconnect", href: "https://fonts.googleapis.com" },
-      {
-        rel: "preconnect",
-        href: "https://fonts.gstatic.com",
-        crossOrigin: "anonymous",
-      },
-      {
-        rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap",
-      },
+      { rel: "stylesheet", href: fontsCss },
       { rel: "stylesheet", href: siteCss },
     ],
   }),

@@ -16,5 +16,7 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # uicheck's tests drive a headless Chromium.
+      - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm check
       - run: pnpm build
