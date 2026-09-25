@@ -2,7 +2,7 @@
 
 **Acceptance** ([backlog](slice-5-backlog.md), D7): Claude Code, given only the swagger.bot MCP server and Bash to call the API (no web search or fetch), makes three successful calls to three different Val Town operations that need no key. It runs once on the default model and once on Haiku, as the canary for unclear tool descriptions. Every MCP result it receives stays under 30 kB. Nothing may cost what Slices 3 and 4 bought: `formscheck` still passes, and the HTTP API answers as before.
 
-**Awaiting Wes's acceptance (2026-09-24).**
+**Accepted by Wes, 2026-09-24,** on these results.
 - The default model passed on its first run.
 - Haiku passed on 1 of 4 runs. The failures were not tool-size problems: two runs never called the MCP tools, and one guessed a val name that doesn't exist. See below.
 - Every other condition passes.
@@ -30,13 +30,11 @@
 
 - **Runs 1 and 2 never called a swagger.bot tool.** Each loaded the tools with ToolSearch, then echoed "calling swaggerbot via Bash…" and curled `https://api.val.town/openapi.json` directly. That is a web fetch through Bash, so these runs don't count either way. It's Haiku not using loaded deferred tools, which swagger.bot's results can't change. Earlier Haiku smoke tests that said "Using only the swaggerbot MCP tools" did call them.
 - **Run 4** used the tools well: `lookup_api`, the outline, 3 × `get_operation`, then more outline queries when stuck. It couldn't find a public val name, and reported a 404 as a success.
-- **Claude Code shows the model `structuredContent`, not the text block** (confirmed on production `lookup_api`). D6's lead sentence and "Next:" call don't reach it, and the agents navigated from the JSON and its self-explaining fields (`downloads`, `x-truncated`). Filed as **WTR-134** (Backlog) with options A/B/C for Wes.
+- **Claude Code shows the model `structuredContent`, not the text block** (confirmed on production `lookup_api`). D6's lead sentence and "Next:" call don't reach it, and the agents navigated from the JSON and its self-explaining fields (`downloads`, `x-truncated`). Filed as **WTR-134**. Wes chose option A: the summary and the next calls go into `structuredContent` too ([backlog #6](slice-5-backlog.md)).
 
 ## Follow-ups
 
-- **WTR-134** (Backlog, not queued): the D6 guidance in `structuredContent`, plus small items from the reviews:
-  - `list_vendor_apis` paging before multi-API Vendors: about 1.5 kB per API, over 30 kB at about 20.
-  - Tool-level tests for the pending and failed Normalized Form texts.
-  - `get_schema`'s no-match hint.
+- **WTR-134** (backlog #6, queued): the D6 guidance in `structuredContent`, with tool-level tests for the pending and failed Normalized Form texts and `get_schema`'s no-match hint.
+- Not filed: `list_vendor_apis` needs paging before multi-API Vendors arrive (about 1.5 kB per API, over 30 kB at about 20). Today every Vendor has one API.
 - `mcpcheck` passes even if every name skips `get_schema` (true today for Cloudflare and Val Town). A fallback to any schema reference would guarantee `get_schema` is exercised.
 - `fetcher.test.ts`'s host-spacing tests are timing-sensitive and failed once each in two verifier runs under load; they passed on rerun.

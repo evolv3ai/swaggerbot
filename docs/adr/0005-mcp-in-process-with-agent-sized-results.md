@@ -1,6 +1,6 @@
 # MCP served in-process, stateless, with results sized for agents
 
-**Status:** accepted (Wes, 2026-09-24).
+**Status:** accepted (Wes, 2026-09-24); amended the same day for the result shape (below).
 
 swagger.bot's MCP server is a route in the same TanStack Start app (ADR 0002), at `https://swaggerbot.dev/mcp`, built on the MCP TypeScript SDK **v2** (`@modelcontextprotocol/server`, the stable line, implementing the 2026-07-28 spec). Its `createMcpHandler` turns a web-standard `Request` into a `Response` and builds a fresh `McpServer` per request, so the server keeps no session state and needs no sticky routing; it also answers 2025-era clients. The tools are thin adapters over the same code as the HTTP API: one rule for Index answers, API keys, quotas and the per-IP rate limit, whichever surface a Caller uses. The API key travels as `Authorization: Bearer`, is checked before the handler runs and is handed to it as `authInfo` for that request only.
 
@@ -18,3 +18,7 @@ What an MCP tool returns is sized for an agent's context, not for a program. Cla
 - The outline's filters and paging, and `get_schema`, are shared code; the HTTP API gets them too (optional query parameters and a route), so the two surfaces stay equal.
 - MCP calls count against the same per-IP limit (60 a minute by default). An agent navigating a Spec makes a handful of calls per task, well inside it.
 - `@modelcontextprotocol/server` becomes a dependency, and with it its protocol updates.
+
+## Amendment: the guidance lives in the structured result (2026-09-24)
+
+Claude Code 2.1.281 gives the model a tool result's `structuredContent` and drops its `text` block, so a summary and next call written only in the text never reach the agent (found in the Slice 5 acceptance, [result](../slices/slice-5-result.md)). Wes chose to put them in the structured result too: every successful MCP result's `structuredContent` begins with `summary` (the sentences for the agent) and `next` (the calls to make next), followed by the answer, and every tool declares an `outputSchema`. The text block stays, built from the same two fields, for clients that show it. The HTTP API doesn't change. Rejected: text only (the result would lose its types) and leaving it (the markers explain themselves, but the next calls were lost).

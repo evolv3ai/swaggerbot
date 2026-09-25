@@ -18,7 +18,7 @@ All eight taken as recommended by Wes on 2026-09-24, and recorded in [ADR 0005](
   - `get_spec_outline` takes optional `tag` and `query` (substring of path, `operationId` or summary) and pages at most 100 operations with a `cursor`. Without a filter on a Spec over 100 operations, the first page carries the tag list with counts and says to filter.
   - `get_operation` inlines breadth-first to 24 kB (today's `expandOperation` with `maxBytes`).
   - The same filters, paging and a `GET /api/apis/{apiId}/schema?name=` route are added to the HTTP API, whose defaults stay as they are.
-- **D6. Result shape:** *Taken.* each tool returns `structuredContent` (the JSON, with an `outputSchema`) and one `text` block that begins with a sentence for the agent and the next call to make (for example *"Resolved: Stripe API, Official Spec. Download: … Next: get_spec_outline(apiId: "stripe.com/stripe-api", query: "customers")."*). An error is `isError` with what went wrong and the call that fixes it (a wrong `path` gets the nearest paths from the outline). Spec content is never returned whole (PRD): the full Spec is its download URL.
+- **D6. Result shape:** *Taken; amended by Wes 2026-09-24 (#6, ADR 0005's amendment): the summary and next calls go in `structuredContent` too, because Claude Code shows the model only that.* each tool returns `structuredContent` (the JSON, with an `outputSchema`) and one `text` block that begins with a sentence for the agent and the next call to make (for example *"Resolved: Stripe API, Official Spec. Download: … Next: get_spec_outline(apiId: "stripe.com/stripe-api", query: "customers")."*). An error is `isError` with what went wrong and the call that fixes it (a wrong `path` gets the nearest paths from the outline). Spec content is never returned whole (PRD): the full Spec is its download URL.
 - **D7. Acceptance target:** *Taken.* Val Town, as above. Alternatives: GitHub REST (unauthenticated reads work, but Claude knows it well, so it proves less), or Stripe with a test-mode key you'd provide.
 - **D8. Docs:** *Taken.* a README "MCP" section and one "Use it from Claude Code" block on the landing page (still the interim page; Slice 6 replaces it).
 
@@ -35,6 +35,7 @@ Slice 4 is accepted with its follow-ups (production `d0175c1`). The four operati
 | 3 | WTR-131 | `get_operation` and `get_schema` for agents | 1 | 2 |
 | 4 | WTR-132 | `list_vendor_apis` over MCP | 1 | 2 |
 | 5 | WTR-133 | `scripts/mcpcheck.ts`, the README section and the landing-page block | 2, 3, 4 | 3 |
+| 6 | WTR-134 | The agent's guidance in `structuredContent` (after the acceptance) | 1–5 | 4 |
 
 Wave 1 was queued on filing; wave 2 (WTR-130–132) is queued when WTR-129 merges, wave 3 when all three have. #2, #3 and #4 each add a file under `src/mcp/tools/` and one line to the tool list in `src/mcp/server.ts`, a mechanical conflict: wave 2 is merged one PR at a time, rebasing each on the last.
 
@@ -119,3 +120,28 @@ Slice 5's acceptance needs a repeatable check of the deployed MCP server, and Ca
 ## Done when
 - `pnpm check` and `pnpm build` green; the script's `--help`.
 - The manual check in the PR: `mcpcheck` against the built server on a copy of an Index passes, output pasted.
+
+## 6. swaggerbot: MCP guidance reaches Claude Code, in `structuredContent`
+
+## Problem
+D6 put the guidance an agent needs in each MCP result's `text` block: what was found, what was left out, and the call to make next. Claude Code (2.1.281) shows the model only `structuredContent` when a result has it. The text never arrives. Checked on production: asked to quote what `lookup_api` returned, Haiku quoted the Outcome JSON, not the "Resolved: … Next: get_spec_outline(…)" sentence. Wes chose to put the guidance in the structured result ([ADR 0005](../adr/0005-mcp-in-process-with-agent-sized-results.md), amendment).
+
+## Change
+- `src/mcp/result.ts`: one helper that builds every successful tool result from `{ summary, next, data }`:
+  - `structuredContent` = `{ summary, next, ...data }`, with `summary` and `next` as the object's first keys, so they come first in the JSON.
+  - The `text` block = `summary`, then `Next: ` and the `next` calls joined with "; or ". This keeps what each tool writes in its text today.
+  - `summary` is a string: today's text up to the "Next:" sentence.
+  - `next` is a list of call strings, for example `get_spec_outline(apiId: "stripe.com/stripe-api")`. It is empty when there is nothing to call.
+- All five tools use it: `lookup_api`, `list_vendor_apis`, `get_spec_outline`, `get_operation`, `get_schema`. Each keeps its current sentences, and moves each "Next: …" call into `next`.
+- Every tool declares an `outputSchema`: the answer's schema extended with `summary` and `next`. `lookup_api`'s answer is the Outcome, a union; `z.intersection` or a per-member `.extend` is fine. SDK 2.1.0 adds `type: "object"` to such a root and doesn't wrap it as `{ result }`.
+- Error results (`isError`) stay as they are: text only, with no `structuredContent`, which Claude Code shows.
+- The HTTP API does not change, including the bodies of `/api/lookup` and `/api/apis/…`.
+- Also:
+  - Add tool-level tests for the pending and failed Normalized Form texts of `get_operation`, `get_schema` and `get_spec_outline`.
+  - When a name has no near match, `get_schema` gives no "Next:" name. It points to `get_spec_outline` or `get_operation` instead.
+
+## Done when
+- Tests: for each tool's success, `structuredContent`'s first two keys are `summary` and `next`, and the text equals the summary followed by the next calls. The result validates against the tool's `outputSchema`. The 30 kB bound still holds, counting the new fields. The errors are unchanged. The new tests for pending, failed and no-match pass.
+- `pnpm check` and `pnpm build` green.
+- Manual check in the PR: start the built server on a copy of an Index, then run `claude -p "Call the swaggerbot lookup_api tool once with name Stripe, then quote verbatim the first 300 characters of exactly what the tool returned to you." --mcp-config <file> --strict-mcp-config --allowedTools "mcp__swaggerbot__*" --model haiku`. The quote must begin with `{"summary":"Resolved:`. Also run `scripts/mcpcheck.ts` against it and paste the output.
+
