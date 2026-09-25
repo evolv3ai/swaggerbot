@@ -10,7 +10,7 @@ import type { Gate } from "~/lookup/http";
 import { createLookup } from "~/lookup/lookup";
 import { expectGuided } from "../__fixtures__/guided";
 import { createSwaggerbotMcpHandler } from "../server";
-import { ListVendorApisOutput } from "./list-vendor-apis";
+import { ListVendorApisOutput, vendorApisGuidance } from "./list-vendor-apis";
 
 const dir = mkdtempSync(join(tmpdir(), "swaggerbot-mcp-vendors-"));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -167,5 +167,19 @@ describe("list_vendor_apis", () => {
     const result = await listVendorApis({ vendor: "  " });
 
     expect(result.isError).toBe(true);
+  });
+});
+
+describe("vendorApisGuidance", () => {
+  it("names no placeholder call for a Vendor with no APIs, and says how to add one", () => {
+    const { summary, next } = vendorApisGuidance({
+      vendor: { id: "twilio.dev", name: "Twilio Dev", domain: "twilio.dev" },
+      apis: [],
+    });
+
+    expect(next).toEqual([]);
+    expect(summary).toBe(
+      "Twilio Dev (twilio.dev) has 0 APIs in the Index. lookup_api with the name of the API you want finds it and adds it, with its Vendor, to the Index.",
+    );
   });
 });

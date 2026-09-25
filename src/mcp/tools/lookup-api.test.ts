@@ -43,6 +43,18 @@ describe("outcomeGuidance", () => {
     expect(next).toEqual(['lookup_api(name: "PayCo", allowCommunity: true)']);
   });
 
+  it("escapes a candidate name that holds a quote in the call to retry with", () => {
+    const { next } = outcomeGuidance(
+      { name: "Acme" },
+      {
+        outcome: "Ambiguous",
+        candidates: [{ name: 'Acme "Classic" API', probability: 0.5 }],
+      },
+    );
+
+    expect(next).toEqual(['lookup_api(name: "Acme \\"Classic\\" API")']);
+  });
+
   it("says what an Unknown name could try instead", () => {
     const { summary, next } = outcomeGuidance(
       { name: "nope" },

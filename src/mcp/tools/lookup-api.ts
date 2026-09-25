@@ -110,7 +110,9 @@ export function outcomeGuidance(
         summary: `Ambiguous: "${request.name}" could mean several APIs: ${outcome.candidates
           .map((c) => `"${c.name}"${c.vendor ? ` (${c.vendor})` : ""}`)
           .join(", ")}.`,
-        next: outcome.candidates.map((c) => `lookup_api(name: "${c.name}")`),
+        next: outcome.candidates.map(
+          (c) => `lookup_api(name: ${JSON.stringify(c.name)})`,
+        ),
       };
     case "Unconfirmed": {
       const { api, vendor, spec } = outcome;
@@ -132,7 +134,9 @@ export function outcomeGuidance(
           outcome.communityAvailable ? " A Community Spec exists." : ""
         }`,
         next: outcome.communityAvailable
-          ? [`lookup_api(name: "${request.name}", allowCommunity: true)`]
+          ? [
+              `lookup_api(name: ${JSON.stringify(request.name)}, allowCommunity: true)`,
+            ]
           : [],
       };
     case "Unknown":

@@ -80,10 +80,10 @@ export function vendorApisGuidance({ vendor, apis }: VendorApis): Guidance {
   const head = `${vendor.name}${vendor.name === vendor.id ? "" : ` (${vendor.id})`} has ${apis.length} API${apis.length === 1 ? "" : "s"} in the Index${apis.length > 0 ? ":" : "."}`;
   const next = apis.find((a) => a.currentSpec) ?? apis[0];
   return {
-    summary: [head, ...apis.map(apiLine)].join("\n"),
-    next: next
-      ? [`get_spec_outline(apiId: "${next.api.id}")`]
-      : ["lookup_api(name)"],
+    summary: next
+      ? [head, ...apis.map(apiLine)].join("\n")
+      : `${head} lookup_api with the name of the API you want finds it and adds it, with its Vendor, to the Index.`,
+    next: next ? [`get_spec_outline(apiId: "${next.api.id}")`] : [],
   };
 }
 
