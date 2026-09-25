@@ -321,6 +321,51 @@ export function createRepo(db: Db) {
         .all();
     },
 
+    /**
+     * The Vendors with at least one API in the Index, each with its API
+     * count, whose id or name contains `query` ignoring case (ASCII letters
+     * only, as SQLite's `lower`), by name ignoring case, then id: `limit` of
+     * them from `offset` on, and how many match in all.
+     */
+    pageVendorsWithApis({
+      query,
+      offset,
+      limit,
+    }: {
+      query?: string;
+      offset: number;
+      limit: number;
+    }): {
+      vendors: { id: string; name: string; apiCount: number }[];
+      total: number;
+    } {
+      const needle = query?.trim().toLowerCase();
+      const matches = needle
+        ? sql`(instr(lower(${vendors.id}), ${needle}) > 0 or instr(lower(${vendors.name}), ${needle}) > 0)`
+        : undefined;
+      const page = db
+        .select({
+          id: vendors.id,
+          name: vendors.name,
+          apiCount: sql<number>`count(${apis.id})`,
+        })
+        .from(vendors)
+        .innerJoin(apis, eq(apis.vendorId, vendors.id))
+        .where(matches)
+        .groupBy(vendors.id)
+        .orderBy(asc(sql`lower(${vendors.name})`), asc(vendors.id))
+        .limit(limit)
+        .offset(offset)
+        .all();
+      const counted = db
+        .select({ total: sql<number>`count(distinct ${vendors.id})` })
+        .from(vendors)
+        .innerJoin(apis, eq(apis.vendorId, vendors.id))
+        .where(matches)
+        .get();
+      return { vendors: page, total: counted?.total ?? 0 };
+    },
+
     getApiWithSpecs(apiId: string): ApiWithSpecs | undefined {
       const row = db
         .select({ api: apiColumns, vendor: vendorColumns })
