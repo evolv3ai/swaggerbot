@@ -11,3 +11,6 @@ dist/
 
 # local Index database
 data/
+
+# Impeccable engine binary (its launcher downloads it to ~/.impeccable/bin)
+.claude/skills/impeccable/scripts/bin/
