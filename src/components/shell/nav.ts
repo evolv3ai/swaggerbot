@@ -5,4 +5,7 @@
  */
 export type NavItem = { to: string; label: string };
 
-export const NAV: NavItem[] = [{ to: "/", label: "Search" }];
+export const NAV: NavItem[] = [
+  { to: "/", label: "Search" },
+  { to: "/vendors", label: "Vendors" },
+];

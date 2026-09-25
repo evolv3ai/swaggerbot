@@ -10,11 +10,14 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as LookupRouteImport } from './routes/lookup'
 import { Route as McpRouteImport } from './routes/mcp'
 import { Route as ApiSplatRouteImport } from './routes/api/$'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as ApiLookupRouteImport } from './routes/api/lookup'
 import { Route as SpecsSpecIdRouteImport } from './routes/specs/$specId'
+import { Route as VendorsIndexRouteImport } from './routes/vendors/index'
+import { Route as VendorsVendorIdRouteImport } from './routes/vendors/$vendorId'
 import { Route as ApiApisSplatRouteImport } from './routes/api/apis/$'
 import { Route as ApiVendorsIndexRouteImport } from './routes/api/vendors/index'
 import { Route as EmbedSpecsSpecIdRouteImport } from './routes/embed/specs/$specId'
@@ -25,6 +28,11 @@ import { Route as ApiVendorsVendorApisRouteImport } from './routes/api/vendors/$
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LookupRoute = LookupRouteImport.update({
+  id: '/lookup',
+  path: '/lookup',
   getParentRoute: () => rootRouteImport,
 } as any)
 const McpRoute = McpRouteImport.update({
@@ -50,6 +58,16 @@ const ApiLookupRoute = ApiLookupRouteImport.update({
 const SpecsSpecIdRoute = SpecsSpecIdRouteImport.update({
   id: '/specs/$specId',
   path: '/specs/$specId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VendorsIndexRoute = VendorsIndexRouteImport.update({
+  id: '/vendors/',
+  path: '/vendors/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VendorsVendorIdRoute = VendorsVendorIdRouteImport.update({
+  id: '/vendors/$vendorId',
+  path: '/vendors/$vendorId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiApisSplatRoute = ApiApisSplatRouteImport.update({
@@ -86,11 +104,14 @@ const ApiVendorsVendorApisRoute = ApiVendorsVendorApisRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/lookup': typeof LookupRoute
   '/mcp': typeof McpRoute
   '/api/$': typeof ApiSplatRoute
   '/api/health': typeof ApiHealthRoute
   '/api/lookup': typeof ApiLookupRoute
   '/specs/$specId': typeof SpecsSpecIdRoute
+  '/vendors/$vendorId': typeof VendorsVendorIdRoute
+  '/vendors/': typeof VendorsIndexRoute
   '/api/apis/$': typeof ApiApisSplatRoute
   '/embed/specs/$specId': typeof EmbedSpecsSpecIdRoute
   '/api/vendors/': typeof ApiVendorsIndexRoute
@@ -100,11 +121,14 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/lookup': typeof LookupRoute
   '/mcp': typeof McpRoute
   '/api/$': typeof ApiSplatRoute
   '/api/health': typeof ApiHealthRoute
   '/api/lookup': typeof ApiLookupRoute
   '/specs/$specId': typeof SpecsSpecIdRoute
+  '/vendors/$vendorId': typeof VendorsVendorIdRoute
+  '/vendors': typeof VendorsIndexRoute
   '/api/apis/$': typeof ApiApisSplatRoute
   '/embed/specs/$specId': typeof EmbedSpecsSpecIdRoute
   '/api/vendors': typeof ApiVendorsIndexRoute
@@ -115,11 +139,14 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/lookup': typeof LookupRoute
   '/mcp': typeof McpRoute
   '/api/$': typeof ApiSplatRoute
   '/api/health': typeof ApiHealthRoute
   '/api/lookup': typeof ApiLookupRoute
   '/specs/$specId': typeof SpecsSpecIdRoute
+  '/vendors/$vendorId': typeof VendorsVendorIdRoute
+  '/vendors/': typeof VendorsIndexRoute
   '/api/apis/$': typeof ApiApisSplatRoute
   '/embed/specs/$specId': typeof EmbedSpecsSpecIdRoute
   '/api/vendors/': typeof ApiVendorsIndexRoute
@@ -131,11 +158,14 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/lookup'
     | '/mcp'
     | '/api/$'
     | '/api/health'
     | '/api/lookup'
     | '/specs/$specId'
+    | '/vendors/$vendorId'
+    | '/vendors/'
     | '/api/apis/$'
     | '/embed/specs/$specId'
     | '/api/vendors/'
@@ -145,11 +175,14 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/lookup'
     | '/mcp'
     | '/api/$'
     | '/api/health'
     | '/api/lookup'
     | '/specs/$specId'
+    | '/vendors/$vendorId'
+    | '/vendors'
     | '/api/apis/$'
     | '/embed/specs/$specId'
     | '/api/vendors'
@@ -159,11 +192,14 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/lookup'
     | '/mcp'
     | '/api/$'
     | '/api/health'
     | '/api/lookup'
     | '/specs/$specId'
+    | '/vendors/$vendorId'
+    | '/vendors/'
     | '/api/apis/$'
     | '/embed/specs/$specId'
     | '/api/vendors/'
@@ -174,11 +210,14 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  LookupRoute: typeof LookupRoute
   McpRoute: typeof McpRoute
   ApiSplatRoute: typeof ApiSplatRoute
   ApiHealthRoute: typeof ApiHealthRoute
   ApiLookupRoute: typeof ApiLookupRoute
   SpecsSpecIdRoute: typeof SpecsSpecIdRoute
+  VendorsVendorIdRoute: typeof VendorsVendorIdRoute
+  VendorsIndexRoute: typeof VendorsIndexRoute
   ApiApisSplatRoute: typeof ApiApisSplatRoute
   EmbedSpecsSpecIdRoute: typeof EmbedSpecsSpecIdRoute
   ApiVendorsIndexRoute: typeof ApiVendorsIndexRoute
@@ -194,6 +233,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/lookup': {
+      id: '/lookup'
+      path: '/lookup'
+      fullPath: '/lookup'
+      preLoaderRoute: typeof LookupRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/mcp': {
@@ -229,6 +275,20 @@ declare module '@tanstack/react-router' {
       path: '/specs/$specId'
       fullPath: '/specs/$specId'
       preLoaderRoute: typeof SpecsSpecIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/vendors/': {
+      id: '/vendors/'
+      path: '/vendors'
+      fullPath: '/vendors/'
+      preLoaderRoute: typeof VendorsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/vendors/$vendorId': {
+      id: '/vendors/$vendorId'
+      path: '/vendors/$vendorId'
+      fullPath: '/vendors/$vendorId'
+      preLoaderRoute: typeof VendorsVendorIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/apis/$': {
@@ -278,11 +338,14 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  LookupRoute: LookupRoute,
   McpRoute: McpRoute,
   ApiSplatRoute: ApiSplatRoute,
   ApiHealthRoute: ApiHealthRoute,
   ApiLookupRoute: ApiLookupRoute,
   SpecsSpecIdRoute: SpecsSpecIdRoute,
+  VendorsVendorIdRoute: VendorsVendorIdRoute,
+  VendorsIndexRoute: VendorsIndexRoute,
   ApiApisSplatRoute: ApiApisSplatRoute,
   EmbedSpecsSpecIdRoute: EmbedSpecsSpecIdRoute,
   ApiVendorsIndexRoute: ApiVendorsIndexRoute,

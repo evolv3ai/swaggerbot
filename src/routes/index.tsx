@@ -1,6 +1,7 @@
 import { createFileRoute, useLoaderData } from "@tanstack/react-router";
 import { useEffect, useId, useRef, useState } from "react";
 import { CertaintyStrip } from "~/components/darkroom/certainty-strip";
+import { CodeLine } from "~/components/darkroom/code-line";
 import { Print } from "~/components/darkroom/print";
 import { dayOf } from "~/components/darkroom/stamp";
 import { type ChainState, Stations } from "~/components/darkroom/stations";
@@ -255,16 +256,6 @@ function Replay({
 }
 
 function StatusBar({ facts }: { facts: IndexStats | null }) {
-  const [copied, setCopied] = useState(false);
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(MCP_ADD);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      setCopied(false);
-    }
-  };
   return (
     <section
       aria-label="The Index, the Benchmark and Claude Code"
@@ -303,21 +294,7 @@ function StatusBar({ facts }: { facts: IndexStats | null }) {
         <p className="font-caps text-xs font-semibold uppercase tracking-[0.14em] text-ink-2">
           Add it to Claude Code
         </p>
-        <div className="flex min-w-0 items-stretch overflow-hidden rounded-[3px] border border-ink bg-strip-5">
-          <code className="min-w-0 flex-1 px-3 py-2.5 font-mono text-sm leading-relaxed text-print [overflow-wrap:anywhere]">
-            {MCP_ADD}
-          </code>
-          <button
-            type="button"
-            onClick={copy}
-            className="shrink-0 border-l border-ink bg-lamp px-3 font-caps text-sm font-bold uppercase tracking-[0.12em] text-[#0e0e0e]"
-          >
-            {copied ? "Copied" : "Copy"}
-          </button>
-        </div>
-        <p className="sr-only" aria-live="polite">
-          {copied ? "Copied to the clipboard" : ""}
-        </p>
+        <CodeLine code={MCP_ADD} />
       </div>
     </section>
   );

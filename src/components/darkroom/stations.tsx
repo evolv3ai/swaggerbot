@@ -23,14 +23,17 @@ export const STATIONS = [
 
 /**
  * Where a Lookup is on the chain. `checking`: at the Index. `answered`: the
- * Index answered, so no later station was needed.
+ * Index answered, so no later station was needed. `missed`: the Index
+ * didn't know the name, and the stations after it are Discovery, which
+ * needs an API key.
  */
-export type ChainState = "idle" | "checking" | "answered";
+export type ChainState = "idle" | "checking" | "answered" | "missed";
 
 /**
  * The chain as numbered stations: the numbers carry the order a Lookup runs
  * in. The Index station lights while a Lookup is there; once the Index has
- * answered, the stations after it say they weren't needed.
+ * answered, the stations after it say they weren't needed; when it
+ * hasn't, that they need a key.
  */
 export function Stations({
   state,
@@ -47,7 +50,7 @@ export function Stations({
       )}
     >
       {STATIONS.map((station, i) => {
-        const lit = i === 0 && state !== "idle";
+        const lit = i === 0 && (state === "checking" || state === "answered");
         const skipped = i > 0 && state === "answered";
         return (
           <li
@@ -67,9 +70,19 @@ export function Stations({
                   Answered here
                 </span>
               ) : null}
+              {i === 0 && state === "missed" ? (
+                <span className="rounded-[2px] border border-ink px-1.5 py-px font-caps text-xs font-semibold uppercase tracking-[0.12em]">
+                  Not here
+                </span>
+              ) : null}
               {skipped ? (
                 <span className="font-caps text-xs font-semibold uppercase tracking-[0.12em] text-ink-2">
                   Not needed
+                </span>
+              ) : null}
+              {i > 0 && state === "missed" ? (
+                <span className="font-caps text-xs font-semibold uppercase tracking-[0.12em] text-ink-2">
+                  Needs a key
                 </span>
               ) : null}
             </span>
