@@ -1,6 +1,6 @@
 # Slice 6 backlog: Web UI
 
-**Status: DRAFT for Wes, 2026-09-25.** Nothing is filed on Linear. The decisions D1–D9 below each carry a recommendation; nothing is built until Wes approves them (or changes them).
+**Status: approved by Wes, 2026-09-25** (D1–D8 as recommended; D9 a `mailto:`, address to come). Filed on Linear as in the Order table. Unkey for keys was considered the same day and deferred to self-service keys (PRD "Later"): see D9.
 
 The issues for [Slice 6](../PRD.md#slice-6--web-ui), written so the weawr factory can build them: each numbered body is filed as-is on Linear (team WTR, labels `ai` + `swaggerbot`). Capitalised terms are from [`CONTEXT.md`](../../CONTEXT.md). Conventions shared by every issue live in `.weawr/instructions.md`.
 
@@ -37,7 +37,7 @@ Slice 5 is accepted (production `f6b9bf3`, `main` `2299aef`). The UI has these p
   - Large Specs: Cloudflare is 26 MB. The viewer loads Scalar only for the chosen form, shows its size first, and for Specs over 10 MB links to the outline and downloads instead of rendering them inline (the threshold is checked in the issue's manual check against Stripe, GitHub and Cloudflare).
 - **D7. Index browsing: a new `GET /api/vendors`.** *Recommended:* `GET /api/vendors?cursor=&limit=&query=`: Vendors ordered by name, each with its id, name and API count, 50 per page by default (at most 200), `query` a substring of the id or name. The `/vendors` page uses the same function. **No new MCP tool:** `tools/list` is 28.4 kB, near `mcpcheck`'s 30 kB bound, and an agent reaches Vendors through `lookup_api` and `list_vendor_apis`. The open follow-up that `list_vendor_apis` needs paging past ~20 APIs is left open (not Slice 6).
 - **D8. Acceptance:** as at the top. The WCAG AA check is automated (`uicheck`) so every screen issue can run it in its PR, not only at the end. `uicheck` uses Playwright (`playwright` and `@axe-core/playwright` as dev dependencies, Chromium only). The alternative is the headless-Chrome screenshots of earlier slices plus a manual axe run, which catches less and can't run in a PR.
-- **D9. "Request a key": where does it go?** Keys are handed out by hand (PRD). *Needs Wes:* a `mailto:` to an address you name, or a GitHub issue form on `evolv3ai/swagger.bot` (public issues would show who asked). *Recommended:* a `mailto:` with a prefilled subject, if you have an address you want public.
+- **D9. "Request a key": a `mailto:`.** *Taken (Wes, 2026-09-25):* a `mailto:` link with a prefilled subject ("swagger.bot API key request"); the address is Wes's to give before issue #6 is queued. Keys stay hand-issued in the Index (`scripts/keys.ts`). **Unkey was considered and deferred:** it maps cleanly onto our keys (daily credits refilled at midnight UTC, `verifyKey` codes; our `findKey`/`takeQuota` seam makes it one adapter issue, with `findKey` going async), but it puts an outside service in the auth path and its customer portal, the part that would replace this link, is unreleased. Revisit with self-service keys.
 
 ## Screens and routes
 
