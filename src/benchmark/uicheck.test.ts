@@ -252,6 +252,21 @@ describe.skipIf(!probe && !process.env.CI)("checkRun on fixture pages", () => {
         res.writeHead(200, headers).end(body);
       });
     }
+    server.send(
+      "127.0.0.1",
+      "/framed",
+      readFileSync(join(FIXTURES, "framed.html"), "utf8"),
+      "text/html; charset=utf-8",
+    );
+    const embed = readFileSync(join(FIXTURES, "embed", "bad.html"), "utf8");
+    server.route("127.0.0.1", "/embed/bad", (_req, res) => {
+      res
+        .writeHead(200, {
+          "content-type": "text/html; charset=utf-8",
+          "content-security-policy": "img-src 'self'",
+        })
+        .end(embed);
+    });
     browser = await chromium.launch();
     out = mkdtempSync(join(tmpdir(), "uicheck-"));
   }, 30_000);
@@ -304,6 +319,13 @@ describe.skipIf(!probe && !process.env.CI)("checkRun on fixture pages", () => {
     const run = await check("/csp");
     expect(run.cspViolations).toHaveLength(1);
     expect(run.failures[0]).toMatch(/^CSP: .*Content Security Policy/);
+  }, 30_000);
+
+  it("leaves the Spec viewer's frame (/embed/…) to the operator's audit", async () => {
+    const run = await check("/framed");
+    // The frame has a field with no label and a remote image its CSP refuses.
+    expect(run.violations).toEqual([]);
+    expect(run.cspViolations).toEqual([]);
   }, 30_000);
 
   it("fails a page that doesn't load", async () => {

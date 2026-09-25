@@ -228,6 +228,11 @@ export function createRepo(db: Db) {
         .run();
     },
 
+    /** A stored Spec, without its bytes; `undefined` for an unknown Spec. */
+    getSpec(specId: string): Spec | undefined {
+      return getSpec(specId);
+    },
+
     /**
      * A Spec's Published Form as stored, byte for byte, with its format and
      * API id; `undefined` for an unknown Spec.
