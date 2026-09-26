@@ -1,227 +1,333 @@
 import { createFileRoute, Link, useLoaderData } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
-import { CertaintyStrip } from "~/components/darkroom/certainty-strip";
-import { Print } from "~/components/darkroom/print";
+import { ArrowRight } from "lucide-react";
 import { dayOf } from "~/components/darkroom/stamp";
-import { type ChainState, Stations } from "~/components/darkroom/stations";
+import { MCP_ADD } from "~/components/docs/reference";
 import { SearchForm } from "~/components/search/search-form";
-import type { IndexStats } from "~/server/index-stats";
+import { BENCHMARK } from "~/components/shell/benchmark";
+import { WithOnThisPage } from "~/components/shell/on-this-page";
+import { ANSWERS, AnswerBadge } from "~/components/ui/answer-badge";
+import { Badge } from "~/components/ui/badge";
+import { buttonClass } from "~/components/ui/button";
+import { Card } from "~/components/ui/card";
+import { CodeBlock } from "~/components/ui/code-block";
+import { Tabs } from "~/components/ui/tabs";
+import { sizeOf } from "~/components/viewer/size";
+import type { OutcomeKind } from "~/domain/outcome";
+import type { IndexPrint, IndexStats } from "~/server/index-stats";
 import { lookupHref } from "~/server/lookup-search";
 
 export const Route = createFileRoute("/")({
   component: Search,
 });
 
-/**
- * The latest Benchmark run, updated by hand after each run (PRODUCT.md:
- * every figure states its base and date). Source: the Slice 4 result.
- */
-const BENCHMARK = {
-  date: "2026-09-23",
-  names: 40,
-  resolved: 20,
-  wrong: 0,
-  runs: 2,
-  href: "https://github.com/evolv3ai/swaggerbot/blob/main/docs/slices/slice-4-result.md",
+const H2 =
+  "mt-10 mb-3.5 scroll-mt-20 font-display text-xl font-bold tracking-[-0.01em] text-sb-text";
+
+/** What each answer means (CONTEXT.md's Outcomes, in the page's words). */
+const MEANING: Record<OutcomeKind, string> = {
+  Resolved:
+    "The name is one API, and its Spec is confirmed to describe it. With Provenance and Sources.",
+  Unconfirmed:
+    "The API and a Spec were found, but not confirmed as this API's. The Spec comes with the reasons for doubt.",
+  Ambiguous:
+    "The name could mean more than one API. You get the candidates to pick from.",
+  NoSpec: "The API is known, but no Spec exists at a Provenance you allowed.",
+  Unknown: "The name can't be matched to any API.",
 };
 
-/** How long a replayed answer sits at the Index station before it's answered. */
-const CHECKING_MS = 900;
-
+/**
+ * Search, the front door: a docs page that answers. The Lookup box, then a
+ * real answer from the Index, the five answers, and the way in for agents
+ * and programs. Every figure is live from the Index or the dated Benchmark.
+ */
 function Search() {
   const facts = useLoaderData({ from: "__root__" });
-  const [typing, setTyping] = useState(false);
-  // The print on show was answered by the Index, so the chain starts there.
-  const [chain, setChain] = useState<ChainState>(
-    facts?.recent.length ? "answered" : "idle",
-  );
+  const example = facts?.recent[0];
   return (
-    <div className="grid gap-10 px-4 pt-8 sm:px-8 lg:gap-14 lg:pt-12">
-      <div className="grid items-start gap-10 xl:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)]">
-        <section aria-labelledby="headline" className="grid gap-6">
-          <h1
-            id="headline"
-            className="font-pencil text-[clamp(3.25rem,8.5vw,6rem)] uppercase leading-[0.95]"
-          >
-            No fake Specs.
-          </h1>
-          <p className="max-w-[34rem] text-lg leading-relaxed text-ink-2 sm:text-xl">
-            Name an API. SwaggerBot hands you its OpenAPI Spec, where it came
-            from and how sure it is, or tells you straight why there isn't one.
-          </p>
-          <SearchForm
-            onType={() => setTyping(true)}
-            onSubmit={() => setChain("checking")}
-          >
-            <CertaintyStrip />
-          </SearchForm>
-        </section>
-        {facts && facts.recent.length > 0 ? (
-          <Replay recent={facts.recent} stopped={typing} onChain={setChain} />
+    <WithOnThisPage first={{ id: "look-up", label: "Look up an API" }}>
+      <div className="max-w-[860px] px-4 pt-7 pb-16 sm:px-8 lg:px-14 lg:pt-11">
+        <p className="font-display text-xs font-bold uppercase tracking-[0.3em] text-sb-accent-text">
+          Better than Specs
+        </p>
+        <h1
+          id="look-up"
+          className="mt-2 mb-2.5 scroll-mt-20 font-display text-[28px] leading-[1.1] font-extrabold tracking-[-0.01em] text-sb-text sm:text-[40px]"
+        >
+          No fake Specs.
+        </h1>
+        <p className="max-w-[40em] text-[17px] text-sb-text-muted">
+          Name an API. SwaggerBot hands you its OpenAPI Spec, where it came from
+          and how sure it is, or tells you straight why there isn't one.
+        </p>
+        <SearchForm className="mt-[26px]">
+          <TryRow facts={facts} />
+        </SearchForm>
+
+        {example ? (
+          <section aria-labelledby="what-you-get-back">
+            <h2 id="what-you-get-back" className={H2}>
+              What you get back
+            </h2>
+            <ResolvedExample print={example} />
+          </section>
         ) : null}
-      </div>
 
-      <section aria-labelledby="stations" className="grid gap-4">
-        <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-          <h2
-            id="stations"
-            className="font-caps text-2xl font-semibold uppercase tracking-wide"
-          >
-            How a Spec is developed
+        <section aria-labelledby="answers">
+          <h2 id="answers" className={H2}>
+            Every answer is one of five
           </h2>
-          <p className="text-sm text-ink-2">
-            From the Index, anyone. Past it, Discovery, with an API key.
+          <p className="mb-4 max-w-[40em] text-sb-text-muted">
+            Precision over coverage: when SwaggerBot isn't sure, it says so as
+            plainly as when it is.
           </p>
-        </div>
-        <Stations state={chain} />
-      </section>
+          <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {ANSWERS.map((a) => (
+              <li key={a.outcome}>
+                <Card className="h-full rounded-[12px] p-4">
+                  <AnswerBadge outcome={a.outcome} />
+                  <p className="mt-2.5 text-[13.5px] leading-normal text-sb-text-muted">
+                    {MEANING[a.outcome]}
+                  </p>
+                </Card>
+              </li>
+            ))}
+          </ul>
+        </section>
 
-      <StatusBar facts={facts} />
+        <section aria-labelledby="use-it-from-code">
+          <h2 id="use-it-from-code" className={H2}>
+            Use it from code
+          </h2>
+          <Card className="grid gap-4 rounded-[12px] p-5">
+            <p className="max-w-[40em]">
+              For agents and programs: the same answers over MCP and the HTTP
+              API. From the Index, anyone. Past it, Discovery, with an API key.
+            </p>
+            <CodeBlock code={MCP_ADD} className="overflow-hidden rounded-md" />
+            <p className="flex flex-wrap gap-3">
+              <Link
+                to="/docs"
+                className={buttonClass({ variant: "secondary", size: "md" })}
+              >
+                Read the docs
+              </Link>
+              <Link
+                to="/docs"
+                hash="keys"
+                className={buttonClass({ variant: "ghost", size: "md" })}
+              >
+                Request a key
+              </Link>
+            </p>
+          </Card>
+        </section>
+
+        <section aria-labelledby="benchmark">
+          <h2 id="benchmark" className={H2}>
+            Benchmark
+          </h2>
+          <p className="max-w-[40em] text-sb-text-muted">
+            On {dayOf(`${BENCHMARK.date}T12:00:00Z`)}:{" "}
+            <strong className="font-semibold text-sb-text">
+              {BENCHMARK.wrong} wrong of {BENCHMARK.resolved} Resolved answers
+            </strong>
+            , on {BENCHMARK.runs} runs over the {BENCHMARK.names}-name set,
+            after two label corrections.{" "}
+            <a href={BENCHMARK.href} className="text-sb-accent-text">
+              How it was measured
+            </a>
+          </p>
+          {facts ? (
+            <dl className="mt-5 flex flex-wrap gap-x-10 gap-y-3">
+              {(
+                [
+                  ["Vendors", facts.vendors],
+                  ["APIs", facts.apis],
+                  ["Specs", facts.specs],
+                ] as const
+              ).map(([label, n]) => (
+                <div key={label} className="grid">
+                  <dt className="text-xs font-semibold text-sb-text-muted">
+                    {label} in the Index
+                  </dt>
+                  <dd className="font-display text-2xl font-extrabold tabular-nums">
+                    {n}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          ) : null}
+        </section>
+      </div>
+    </WithOnThisPage>
+  );
+}
+
+/** The Try chips (the Index's most recently verified APIs) and the count. */
+function TryRow({ facts }: { facts: IndexStats | null }) {
+  if (!facts) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-[13px] text-sb-text-muted">
+      {facts.recent.length > 0 ? (
+        <>
+          <span id="try-label">Try</span>
+          <ul aria-labelledby="try-label" className="contents">
+            {facts.recent.map((p) => (
+              <li key={p.apiId}>
+                <a
+                  href={lookupHref(p.lookupName)}
+                  className="inline-block rounded-full border border-sb-border px-2.5 py-[3px] text-sb-text no-underline transition-colors hover:border-sb-accent hover:text-sb-accent-text"
+                >
+                  {chipName(p.apiName)}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+      <Link
+        to="/vendors"
+        search={{ query: undefined, cursor: undefined }}
+        className="inline-flex items-center gap-1 text-sb-text"
+      >
+        {facts.apis} APIs answer without a key
+        <ArrowRight aria-hidden="true" className="size-3.5" />
+      </Link>
     </div>
   );
 }
 
+/** An API's name, short, for a chip: `The Plaid API` → `Plaid`. */
+function chipName(apiName: string): string {
+  return apiName.replace(/^the\s+/i, "").replace(/\s+API$/i, "") || apiName;
+}
+
+/** `3.0.0` → `OpenAPI 3.0.0`; `2.0` → `Swagger 2.0`. */
+function specName(version: string): string {
+  return version.startsWith("2") ? `Swagger ${version}` : `OpenAPI ${version}`;
+}
+
 /**
- * Attract mode: a replay of the Index's real answers for the APIs it verified
- * most recently (the newest is in the rail), read when the page was served.
- * Each print comes up in turn while the chain above lights its Index
- * station. Stops for good once the visitor types, pauses on hover and focus,
- * has its own pause control, and stays still under reduced motion.
+ * A real Resolved answer from the Index (the API it verified most
+ * recently), as a Lookup gives it, with the three ways to take it: curl,
+ * MCP, and the JSON (trimmed).
  */
-function Replay({
-  recent,
-  stopped,
-  onChain,
-}: {
-  recent: IndexStats["recent"];
-  stopped: boolean;
-  onChain: (state: ChainState) => void;
-}) {
-  // The newest print is in the rail; the replay runs through the rest.
-  const offset = recent.length > 1 ? 1 : 0;
-  const prints = recent.slice(offset);
-  const [index, setIndex] = useState(0);
-  const [paused, setPaused] = useState(false);
-  const [held, setHeld] = useState(false);
-  const [still, setStill] = useState(true);
-  // The first print is shown developed; only a change of print develops.
-  const [changed, setChanged] = useState(false);
-  const region = useRef<HTMLElement>(null);
-
-  useEffect(() => {
-    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const update = () => setStill(query.matches);
-    update();
-    query.addEventListener("change", update);
-    return () => query.removeEventListener("change", update);
-  }, []);
-
-  const running = !stopped && !paused && !held && !still && prints.length > 1;
-  useEffect(() => {
-    if (!running) return;
-    let answered: number | undefined;
-    const timer = window.setInterval(() => {
-      setChanged(true);
-      setIndex((i) => (i + 1) % prints.length);
-      onChain("checking");
-      answered = window.setTimeout(() => onChain("answered"), CHECKING_MS);
-    }, 6000);
-    return () => {
-      window.clearInterval(timer);
-      window.clearTimeout(answered);
-      onChain("answered");
-    };
-  }, [running, prints.length, onChain]);
-
-  const print = prints[index] ?? prints[0];
-  if (!print) return null;
+function ResolvedExample({ print }: { print: IndexPrint }) {
+  const spec = print.spec;
+  const size = spec ? sizeOf(spec.byteLength) : null;
+  const tabs = spec
+    ? [
+        {
+          id: "curl",
+          label: "curl",
+          content: (
+            <CodeBlock
+              code={`curl -o openapi.${spec.format} ${spec.downloads.published}`}
+            >
+              <span className="text-[#8fbaff]">curl</span> -o openapi.
+              {spec.format} {spec.downloads.published}
+            </CodeBlock>
+          ),
+        },
+        {
+          id: "mcp",
+          label: "MCP",
+          content: (
+            <CodeBlock code={MCP_ADD}>
+              <span className="text-[#8fbaff]">claude</span>
+              {MCP_ADD.slice("claude".length)}
+            </CodeBlock>
+          ),
+        },
+        {
+          id: "json",
+          label: "JSON",
+          content: (
+            <>
+              <CodeBlock code={answerJson(print)} />
+              <p className="border-t border-sb-border px-4 py-2.5 text-[13px] text-sb-text-muted">
+                Trimmed: the whole answer also carries the Sources, any
+                Alternate Specs and the Validity Issues.
+              </p>
+            </>
+          ),
+        },
+      ]
+    : [];
   return (
-    <section
-      ref={region}
-      aria-labelledby="replay"
-      className="grid gap-3"
-      onMouseEnter={() => setHeld(true)}
-      onMouseLeave={() => setHeld(false)}
-      onFocus={() => setHeld(true)}
-      onBlur={(e) => {
-        if (!region.current?.contains(e.relatedTarget as Node)) setHeld(false);
-      }}
-    >
-      <div className="flex items-center justify-between gap-4">
-        <h2
-          id="replay"
-          className="font-caps text-sm font-semibold uppercase tracking-[0.14em] text-ink-2"
-        >
-          Replay: real answers from the Index
-        </h2>
-        {prints.length > 1 && !still && !stopped ? (
-          <button
-            type="button"
-            onClick={() => setPaused((p) => !p)}
-            className="rounded-[3px] border border-ink bg-dense-black px-3 py-1 font-caps text-xs font-semibold uppercase tracking-[0.12em] text-lamp hover:brightness-125"
-          >
-            {paused ? "Play" : "Pause"}
-          </button>
+    <Card className="overflow-hidden rounded-[12px]">
+      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 border-b border-sb-border px-4 py-3.5">
+        <h3 className="font-semibold">
+          <a href={lookupHref(print.lookupName)} className="text-sb-text">
+            {print.apiName}
+          </a>
+        </h3>
+        <AnswerBadge outcome="Resolved" />
+        {print.provenance ? (
+          <Badge tone="neutral">
+            <span className="sr-only">Provenance: </span>
+            {print.provenance}
+          </Badge>
         ) : null}
+        <span className="text-[13px] text-sb-text-muted sm:ml-auto">
+          answered in {print.ms.toFixed(1)} ms
+        </span>
       </div>
-      <Print
-        print={print}
-        href={lookupHref(print.lookupName)}
-        rank={index + offset}
-        developing={changed && !still}
-      />
-      <p className="text-sm text-ink-2">
-        {index + offset + 1} of the {recent.length} APIs the Index verified most
-        recently, as a default Lookup answers them.
-      </p>
-    </section>
+      <dl className="grid grid-cols-[110px_minmax(0,1fr)] gap-x-4 gap-y-2 px-4 py-3.5 text-sm sm:grid-cols-[140px_minmax(0,1fr)]">
+        <dt className="text-sb-text-muted">Vendor</dt>
+        <dd>{print.vendorDomain ?? print.vendorName}</dd>
+        <dt className="text-sb-text-muted">Verified</dt>
+        <dd>
+          {print.verifiedAt ? (
+            <time dateTime={print.verifiedAt}>{dayOf(print.verifiedAt)}</time>
+          ) : (
+            "Not verified"
+          )}
+          {print.stale ? (
+            <span className="text-sb-text-muted">
+              {" "}
+              · Stale: a Lookup queues a new Verification
+            </span>
+          ) : null}
+        </dd>
+        {spec && size ? (
+          <>
+            <dt className="text-sb-text-muted">Spec</dt>
+            <dd>
+              {specName(spec.specVersion)} · {spec.format.toUpperCase()} ·{" "}
+              {size.value} {size.unit}
+            </dd>
+          </>
+        ) : null}
+      </dl>
+      {tabs.length ? (
+        <Tabs
+          label={`Take the ${print.apiName} Spec`}
+          tabs={tabs}
+          listClassName="border-t border-sb-border"
+        />
+      ) : null}
+    </Card>
   );
 }
 
-function StatusBar({ facts }: { facts: IndexStats | null }) {
-  return (
-    <section
-      aria-label="The Index, the Benchmark and the docs"
-      className="-mx-4 grid gap-6 border-t border-rule bg-bay-deep px-4 py-6 sm:-mx-8 sm:px-8 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] xl:items-center xl:gap-12"
-    >
-      {facts ? (
-        <dl className="flex flex-wrap gap-x-8 gap-y-3 lg:hidden">
-          {(
-            [
-              ["Vendors", facts.vendors],
-              ["APIs", facts.apis],
-              ["Specs", facts.specs],
-            ] as const
-          ).map(([label, n]) => (
-            <div key={label} className="grid gap-1">
-              <dt className="font-caps text-xs font-semibold uppercase tracking-[0.14em] text-ink-2">
-                {label}
-              </dt>
-              <dd className="font-segment text-3xl leading-none">{n}</dd>
-            </div>
-          ))}
-        </dl>
-      ) : null}
-      <p className="text-sm leading-relaxed">
-        <span className="font-caps font-semibold uppercase tracking-[0.12em]">
-          Benchmark, {dayOf(`${BENCHMARK.date}T12:00:00Z`)}:
-        </span>{" "}
-        {BENCHMARK.wrong} wrong of {BENCHMARK.resolved} Resolved answers, on{" "}
-        {BENCHMARK.runs} runs over the {BENCHMARK.names}-name set, after two
-        label corrections.{" "}
-        <a href={BENCHMARK.href} className="whitespace-nowrap">
-          How it was measured
-        </a>
-      </p>
-      <p className="text-sm leading-relaxed">
-        <span className="font-caps font-semibold uppercase tracking-[0.12em]">
-          For agents and programs:
-        </span>{" "}
-        the same answers over MCP and the HTTP API.{" "}
-        <Link to="/docs" className="whitespace-nowrap">
-          Read the docs
-        </Link>
-      </p>
-    </section>
-  );
+/** The answer's JSON, trimmed to what the card shows. */
+function answerJson(print: IndexPrint): string {
+  const answer = {
+    outcome: "Resolved",
+    api: { id: print.apiId, name: print.apiName },
+    vendor: { name: print.vendorName, domain: print.vendorDomain },
+    currentSpec: print.spec
+      ? {
+          id: print.specId,
+          specVersion: print.spec.specVersion,
+          format: print.spec.format,
+          byteLength: print.spec.byteLength,
+          downloads: print.spec.downloads,
+        }
+      : { id: print.specId },
+    provenance: print.provenance,
+    verifiedAt: print.verifiedAt,
+  };
+  return JSON.stringify(answer, null, 2);
 }

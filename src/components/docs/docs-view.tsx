@@ -1,5 +1,7 @@
 import { CodeLine } from "~/components/darkroom/code-line";
 import { dayOf } from "~/components/darkroom/stamp";
+import { WithOnThisPage } from "~/components/shell/on-this-page";
+import { buttonClass } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 import {
   BASE_URL,
@@ -83,36 +85,42 @@ function Inline({ text }: { text: string }) {
  */
 export function DocsView() {
   return (
-    <div className="grid gap-10 px-4 pt-8 pb-12 sm:px-8 lg:gap-14 lg:pt-12">
-      <header className="grid gap-6">
-        <h1 className="font-pencil text-[clamp(3.25rem,8.5vw,6rem)] uppercase leading-[0.95]">
-          Docs
-        </h1>
-        <p className="max-w-[34rem] text-lg leading-relaxed text-ink-2 sm:text-xl">
-          Everything this site shows, programs get over HTTP and agents over
-          MCP, in the same words. Answers from the Index are open to anyone;
-          Discovery needs a key.
-        </p>
-        <nav aria-labelledby="contents" className="grid gap-2">
-          <h2 id="contents" className={cn(LABEL, "text-ink-2")}>
-            On this page
-          </h2>
-          <ul className="flex flex-wrap gap-x-6 gap-y-2">
-            {SECTIONS.map((s) => (
-              <li key={s.id}>
-                <a href={`#${s.id}`} className={LINK}>
-                  {s.label}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </nav>
-      </header>
-      <HttpApi />
-      <Mcp />
-      <Access />
-      <Keys />
-    </div>
+    <WithOnThisPage>
+      <div className="grid gap-10 px-4 pt-8 pb-12 sm:px-8 lg:gap-14 lg:pt-12">
+        <header className="grid gap-6">
+          <h1 className="font-pencil text-[clamp(3.25rem,8.5vw,6rem)] uppercase leading-[0.95]">
+            Docs
+          </h1>
+          <p className="max-w-[34rem] text-lg leading-relaxed text-ink-2 sm:text-xl">
+            Everything this site shows, programs get over HTTP and agents over
+            MCP, in the same words. Answers from the Index are open to anyone;
+            Discovery needs a key.
+          </p>
+          <nav
+            aria-labelledby="contents"
+            className="grid gap-2 xl:hidden"
+            data-toc-skip
+          >
+            <h2 id="contents" className={cn(LABEL, "text-ink-2")}>
+              On this page
+            </h2>
+            <ul className="flex flex-wrap gap-x-6 gap-y-2">
+              {SECTIONS.map((s) => (
+                <li key={s.id}>
+                  <a href={`#${s.id}`} className={LINK}>
+                    {s.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        </header>
+        <HttpApi />
+        <Mcp />
+        <Access />
+        <Keys />
+      </div>
+    </WithOnThisPage>
   );
 }
 
@@ -198,7 +206,11 @@ function RouteTable() {
 function RouteExample({ example }: { example: Example }) {
   const title = `${example.id}-title`;
   return (
-    <section aria-labelledby={title} className="grid max-w-[56rem] gap-3">
+    <section
+      aria-labelledby={title}
+      id={example.id}
+      className="grid max-w-[56rem] scroll-mt-20 gap-3"
+    >
       <h3 id={title} className={H3}>
         {example.route}
       </h3>
@@ -236,7 +248,7 @@ function Mcp() {
         <h3 className={cn(LABEL, "text-ink-2")}>The endpoint</h3>
         <CodeLine code={MCP_URL} />
       </div>
-      <div className="grid max-w-[56rem] gap-3">
+      <div id="mcp-add" className="grid max-w-[56rem] scroll-mt-20 gap-3">
         <h3 className={cn(LABEL, "text-ink-2")}>Add it to Claude Code</h3>
         <CodeLine code={MCP_ADD} />
         <p className="text-sm text-ink-2">
@@ -343,10 +355,7 @@ function Keys() {
         it is made.
       </p>
       <p>
-        <a
-          href={KEY_REQUEST_HREF}
-          className="mb-[3px] inline-flex min-h-[45px] items-center rounded-none border-2 border-[#0e0e0e] bg-lamp px-7 font-caps text-lg font-bold uppercase tracking-[0.14em] text-[#0e0e0e] no-underline shadow-[0_3px_0_#0e0e0e] transition-[box-shadow,translate] duration-100 hover:brightness-105 active:translate-y-[3px] active:shadow-none dark:border-[#9a6400] dark:shadow-[0_3px_0_#9a6400] dark:active:shadow-none"
-        >
+        <a href={KEY_REQUEST_HREF} className={buttonClass({ size: "lg" })}>
           Request a key
         </a>
       </p>

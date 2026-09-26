@@ -86,6 +86,45 @@ describe("indexStats", () => {
     expect(recent[0]?.ms).toBeGreaterThanOrEqual(0);
   });
 
+  it("carries the Current Spec's version, form, size and downloads when the answer has them", () => {
+    const withSpec = {
+      currentFromIndex: (id: string) => {
+        const answer = current(id);
+        return {
+          ...answer,
+          vendor: { id: "stripe.com", name: "Stripe", domain: "stripe.com" },
+          currentSpec: {
+            ...answer.currentSpec,
+            specVersion: "3.0.0",
+            format: "yaml",
+            byteLength: 6_600_000,
+            downloads: {
+              published: `https://swaggerbot.dev/api/specs/${specIds[id]}/published`,
+              normalized: `https://swaggerbot.dev/api/specs/${specIds[id]}/normalized`,
+            },
+          },
+        } as unknown as CurrentFromIndex;
+      },
+    };
+    const { recent } = indexStats(db, withSpec, { now, freshnessDays: 7 });
+    expect(recent[0]).toMatchObject({
+      vendorDomain: "stripe.com",
+      spec: {
+        specVersion: "3.0.0",
+        format: "yaml",
+        byteLength: 6_600_000,
+        downloads: {
+          published: `https://swaggerbot.dev/api/specs/${specIds[stripe]}/published`,
+        },
+      },
+    });
+  });
+
+  it("gives no Spec details when the answer carries none", () => {
+    const { recent } = indexStats(db, lookup, { now, freshnessDays: 7 });
+    expect(recent[0]?.spec).toBeNull();
+  });
+
   it("marks an answer older than the freshness window Stale", () => {
     const { recent } = indexStats(db, lookup, { now, freshnessDays: 7 });
     expect(recent.find((p) => p.apiId === github)?.stale).toBe(true);
