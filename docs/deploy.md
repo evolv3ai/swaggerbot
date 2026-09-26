@@ -186,6 +186,15 @@ The deploys of 2026-09-23:
 - `mcpcheck` PASS; slowest call 1.9 s, again the first Lookup on a fresh server.
 - `formscheck` PASS: outline p90 196 ms, operation p90 358 ms, 0 non-2xx.
 
+### `514b8d8` (2026-09-26): the Slice 6 rebrand
+
+**Deployed at 03:20 CDT** (deployment `yhqg9b42vrwrrgsd7lj8dala`). It replaces the Darkroom look Wes rejected with his SwaggerBot design system v2 in a docs layout, dark by default: #98 (tokens, fonts, logo, favicon, the docs shell and Search), #99 Vendors, #100 Lookup (it carries WTR-144's actions), #101 Docs, #102 the Spec viewer, #103 `og.png`, #104 (the Darkroom leftovers removed), #105 (the Impeccable finish review's seven fixes), #107 (the two regressions its verdict pass found) and #106 (`DESIGN.md` and `.impeccable/design.json` from the design system). The finish review's disposition is ship. No new env vars.
+
+**Live checks:**
+- `uicheck` PASS on `/`, `/lookup?name=stripe`, `/lookup?name=frobnicator-xyz`, `/vendors`, `/vendors/stripe.com`, the Stripe Spec viewer and `/docs` at 390 and 1280, light and dark (28 runs): axe 0, CSP 0, links 0, keyboard complete.
+- `mcpcheck`: the first run after the deploy FAILED on one timing (Cloudflare `lookup_api` 2.2 s, bound 2.0 s, the first Lookup on a cold server); three reruns PASS, slowest call 308–342 ms, largest result 28.4 kB.
+- `formscheck` PASS: outline p90 170 ms, operation p90 352 ms, 0 non-2xx.
+
 ## Gotchas
 
 - Coolify's application health check runs `curl`/`wget` **inside** the container. An image without them is rolled back as unhealthy, even when its own Docker `HEALTHCHECK` passes.
