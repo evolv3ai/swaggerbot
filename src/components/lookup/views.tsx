@@ -1,7 +1,5 @@
 import { Download, FileCode } from "lucide-react";
 import type { ReactNode } from "react";
-import { ProvenanceMark } from "~/components/darkroom/provenance-mark";
-import { dayOf, VerifiedStamp } from "~/components/darkroom/stamp";
 import { SearchForm } from "~/components/search/search-form";
 import { WithOnThisPage } from "~/components/shell/on-this-page";
 import { ANSWERS, AnswerBadge } from "~/components/ui/answer-badge";
@@ -14,6 +12,7 @@ import { sizeOf } from "~/components/viewer/size";
 import type { Source } from "~/domain/catalog";
 import type { Outcome, OutcomeKind, SpecAnswer } from "~/domain/outcome";
 import type { Provenance } from "~/domain/provenance";
+import { dayOf } from "~/lib/dates";
 import { cn } from "~/lib/utils";
 import { vendorHref } from "~/lib/vendor-hrefs";
 import { distinctDomain } from "~/lib/vendor-name";
@@ -781,17 +780,13 @@ function AlternateSpecs({ specs }: { specs: SpecAnswer[] }) {
 
 /**
  * Where a Spec was found: each Source's URL (as text, never a link to it),
- * its Provenance and when it was last verified. `on="print"` is the Spec
- * viewer's label, TEMPORARY until the viewer moves to the design system.
+ * its Provenance and when it was last verified.
  */
 export function Sources({
   sources,
-  on = "page",
 }: {
   sources: Pick<Source, "id" | "url" | "provenance" | "lastVerifiedAt">[];
-  on?: "page" | "print";
 }) {
-  if (on === "print") return <PrintSources sources={sources} />;
   return (
     <section aria-labelledby="sources" className={SECTION}>
       <h2 id="sources" className={H2}>
@@ -822,49 +817,6 @@ export function Sources({
           ))}
         </ul>
       </Card>
-    </section>
-  );
-}
-
-/** TEMPORARY: the Sources on the Darkroom print of the Spec viewer's label. */
-function PrintSources({
-  sources,
-}: {
-  sources: Pick<Source, "id" | "url" | "provenance" | "lastVerifiedAt">[];
-}) {
-  return (
-    <section aria-labelledby="sources" className="grid gap-2">
-      <h2
-        id="sources"
-        className="font-caps text-sm font-semibold uppercase tracking-[0.14em] text-print-ink-2"
-      >
-        Sources
-      </h2>
-      <ul className="grid max-w-[48rem] gap-px overflow-hidden rounded-[2px] border border-print-ink-2 bg-print-ink-2">
-        {sources.map((source) => (
-          <li
-            key={source.id}
-            className="grid gap-1.5 bg-print p-3 sm:grid-cols-[auto_1fr] sm:items-baseline sm:gap-x-4"
-          >
-            <span>
-              <ProvenanceMark provenance={source.provenance} />
-            </span>
-            <span className="grid gap-0.5">
-              <span className="font-mono text-sm [overflow-wrap:anywhere]">
-                {source.url}
-              </span>
-              <span className="text-sm text-print-ink-2">
-                Last verified{" "}
-                <VerifiedStamp
-                  verifiedAt={source.lastVerifiedAt}
-                  stale={false}
-                  on="print"
-                />
-              </span>
-            </span>
-          </li>
-        ))}
-      </ul>
     </section>
   );
 }

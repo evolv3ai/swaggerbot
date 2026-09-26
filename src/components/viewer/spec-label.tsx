@@ -1,10 +1,10 @@
 import { ArrowRight, ChevronRight, Download } from "lucide-react";
 import type { ReactNode } from "react";
-import { dayOf } from "~/components/darkroom/stamp";
 import { Badge } from "~/components/ui/badge";
 import { buttonClass } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
 import { ProvenanceBadge } from "~/components/ui/provenance-badge";
+import { dayOf } from "~/lib/dates";
 import { vendorHref } from "~/lib/vendor-hrefs";
 import { lookupHref } from "~/server/lookup-search";
 import type { SpecView } from "~/server/spec-view";

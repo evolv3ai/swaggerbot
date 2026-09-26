@@ -1,7 +1,7 @@
-import { dayOf } from "~/components/darkroom/stamp";
 import { Card } from "~/components/ui/card";
 import { ProvenanceBadge } from "~/components/ui/provenance-badge";
 import type { Source } from "~/domain/catalog";
+import { dayOf } from "~/lib/dates";
 import { cn } from "~/lib/utils";
 
 /**

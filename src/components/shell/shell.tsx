@@ -8,12 +8,12 @@ import {
   useRef,
   useState,
 } from "react";
-import { dayOf } from "~/components/darkroom/stamp";
 import { buttonClass } from "~/components/ui/button";
+import { dayOf } from "~/lib/dates";
 import { cn } from "~/lib/utils";
 import type { IndexStats } from "~/server/index-stats";
 import { BENCHMARK, REPO } from "./benchmark";
-import { HealthLamp } from "./health-lamp";
+import { HealthStatus } from "./health-status";
 import { QuickLookup, useQuickLookupKeys } from "./quick-lookup";
 import { Sidebar } from "./sidebar";
 import { ThemeToggle } from "./theme-toggle";
@@ -98,7 +98,7 @@ export function Shell({
             <a href={REPO} className={cn(TOP_LINK, "hidden lg:inline")}>
               GitHub
             </a>
-            <HealthLamp className="hidden lg:flex" />
+            <HealthStatus className="hidden lg:flex" />
             <ThemeToggle className="hidden sm:inline-grid" />
             <Link
               to="/docs"
@@ -246,7 +246,7 @@ function Drawer({
           <a href={REPO} className={cn(TOP_LINK, "w-fit")}>
             GitHub
           </a>
-          <HealthLamp />
+          <HealthStatus />
           <div className="flex items-center gap-2 text-sm text-sb-text-muted">
             <ThemeToggle className="-ml-2" />
             Theme

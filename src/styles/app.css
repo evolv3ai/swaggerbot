@@ -56,42 +56,7 @@
   --color-sb-code-bg: var(--sb-code-bg);
   --color-sb-code-text: var(--sb-code-text);
 
-  /* TEMPORARY Darkroom aliases, so the pages not yet migrated (Lookup,
-     Vendors, the Spec viewer, Docs) keep rendering on the new tokens.
-     Remove each once no page uses it (the follow-up migration issues). */
-  --font-caps: "Montserrat", ui-sans-serif, system-ui, sans-serif;
-  --font-pencil: "Montserrat", ui-sans-serif, system-ui, sans-serif;
-  --font-segment: "JetBrains Mono", ui-monospace, monospace;
-  --color-bay: var(--bay);
-  --color-bay-deep: var(--bay-deep);
-  --color-lamp: var(--lamp);
-  --color-dense-black: var(--dense-black);
-  --color-ink: var(--ink);
-  --color-ink-2: var(--ink-2);
-  --color-rule: var(--rule);
-  --color-print: var(--print);
-  --color-print-ink: var(--print-ink);
-  --color-print-ink-2: var(--print-ink-2);
-  --color-strip-1: var(--strip-1);
-  --color-strip-2: var(--strip-2);
-  --color-strip-3: var(--strip-3);
-  --color-strip-4: var(--strip-4);
-  --color-strip-5: var(--strip-5);
-
   /* shadcn's names. */
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -221,24 +186,6 @@
   --ring: var(--sb-blue);
   --radius: 10px;
 
-  /* TEMPORARY Darkroom aliases (see @theme above): each old name onto the
-     semantic token that plays its part. */
-  --bay: var(--sb-bg);
-  --bay-deep: var(--sb-bg-subtle);
-  --lamp: var(--sb-accent);
-  --dense-black: var(--gray-950);
-  --ink: var(--sb-text);
-  --ink-2: var(--sb-text-muted);
-  --rule: var(--sb-border);
-  --print: var(--sb-surface);
-  --print-ink: var(--sb-text);
-  --print-ink-2: var(--sb-text-muted);
-  --strip-1: var(--gray-50);
-  --strip-2: var(--gray-300);
-  --strip-3: var(--gray-500);
-  --strip-4: var(--gray-700);
-  --strip-5: var(--gray-950);
-
   color-scheme: dark;
 }
 
@@ -310,40 +257,5 @@
   }
   kbd {
     font-family: var(--font-sans);
-  }
-}
-
-/* TEMPORARY (Lookup's certainty patches): Unknown's empty, hatched cell. */
-@utility bg-undeveloped {
-  background-image: repeating-linear-gradient(
-    135deg,
-    var(--rule) 0 1.5px,
-    transparent 1.5px 5px
-  );
-}
-
-/* TEMPORARY (the Darkroom print, on the Lookup result). */
-@keyframes print-develop {
-  from {
-    opacity: 0.06;
-    filter: blur(4px);
-  }
-  60% {
-    opacity: 0.7;
-    filter: blur(1px);
-  }
-  to {
-    opacity: 1;
-    filter: none;
-  }
-}
-
-.print-develop {
-  animation: print-develop 2.4s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .print-develop {
-    animation: none;
   }
 }

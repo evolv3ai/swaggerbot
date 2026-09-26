@@ -6,7 +6,7 @@ import { apis, sources, specs, vendors } from "~/index-store/schema";
 import type { IndexedLookup } from "~/lookup/lookup";
 
 /** One API as the Search page shows it: its Current Spec, from the Index. */
-export type IndexPrint = {
+export type RecentApi = {
   apiId: string;
   apiName: string;
   /** A name the Index answers a Lookup of this API by, for a link to it. */
@@ -36,7 +36,7 @@ export type IndexStats = {
   apis: number;
   /** Confirmed Specs that aren't Superseded. */
   specs: number;
-  recent: IndexPrint[];
+  recent: RecentApi[];
 };
 
 /**
@@ -82,7 +82,7 @@ export function indexStats(
 
   const repo = createRepo(db);
   const staleAfterMs = freshnessDays * 24 * 60 * 60 * 1000;
-  const recent: IndexPrint[] = [];
+  const recent: RecentApi[] = [];
   for (const { apiId } of recentIds) {
     if (recent.length >= limit) break;
     const started = performance.now();

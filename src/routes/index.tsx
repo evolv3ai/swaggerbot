@@ -1,6 +1,5 @@
 import { createFileRoute, Link, useLoaderData } from "@tanstack/react-router";
 import { ArrowRight } from "lucide-react";
-import { dayOf } from "~/components/darkroom/stamp";
 import { MCP_ADD } from "~/components/docs/reference";
 import { SearchForm } from "~/components/search/search-form";
 import { BENCHMARK } from "~/components/shell/benchmark";
@@ -13,7 +12,8 @@ import { CodeBlock } from "~/components/ui/code-block";
 import { Tabs } from "~/components/ui/tabs";
 import { sizeOf } from "~/components/viewer/size";
 import type { OutcomeKind } from "~/domain/outcome";
-import type { IndexPrint, IndexStats } from "~/server/index-stats";
+import { dayOf } from "~/lib/dates";
+import type { IndexStats, RecentApi } from "~/server/index-stats";
 import { lookupHref } from "~/server/lookup-search";
 
 export const Route = createFileRoute("/")({
@@ -68,7 +68,7 @@ function Search() {
             <h2 id="what-you-get-back" className={H2}>
               What you get back
             </h2>
-            <ResolvedExample print={example} />
+            <ResolvedExample api={example} />
           </section>
         ) : null}
 
@@ -212,8 +212,8 @@ function specName(version: string): string {
  * recently), as a Lookup gives it, with the three ways to take it: curl,
  * MCP, and the JSON (trimmed).
  */
-function ResolvedExample({ print }: { print: IndexPrint }) {
-  const spec = print.spec;
+function ResolvedExample({ api }: { api: RecentApi }) {
+  const spec = api.spec;
   const size = spec ? sizeOf(spec.byteLength) : null;
   const tabs = spec
     ? [
@@ -244,7 +244,7 @@ function ResolvedExample({ print }: { print: IndexPrint }) {
           label: "JSON",
           content: (
             <>
-              <CodeBlock code={answerJson(print)} />
+              <CodeBlock code={answerJson(api)} />
               <p className="border-t border-sb-border px-4 py-2.5 text-[13px] text-sb-text-muted">
                 Trimmed: the whole answer also carries the Sources, any
                 Alternate Specs and the Validity Issues.
@@ -258,32 +258,32 @@ function ResolvedExample({ print }: { print: IndexPrint }) {
     <Card className="overflow-hidden rounded-[12px]">
       <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 border-b border-sb-border px-4 py-3.5">
         <h3 className="font-semibold">
-          <a href={lookupHref(print.lookupName)} className="text-sb-text">
-            {print.apiName}
+          <a href={lookupHref(api.lookupName)} className="text-sb-text">
+            {api.apiName}
           </a>
         </h3>
         <AnswerBadge outcome="Resolved" />
-        {print.provenance ? (
+        {api.provenance ? (
           <Badge tone="neutral">
             <span className="sr-only">Provenance: </span>
-            {print.provenance}
+            {api.provenance}
           </Badge>
         ) : null}
         <span className="text-[13px] text-sb-text-muted sm:ml-auto">
-          answered in {print.ms.toFixed(1)} ms
+          answered in {api.ms.toFixed(1)} ms
         </span>
       </div>
       <dl className="grid grid-cols-[110px_minmax(0,1fr)] gap-x-4 gap-y-2 px-4 py-3.5 text-sm sm:grid-cols-[140px_minmax(0,1fr)]">
         <dt className="text-sb-text-muted">Vendor</dt>
-        <dd>{print.vendorDomain ?? print.vendorName}</dd>
+        <dd>{api.vendorDomain ?? api.vendorName}</dd>
         <dt className="text-sb-text-muted">Verified</dt>
         <dd>
-          {print.verifiedAt ? (
-            <time dateTime={print.verifiedAt}>{dayOf(print.verifiedAt)}</time>
+          {api.verifiedAt ? (
+            <time dateTime={api.verifiedAt}>{dayOf(api.verifiedAt)}</time>
           ) : (
             "Not verified"
           )}
-          {print.stale ? (
+          {api.stale ? (
             <span className="text-sb-text-muted">
               {" "}
               · Stale: a Lookup queues a new Verification
@@ -302,7 +302,7 @@ function ResolvedExample({ print }: { print: IndexPrint }) {
       </dl>
       {tabs.length ? (
         <Tabs
-          label={`Take the ${print.apiName} Spec`}
+          label={`Take the ${api.apiName} Spec`}
           tabs={tabs}
           listClassName="border-t border-sb-border"
         />
@@ -312,22 +312,22 @@ function ResolvedExample({ print }: { print: IndexPrint }) {
 }
 
 /** The answer's JSON, trimmed to what the card shows. */
-function answerJson(print: IndexPrint): string {
+function answerJson(api: RecentApi): string {
   const answer = {
     outcome: "Resolved",
-    api: { id: print.apiId, name: print.apiName },
-    vendor: { name: print.vendorName, domain: print.vendorDomain },
-    currentSpec: print.spec
+    api: { id: api.apiId, name: api.apiName },
+    vendor: { name: api.vendorName, domain: api.vendorDomain },
+    currentSpec: api.spec
       ? {
-          id: print.specId,
-          specVersion: print.spec.specVersion,
-          format: print.spec.format,
-          byteLength: print.spec.byteLength,
-          downloads: print.spec.downloads,
+          id: api.specId,
+          specVersion: api.spec.specVersion,
+          format: api.spec.format,
+          byteLength: api.spec.byteLength,
+          downloads: api.spec.downloads,
         }
-      : { id: print.specId },
-    provenance: print.provenance,
-    verifiedAt: print.verifiedAt,
+      : { id: api.specId },
+    provenance: api.provenance,
+    verifiedAt: api.verifiedAt,
   };
   return JSON.stringify(answer, null, 2);
 }

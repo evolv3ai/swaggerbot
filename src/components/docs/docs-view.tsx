@@ -1,10 +1,10 @@
-import { dayOf } from "~/components/darkroom/stamp";
 import { WithOnThisPage } from "~/components/shell/on-this-page";
 import { buttonClass } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
 import { CodeBlock } from "~/components/ui/code-block";
 import { MethodBadge, splitRoute } from "~/components/ui/method-badge";
 import { Tabs } from "~/components/ui/tabs";
+import { dayOf } from "~/lib/dates";
 import { cn } from "~/lib/utils";
 import {
   BASE_URL,
