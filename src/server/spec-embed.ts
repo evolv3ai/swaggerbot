@@ -22,6 +22,14 @@ import { SCALAR_SCRIPT_PATH } from "./scalar-script";
  */
 const MEMORY_STORAGE_PATH = "/embed/memory-storage.js";
 
+/**
+ * Points Scalar's lazy rendering at the frame's own viewport
+ * (`public/embed/frame-viewport.js`): to the browser the opaque-origin frame
+ * is cross-origin, so observers with the implicit root see nothing while the
+ * frame is below the fold, and Scalar would show empty placeholders.
+ */
+const FRAME_VIEWPORT_PATH = "/embed/frame-viewport.js";
+
 /** Which of a Spec's forms a viewer shows. */
 export type SpecForm = "published" | "normalized";
 
@@ -150,6 +158,7 @@ export function embedHtml({
 <body>
 <script id="api-reference" type="application/json" data-configuration="${escapeHtml(configuration)}"></script>
 <script src="${MEMORY_STORAGE_PATH}"></script>
+<script src="${FRAME_VIEWPORT_PATH}"></script>
 <script src="${SCALAR_SCRIPT_PATH}"></script>
 </body>
 </html>

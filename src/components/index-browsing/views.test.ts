@@ -25,6 +25,19 @@ describe("VendorListView", () => {
     next: "/vendors?query=a&cursor=5",
   };
 
+  it("heads the page with its title alone, no category kicker", () => {
+    const html = list(page);
+    expect(html.slice(0, html.indexOf("<h1"))).not.toMatch(/<p/);
+    expect(html).not.toContain("The Index</p>");
+  });
+
+  it("makes each Vendor's name the row's link, underlined on hover and focus only", () => {
+    const html = list(page);
+    expect(html).toMatch(
+      /<a href="\/vendors\/alpha.com" class="[^"]*\bno-underline\b[^"]*\bhover:underline\b[^"]*\bfocus-visible:underline\b/,
+    );
+  });
+
   it("links each Vendor with its API count", () => {
     const html = list(page);
     expect(html).toContain('href="/vendors/alpha.com"');

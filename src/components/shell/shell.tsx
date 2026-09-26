@@ -9,10 +9,9 @@ import {
   useState,
 } from "react";
 import { buttonClass } from "~/components/ui/button";
-import { dayOf } from "~/lib/dates";
 import { cn } from "~/lib/utils";
 import type { IndexStats } from "~/server/index-stats";
-import { BENCHMARK, REPO } from "./benchmark";
+import { REPO } from "./benchmark";
 import { HealthStatus } from "./health-status";
 import { QuickLookup, useQuickLookupKeys } from "./quick-lookup";
 import { Sidebar } from "./sidebar";
@@ -145,7 +144,7 @@ export function Shell({
 
 function Footer() {
   return (
-    <footer className="grid gap-2 border-t border-sb-border px-4 py-6 text-[13px] text-sb-text-muted sm:px-8 lg:px-14">
+    <footer className="border-t border-sb-border px-4 py-6 text-[13px] text-sb-text-muted sm:px-8 lg:px-14">
       <p className="flex flex-wrap gap-x-6 gap-y-1">
         <span>
           <span className="font-semibold text-sb-text">SwaggerBot</span> ·
@@ -154,13 +153,9 @@ function Footer() {
         <a href={REPO} className="text-sb-text">
           Source on GitHub
         </a>
-      </p>
-      <p className="max-w-[60rem]">
-        Benchmark, {dayOf(`${BENCHMARK.date}T12:00:00Z`)}: {BENCHMARK.wrong}{" "}
-        wrong of {BENCHMARK.resolved} Resolved answers, on {BENCHMARK.runs} runs
-        over the {BENCHMARK.names}-name set, after two label corrections.{" "}
-        <a href={BENCHMARK.href} className="whitespace-nowrap text-sb-text">
-          How it was measured
+        {/* The Benchmark's figures are said once, on Search. */}
+        <a href="/#benchmark" className="text-sb-text">
+          Benchmark
         </a>
       </p>
     </footer>

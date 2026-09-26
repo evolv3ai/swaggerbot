@@ -81,10 +81,34 @@ const text = (markup: string) =>
 describe("the Resolved view", () => {
   const markup = html(outcomePage(resolved));
 
-  it("heads the page with the Outcome, its badge and the name looked up", () => {
+  it("heads the page with the Outcome once, and says the name looked up", () => {
     expect(markup).toMatch(/<h1[^>]*>Resolved<\/h1>/);
-    expect(text(markup)).toContain("1 of 5, from sure to not found");
-    expect(text(markup)).toContain("Lookup · stripe");
+    expect(text(markup)).toContain("You looked up “stripe”");
+    // No category kicker above the heading, and no second badge beside it:
+    // above the answer card, "Resolved" is said once, by the heading.
+    const head = markup.slice(0, markup.indexOf('aria-labelledby="spec"'));
+    expect(head).not.toContain("Lookup ·");
+    expect(text(head).match(/Resolved/g)).toHaveLength(1);
+    // The card keeps its badge.
+    expect(markup.slice(markup.indexOf('aria-labelledby="spec"'))).toMatch(
+      /<h2 id="spec"[^>]*>Stripe API<\/h2><span[^>]*>.*?Resolved<\/span>/,
+    );
+  });
+
+  it("shows the download on one line, the Spec id elided, and copies it whole", () => {
+    const url = `${base}/api/specs/${specId}/published`;
+    const block = markup.slice(
+      markup.indexOf("<pre"),
+      markup.indexOf("</pre>"),
+    );
+    // What shows is a stand-in, hidden from screen readers...
+    expect(block).toMatch(/<code aria-hidden="true">/);
+    expect(block).toContain(`${specId.slice(0, 8)}…${specId.slice(-4)}`);
+    expect(block).toContain("whitespace-pre");
+    // ...which read the whole URL, as Copy copies it.
+    expect(block).toContain(
+      `<span class="sr-only">curl -o openapi.yaml ${url}</span>`,
+    );
   });
 
   it("leads with the three actions, with the right URLs", () => {

@@ -45,6 +45,12 @@ const STATIC: Record<string, string> = {
     "embed",
     "memory-storage.js",
   ),
+  "/embed/frame-viewport.js": join(
+    ROOT,
+    "public",
+    "embed",
+    "frame-viewport.js",
+  ),
 };
 
 describe.skipIf(!probe && !process.env.CI)(
@@ -93,12 +99,20 @@ describe.skipIf(!probe && !process.env.CI)(
             apiName: "Hostile Co",
           }),
         );
-        return new Response(`<!doctype html><title>viewer</title>${frame}`, {
-          headers: {
-            "content-type": "text/html; charset=utf-8",
-            "content-security-policy": contentSecurityPolicy(newNonce()),
+        // `?below`: the frame starts well below the fold, as on the viewer
+        // page, and is tall enough to hold the first operation.
+        const spacer = url.searchParams.has("below")
+          ? '<style>iframe{width:1000px;height:1500px}</style><div style="height:3000px"></div>'
+          : "";
+        return new Response(
+          `<!doctype html><title>viewer</title>${spacer}${frame}`,
+          {
+            headers: {
+              "content-type": "text/html; charset=utf-8",
+              "content-security-policy": contentSecurityPolicy(newNonce()),
+            },
           },
-        });
+        );
       }
       if (url.pathname === `/embed/specs/${specId}`)
         return embedResponse(request, specId, () => db);
@@ -215,5 +229,44 @@ describe.skipIf(!probe && !process.env.CI)(
         ]),
       );
     });
+
+    it("renders the first operations while the frame is still below the fold", async () => {
+      const context = await browser.newContext({
+        viewport: { width: 1280, height: 800 },
+      });
+      const page = await context.newPage();
+      await page.goto(`${origin}/viewer?below`);
+      const frame = page.frameLocator("iframe");
+      await frame
+        .getByRole("heading", { name: "Hostile Co" })
+        .first()
+        .waitFor({ timeout: 60_000 });
+      const embed = page
+        .frames()
+        .find((f) => f.url().includes("/embed/specs/"));
+      if (!embed) throw new Error("no frame");
+      // Never scrolled into view, yet what is in the frame's own viewport
+      // is rendered: Scalar's lazy sections there are no longer placeholders.
+      await embed.waitForFunction(
+        () => {
+          const lazy = [...document.querySelectorAll("[data-placeholder]")];
+          return (
+            lazy.some((e) => e.getAttribute("data-placeholder") === "false") &&
+            !lazy.some(
+              (e) =>
+                e.getAttribute("data-placeholder") === "true" &&
+                e.getBoundingClientRect().top < window.innerHeight,
+            )
+          );
+        },
+        undefined,
+        { timeout: 4_000 },
+      );
+      expect(await embed.evaluate(() => document.body.innerText)).toContain(
+        "List things",
+      );
+      expect(await page.evaluate(() => window.scrollY)).toBe(0);
+      await context.close();
+    }, 30_000);
   },
 );

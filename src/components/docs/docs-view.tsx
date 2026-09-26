@@ -140,14 +140,9 @@ export function DocsView() {
     <WithOnThisPage>
       <div className="grid max-w-[860px] gap-10 px-4 pt-7 pb-16 sm:px-8 lg:px-14 lg:pt-11">
         <header className="grid gap-4">
-          <div>
-            <p className="font-display text-xs font-bold uppercase tracking-[0.3em] text-sb-accent-text">
-              Docs
-            </p>
-            <h1 className="mt-2 font-display text-[28px] leading-[1.1] font-extrabold tracking-[-0.01em] text-sb-text sm:text-[40px]">
-              HTTP API and MCP
-            </h1>
-          </div>
+          <h1 className="font-display text-[28px] leading-[1.1] font-extrabold tracking-[-0.01em] text-sb-text sm:text-[40px]">
+            HTTP API and MCP
+          </h1>
           <p className="max-w-[34rem] text-[17px] leading-relaxed text-sb-text-muted">
             Everything this site shows, programs get over HTTP and agents over
             MCP, in the same words. Answers from the Index are open to anyone;

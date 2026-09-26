@@ -25,6 +25,10 @@ const text = html
   .replaceAll("&gt;", ">");
 
 describe("DocsView", () => {
+  it("heads the page with its title alone, no category kicker", () => {
+    expect(html.slice(0, html.indexOf("<h1"))).not.toMatch(/>Docs</);
+  });
+
   it("has the Keys section with the request-a-key mailto (D9)", () => {
     expect(html).toMatch(
       /<section[^>]*aria-labelledby="keys"[^>]*>\s*<div[^>]*>\s*<h2 id="keys"[\s\S]*href="mailto:hello@evolv3\.ai\?subject=swagger\.bot%20API%20key%20request"/,
