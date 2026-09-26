@@ -261,6 +261,24 @@ describe("repo", () => {
     expect(repo.findApiByName("stripe-js")).toBeUndefined();
   });
 
+  it("names an API for a link to its Lookup by a name the Index answers", () => {
+    const api = {
+      id: "acme.dev/widgets",
+      vendorId: stripe.id,
+      name: "Acme Widgets REST API",
+    };
+    repo.upsertApi(api);
+    // Nothing remembered: its own name.
+    expect(repo.lookupNameOf(api)).toBe("Acme Widgets REST API");
+    repo.rememberName("acme widgets platform", api.id);
+    repo.rememberName("widgets", api.id);
+    // Its own name isn't remembered: the shortest name that is.
+    expect(repo.lookupNameOf(api)).toBe("widgets");
+    repo.rememberName("acme widgets rest", api.id);
+    // Remembered (without " API", as normalizeName keeps it): its own name.
+    expect(repo.lookupNameOf(api)).toBe("Acme Widgets REST API");
+  });
+
   it("returns undefined for an API that is not in the Index", () => {
     expect(repo.getApiWithSpecs("stripe.com/nope")).toBeUndefined();
   });

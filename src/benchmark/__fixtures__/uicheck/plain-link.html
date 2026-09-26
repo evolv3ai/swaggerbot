@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A link that looks like text</title>
+<style>
+  body { font: 16px/1.5 sans-serif; color: #111; background: #fff; }
+  a { color: #0043ce; text-decoration: none; }
+  a.underlined { text-decoration-line: underline; }
+  :focus-visible { outline: 2px solid #0043ce; outline-offset: 2px; }
+</style>
+</head>
+<body>
+<nav><a href="/home">Outside main, not checked</a></nav>
+<main>
+  <h1>A link that looks like text</h1>
+  <p><a href="/plain">Plain text</a></p>
+  <p><a href="/underlined" class="underlined">Underlined</a></p>
+  <p><a href="/button" class="no-underline">Shaped as a button</a></p>
+</main>
+</body>
+</html>

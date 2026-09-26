@@ -60,3 +60,11 @@ export function lookupSearchOf(request: LookupRequest): LookupSearch {
     ...(request.allowCommunity ? { allowCommunity: 1 } : {}),
   };
 }
+
+/**
+ * `/lookup?name=…`: a default Lookup of `name`, as a plain link. Encoded as
+ * the router writes a query, so following it doesn't redirect.
+ */
+export function lookupHref(name: string): string {
+  return `/lookup?${new URLSearchParams({ name })}`;
+}

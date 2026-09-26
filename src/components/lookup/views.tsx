@@ -6,6 +6,8 @@ import { Print } from "~/components/darkroom/print";
 import { ProvenanceMark } from "~/components/darkroom/provenance-mark";
 import { VerifiedStamp } from "~/components/darkroom/stamp";
 import { type ChainState, Stations } from "~/components/darkroom/stations";
+import { SearchForm } from "~/components/search/search-form";
+import type { Source } from "~/domain/catalog";
 import type { Outcome, OutcomeKind, SpecAnswer } from "~/domain/outcome";
 import { cn } from "~/lib/utils";
 import { distinctDomain } from "~/lib/vendor-name";
@@ -93,7 +95,9 @@ function OutcomeView({ page }: { page: OutcomePage }) {
  * Every view's frame: what was asked, the heading (the Outcome's name in
  * grease pencil, beside its test patch), one lead sentence and, for an
  * Outcome, where it sits on the certainty strip. `aside` is the print, when
- * there is one; the rest follows below.
+ * there is one. With `search`, the Search form follows, holding the name
+ * asked (a view that asks for another name); the rest follows below, and
+ * last a link to Search, `back` its text.
  */
 function Frame({
   request,
@@ -101,8 +105,10 @@ function Frame({
   kind,
   lead,
   aside,
+  search = false,
   chain,
   diagnostics,
+  back = "Look up another API",
   children,
 }: {
   request?: LookupRequest;
@@ -110,8 +116,10 @@ function Frame({
   kind?: OutcomeKind;
   lead: ReactNode;
   aside?: ReactNode;
+  search?: boolean;
   chain?: ChainState;
   diagnostics?: string[];
+  back?: string;
   children?: ReactNode;
 }) {
   return (
@@ -148,6 +156,7 @@ function Frame({
           {aside}
         </div>
       </section>
+      {search ? <SearchForm name={request?.name} /> : null}
       {children}
       {diagnostics?.length ? <Diagnostics diagnostics={diagnostics} /> : null}
       {chain ? (
@@ -165,11 +174,14 @@ function Frame({
           <Stations state={chain} />
         </section>
       ) : null}
-      <p className="text-sm">
-        <Link to="/" className={LINK}>
-          Look up another API
-        </Link>
-      </p>
+      {/* A view with the Search form doesn't also need a link back to it. */}
+      {search ? null : (
+        <p className="text-sm">
+          <Link to="/" className={LINK}>
+            {back}
+          </Link>
+        </p>
+      )}
     </div>
   );
 }
@@ -222,6 +234,7 @@ function ResolvedView({
           print={{
             apiId: api.id,
             apiName: api.name,
+            lookupName: page.request.name,
             vendorName: vendor.name,
             specId: currentSpec.id,
             provenance: outcome.provenance,
@@ -282,6 +295,7 @@ function UnconfirmedView({
           print={{
             apiId: api.id,
             apiName: api.name,
+            lookupName: page.request.name,
             vendorName: vendor.name,
             specId: spec.id,
             provenance: null,
@@ -463,6 +477,7 @@ function UnknownView({
       heading="Unknown"
       kind="Unknown"
       lead={<>No API called “{outcome.name}” was found.</>}
+      search
       chain="answered"
       diagnostics={outcome.diagnostics}
     />
@@ -496,6 +511,7 @@ function NotInIndex({
           one.
         </>
       }
+      search
       chain="missed"
     >
       <section aria-labelledby="discovery" className="grid max-w-[48rem] gap-5">
@@ -577,6 +593,7 @@ function NameRequired() {
     <Frame
       heading="Name an API"
       lead="A Lookup needs the name of an API, such as Stripe or Jira Cloud."
+      search
     />
   );
 }
@@ -733,18 +750,42 @@ function AlternateSpecs({ specs }: { specs: SpecAnswer[] }) {
   );
 }
 
-/** Where a Spec was found: each Source's URL (as text) and Provenance. */
-function Sources({ sources }: { sources: Of<"Resolved">["sources"] }) {
+/**
+ * Where a Spec was found: each Source's URL (as text), its Provenance and
+ * when it was last verified. On the bay under a Lookup result, or `on` a
+ * print's label (the Spec viewer), where it heads a section of the label.
+ */
+export function Sources({
+  sources,
+  on = "bay",
+}: {
+  sources: Pick<Source, "id" | "url" | "provenance" | "lastVerifiedAt">[];
+  on?: "bay" | "print";
+}) {
+  const print = on === "print";
   return (
-    <section aria-labelledby="sources" className="grid gap-4">
-      <h2 id="sources" className={H2}>
+    <section
+      aria-labelledby="sources"
+      className={cn("grid", print ? "gap-2" : "gap-4")}
+    >
+      <h2 id="sources" className={print ? cn(LABEL, "text-print-ink-2") : H2}>
         Sources
       </h2>
-      <ul className="grid max-w-[48rem] gap-px overflow-hidden rounded-[3px] border border-rule bg-rule">
+      <ul
+        className={cn(
+          "grid max-w-[48rem] gap-px overflow-hidden border",
+          print
+            ? "rounded-[2px] border-print-ink-2 bg-print-ink-2"
+            : "rounded-[3px] border-rule bg-rule",
+        )}
+      >
         {sources.map((source) => (
           <li
             key={source.id}
-            className="grid gap-1.5 bg-bay p-4 sm:grid-cols-[auto_1fr] sm:items-baseline sm:gap-x-4"
+            className={cn(
+              "grid gap-1.5 sm:grid-cols-[auto_1fr] sm:items-baseline sm:gap-x-4",
+              print ? "bg-print p-3" : "bg-bay p-4",
+            )}
           >
             <span>
               <ProvenanceMark provenance={source.provenance} />
@@ -753,12 +794,17 @@ function Sources({ sources }: { sources: Of<"Resolved">["sources"] }) {
               <span className="font-mono text-sm [overflow-wrap:anywhere]">
                 {source.url}
               </span>
-              <span className="text-sm text-ink-2">
+              <span
+                className={cn(
+                  "text-sm",
+                  print ? "text-print-ink-2" : "text-ink-2",
+                )}
+              >
                 Last verified{" "}
                 <VerifiedStamp
                   verifiedAt={source.lastVerifiedAt}
                   stale={false}
-                  on="bay"
+                  on={on}
                 />
               </span>
             </span>

@@ -1,6 +1,7 @@
 import { and, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import type { Provenance } from "~/domain/provenance";
 import type { Db } from "~/index-store/db";
+import { createRepo } from "~/index-store/repo";
 import { apis, sources, specs, vendors } from "~/index-store/schema";
 import type { IndexedLookup } from "~/lookup/lookup";
 
@@ -8,6 +9,8 @@ import type { IndexedLookup } from "~/lookup/lookup";
 export type IndexPrint = {
   apiId: string;
   apiName: string;
+  /** A name the Index answers a Lookup of this API by, for a link to it. */
+  lookupName: string;
   vendorName: string;
   specId: string;
   provenance: Provenance | null;
@@ -68,6 +71,7 @@ export function indexStats(
     .limit(limit * 2)
     .all();
 
+  const repo = createRepo(db);
   const staleAfterMs = freshnessDays * 24 * 60 * 60 * 1000;
   const recent: IndexPrint[] = [];
   for (const { apiId } of recentIds) {
@@ -81,6 +85,7 @@ export function indexStats(
     recent.push({
       apiId,
       apiName: current.api.name,
+      lookupName: repo.lookupNameOf(current.api),
       vendorName: current.vendor.name,
       specId: current.currentSpec.id,
       provenance: current.provenance ?? null,

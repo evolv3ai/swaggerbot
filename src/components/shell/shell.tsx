@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { ProvenanceMark } from "~/components/darkroom/provenance-mark";
 import { VerifiedStamp } from "~/components/darkroom/stamp";
 import type { IndexStats } from "~/server/index-stats";
+import { lookupHref } from "~/server/lookup-search";
 import { BotMark } from "./bot-mark";
 import { HealthLamp } from "./health-lamp";
 import { NAV } from "./nav";
@@ -26,7 +27,7 @@ export function Shell({
     <div className="min-h-dvh lg:grid lg:grid-cols-[16rem_minmax(0,1fr)]">
       <a
         href="#content"
-        className="sr-only z-50 rounded-[3px] bg-ink px-4 py-2 font-caps uppercase tracking-wider text-bay focus:not-sr-only focus:fixed focus:left-3 focus:top-3"
+        className="sr-only z-50 rounded-[3px] bg-ink no-underline px-4 py-2 font-caps uppercase tracking-wider text-bay focus:not-sr-only focus:fixed focus:left-3 focus:top-3"
       >
         Skip to content
       </a>
@@ -68,7 +69,7 @@ export function Shell({
               Last verified
             </h2>
             <p className="font-caps text-lg font-semibold uppercase leading-tight">
-              {last.apiName}
+              <a href={lookupHref(last.lookupName)}>{last.apiName}</a>
             </p>
             <p className="flex flex-wrap items-center gap-2">
               {last.provenance ? (

@@ -16,16 +16,19 @@ const WASHED = { field: "bg-[#a39c8f]", text: "text-[#0e0e0e]" } as const;
  * One API's Current Spec as a print. The image is a density field (recency:
  * `rank` 0 is the newest) carrying the measured answer time; the facts are on
  * the label below. `developing` runs the print's one motion, the image coming
- * up out of the paper (none under reduced motion).
+ * up out of the paper (none under reduced motion). With `href`, the API's
+ * name links there (the replay links each print to its Lookup).
  */
 export function Print({
   print,
   rank = 0,
   developing = false,
   headingLevel: Heading = "h3",
+  href,
   className,
 }: {
   print: IndexPrint;
+  href?: string;
   rank?: number;
   developing?: boolean;
   headingLevel?: "h2" | "h3";
@@ -63,7 +66,7 @@ export function Print({
       </div>
       <div className="grid gap-2 px-1 pb-1">
         <Heading className="font-caps text-2xl font-semibold uppercase leading-tight tracking-wide">
-          {print.apiName}
+          {href ? <a href={href}>{print.apiName}</a> : print.apiName}
         </Heading>
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
           <dt className="font-caps uppercase tracking-wider text-print-ink-2">

@@ -1,7 +1,12 @@
 import { useEffect, useState } from "react";
 import { cn } from "~/lib/utils";
 
-/** The service's state from `/api/health`, as a lamp on the bench. */
+/**
+ * The service's state from `/api/health`, as a lamp on the bench. The lamp
+ * itself isn't a live region: the check runs on every page load, and
+ * "Checking" then "up" each time would be noise. Only a service that isn't
+ * answering is announced.
+ */
 export function HealthLamp({ className }: { className?: string }) {
   const [ok, setOk] = useState<boolean>();
   useEffect(() => {
@@ -21,10 +26,7 @@ export function HealthLamp({ className }: { className?: string }) {
         ? "The service is up"
         : "The service isn't answering";
   return (
-    <p
-      className={cn("flex items-center gap-2 text-sm", className)}
-      aria-live="polite"
-    >
+    <p className={cn("flex items-center gap-2 text-sm", className)}>
       <span
         aria-hidden="true"
         className={cn(
@@ -33,7 +35,11 @@ export function HealthLamp({ className }: { className?: string }) {
           ok === false && "bg-destructive",
         )}
       />
-      {label}
+      {/* When down, the live region below says it, once. */}
+      <span aria-hidden={ok === false || undefined}>{label}</span>
+      <span aria-live="polite" className="sr-only">
+        {ok === false ? "The service isn't answering" : ""}
+      </span>
     </p>
   );
 }

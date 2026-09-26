@@ -22,6 +22,9 @@ export const VIEWPORTS: Viewport[] = [
   { width: 1280, height: 800, scheme: "dark" },
 ];
 
+/** The class a link carries to opt out of the underline (Tailwind's). */
+export const LINK_OPT_OUT = "no-underline";
+
 /** Tab presses allowed before a walk that never comes back counts as trapped. */
 export const MAX_TABS = 1_000;
 
@@ -34,12 +37,16 @@ light and in dark:
   where it started. Fails when an interactive element is never reached,
   when focus is trapped, or when a focused element has no visible focus
   indicator (its outline and box-shadow are the same as unfocused);
+- links: every link in <main> must be underlined (computed
+  text-decoration-line), unless it carries the opt-out class ${LINK_OPT_OUT}
+  (the nav items, the home mark, the skip link, links shaped as buttons);
 - the console: any Content Security Policy violation fails, as does a
-  page that doesn't load (HTTP 400 or more).
+  page that doesn't load (HTTP 400 or more). A route that should answer
+  otherwise names its status after "#": /lookup?name=#400 must answer 400.
 
 Saves a full-page screenshot of each run under --out.
 
-  --routes /,/docs  the routes to check, relative to <baseUrl> (default ${DEFAULT_ROUTES.join(",")})
+  --routes /,/docs  the routes to check (each may end in #<status>), relative to <baseUrl> (default ${DEFAULT_ROUTES.join(",")})
   --json            print the whole report as JSON
   --out dir         where the screenshots go (default ${DEFAULT_OUT}/)
 
@@ -257,14 +264,32 @@ export function judgeTabWalk(
   };
 }
 
+/**
+ * A route as `--routes` gives it: the path to load and, after a final
+ * `#<status>`, the HTTP status it must answer (`/lookup?name=#400`).
+ */
+export function routeTarget(route: string): {
+  path: string;
+  expectedStatus?: number;
+} {
+  const match = /^(.*)#(\d{3})$/.exec(route);
+  return match
+    ? { path: match[1] as string, expectedStatus: Number(match[2]) }
+    : { path: route };
+}
+
 /** One route at one viewport. */
 export type UicheckRun = {
   route: string;
   width: number;
   scheme: ColorScheme;
   status: number | null;
+  /** The status the route must answer, when it isn't a 2xx or 3xx. */
+  expectedStatus?: number;
   violations: AxeViolation[];
   keyboard: KeyboardResult;
+  /** Links in `<main>` that aren't underlined and don't opt out. */
+  plainLinks: Described[];
   cspViolations: string[];
   screenshot: string;
   failures: string[];
@@ -281,7 +306,12 @@ export function runFailures(
   run: Omit<UicheckRun, "failures" | "screenshot">,
 ): string[] {
   const failures: string[] = [];
-  if (run.status === null || run.status >= 400) {
+  if (run.expectedStatus !== undefined) {
+    if (run.status !== run.expectedStatus)
+      failures.push(
+        `the page answered HTTP ${run.status ?? "nothing"}, not ${run.expectedStatus}`,
+      );
+  } else if (run.status === null || run.status >= 400) {
     failures.push(`the page answered HTTP ${run.status ?? "nothing"}`);
   }
   for (const v of run.violations) {
@@ -295,6 +325,7 @@ export function runFailures(
   for (const n of k.noFocusIndicator) {
     failures.push(`keyboard: no visible focus indicator on ${n}`);
   }
+  for (const l of run.plainLinks) failures.push(`link not underlined: ${l}`);
   for (const c of run.cspViolations) failures.push(`CSP: ${c}`);
   return failures;
 }
@@ -314,7 +345,7 @@ export function uicheckLines(report: UicheckReport): string[] {
   for (const r of report.runs) {
     const k = r.keyboard;
     lines.push(
-      `${r.failures.length ? "FAIL" : "PASS"} ${r.route} ${r.width} ${r.scheme.padEnd(5)}  axe ${r.violations.length} · keyboard ${k.reached}/${k.expected} · CSP ${r.cspViolations.length} · ${r.screenshot}`,
+      `${r.failures.length ? "FAIL" : "PASS"} ${r.route} ${r.width} ${r.scheme.padEnd(5)}  axe ${r.violations.length} · keyboard ${k.reached}/${k.expected} · links ${r.plainLinks.length} · CSP ${r.cspViolations.length} · ${r.screenshot}`,
     );
     for (const f of r.failures) lines.push(`  ${f}`);
   }
@@ -411,6 +442,22 @@ function markExpected(): [number, string][] {
     const { visibility } = getComputedStyle(el);
     if (visibility === "hidden" || visibility === "collapse") continue;
     out.push([probe.key(el), probe.describe(el)]);
+  }
+  return out;
+}
+
+/**
+ * Runs in the page: the rendered links in `<main>` whose computed
+ * `text-decoration-line` has no underline and that don't carry `optOut`.
+ */
+function findPlainLinks(optOut: string): string[] {
+  const probe = window.__uicheck as Probe;
+  const out: string[] = [];
+  for (const el of document.querySelectorAll("main a[href]")) {
+    if (el.classList.contains(optOut)) continue;
+    if (el.getClientRects().length === 0) continue;
+    if (!getComputedStyle(el).textDecorationLine.includes("underline"))
+      out.push(probe.describe(el));
   }
   return out;
 }
@@ -513,8 +560,9 @@ export async function checkRun(
     options.out,
     `${routeSlug(route)}-${viewport.width}-${viewport.scheme}.png`,
   );
+  const { path, expectedStatus } = routeTarget(route);
   try {
-    const response = await page.goto(options.baseUrl + route, {
+    const response = await page.goto(options.baseUrl + path, {
       waitUntil: "networkidle",
     });
     await page.evaluate(() => document.fonts.ready.then(() => undefined));
@@ -529,14 +577,18 @@ export async function checkRun(
       targets: v.nodes.map((n) => n.target.join(" ")),
     }));
     await page.screenshot({ path: screenshot, fullPage: true });
+    await page.evaluate(installProbe);
+    const plainLinks = await page.evaluate(findPlainLinks, LINK_OPT_OUT);
     const keyboard = await walkKeyboard(page);
     const run = {
       route,
       width: viewport.width,
       scheme: viewport.scheme,
       status: response?.status() ?? null,
+      ...(expectedStatus !== undefined ? { expectedStatus } : {}),
       violations,
       keyboard,
+      plainLinks,
       cspViolations,
     };
     return { ...run, screenshot, failures: runFailures(run) };

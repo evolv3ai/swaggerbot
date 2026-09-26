@@ -136,6 +136,30 @@ describe("specView", () => {
     });
   });
 
+  it("gives the Spec's own Sources, and a name its Lookup answers by", () => {
+    const facts = view(v2.id);
+
+    expect(facts?.sources).toEqual([
+      {
+        id: expect.any(Number),
+        url: "https://payco.com/openapi.json",
+        provenance: "Official",
+        lastVerifiedAt: "2026-09-20T10:00:00.000Z",
+      },
+      {
+        id: expect.any(Number),
+        url: "https://mirror.example/payco.json",
+        provenance: "Mirror",
+        lastVerifiedAt: "2026-09-24T10:00:00.000Z",
+      },
+    ]);
+    expect(view(v1.id)?.sources.map((s) => s.url)).toEqual([
+      "https://payco.com/v1.json",
+    ]);
+    // Nothing remembered for PayCo: its own name.
+    expect(facts?.lookupName).toBe("PayCo");
+  });
+
   it("links an Alternate back to the Current Spec, and marks it Stale", () => {
     const facts = view(v1.id);
 
