@@ -101,7 +101,9 @@ describe("the Resolved view", () => {
     expect(print).toContain(
       `>https://swaggerbot.dev/api/specs/${SPEC_ID}/published</code>`,
     );
-    expect(print).toMatch(/<button type="button"[^>]*>Copy URL<\/button>/);
+    expect(print).toMatch(
+      /<button type="button"[^>]*>(<svg.*?<\/svg>)?Copy URL<\/button>/,
+    );
     expect(print).toContain('aria-live="polite"');
   });
 

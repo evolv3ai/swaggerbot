@@ -1,0 +1,20 @@
+:root{
+--space-0:0;--space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-5:20px;--space-6:24px;--space-8:32px;--space-10:40px;--space-12:48px;--space-16:64px;--space-20:80px;
+/* Radii follow the mark: chunky rounded head, softer inner screen, pill mouth, round eyes */
+--radius-xs:4px;--radius-sm:6px;--radius-md:10px;--radius-lg:16px;--radius-xl:24px;--radius-pill:999px;
+/* Strokes: the mark is drawn in one heavy line weight */
+--stroke-1:1px;--stroke-2:2px;--stroke-3:3px;
+--shadow-sm:0 1px 2px rgba(2,28,65,.08);
+--shadow-md:0 2px 4px rgba(2,28,65,.06),0 6px 16px rgba(2,28,65,.08);
+--shadow-lg:0 4px 8px rgba(2,28,65,.08),0 18px 40px rgba(2,28,65,.14);
+--ease-out:cubic-bezier(.2,.8,.2,1); /* @kind other */
+--ease-bounce:cubic-bezier(.34,1.56,.64,1); /* @kind other */
+--dur-fast:120ms; /* @kind other */
+--dur-base:180ms; /* @kind other */
+--dur-slow:280ms; /* @kind other */
+}
+[data-theme="dark"]{
+--shadow-sm:0 0 0 1px var(--gray-700);
+--shadow-md:0 0 0 1px var(--gray-700),0 8px 20px rgba(0,0,0,.4);
+--shadow-lg:0 0 0 1px var(--gray-600),0 20px 44px rgba(0,0,0,.55);
+}

@@ -7,6 +7,7 @@ import { ProvenanceMark } from "~/components/darkroom/provenance-mark";
 import { VerifiedStamp } from "~/components/darkroom/stamp";
 import { type ChainState, Stations } from "~/components/darkroom/stations";
 import { SearchForm } from "~/components/search/search-form";
+import { buttonClass } from "~/components/ui/button";
 import type { Source } from "~/domain/catalog";
 import type { Outcome, OutcomeKind, SpecAnswer } from "~/domain/outcome";
 import { cn } from "~/lib/utils";
@@ -782,7 +783,7 @@ function PrintActions({
     <div className="mt-2 grid gap-3">
       <a
         href={`/specs/${spec.id}`}
-        className="no-underline mb-[3px] flex min-h-[45px] items-center justify-center rounded-none border-2 border-[#0e0e0e] bg-lamp px-7 text-center font-caps text-lg font-bold uppercase tracking-[0.14em] text-[#0e0e0e] shadow-[0_3px_0_#0e0e0e] transition-[box-shadow,translate] duration-100 hover:brightness-105 active:translate-y-[3px] active:shadow-none dark:border-[#9a6400] dark:shadow-[0_3px_0_#9a6400] dark:active:shadow-none"
+        className={buttonClass({ size: "lg", className: "w-full" })}
       >
         Open in the Spec viewer
       </a>

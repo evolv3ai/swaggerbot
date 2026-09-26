@@ -2,11 +2,13 @@ import {
   createRootRoute,
   HeadContent,
   Outlet,
+  ScriptOnce,
   Scripts,
   useRouterState,
 } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { Shell } from "~/components/shell/shell";
+import { THEME_SCRIPT } from "~/components/shell/theme";
 import { getShellFacts } from "~/server/shell-facts";
 import appCss from "~/styles/app.css?url";
 import fontsCss from "~/styles/fonts.css?url";
@@ -23,7 +25,7 @@ export const Route = createRootRoute({
       { title: TITLE },
       { name: "description", content: DESCRIPTION },
       // One value: the router's head keeps one meta per name.
-      { name: "theme-color", content: "#dc9530" },
+      { name: "theme-color", content: "#111827" },
       { property: "og:type", content: "website" },
       { property: "og:site_name", content: "SwaggerBot" },
       { property: "og:title", content: TITLE },
@@ -35,10 +37,16 @@ export const Route = createRootRoute({
       { name: "twitter:card", content: "summary_large_image" },
     ],
     links: [
-      { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
+      {
+        rel: "icon",
+        href: "/favicon-32.png",
+        type: "image/png",
+        sizes: "32x32",
+      },
+      { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
       {
         rel: "preload",
-        href: "/fonts/permanent-marker-400-latin.woff2",
+        href: "/fonts/montserrat-latin-800-normal.woff2",
         as: "font",
         type: "font/woff2",
         crossOrigin: "anonymous",
@@ -71,8 +79,11 @@ function RootComponent() {
 
 function RootDocument({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    // The theme attribute is set before hydration by THEME_SCRIPT.
+    <html lang="en" suppressHydrationWarning>
       <head>
+        {/* Before the styles, so the page paints in the visitor's theme. */}
+        <ScriptOnce>{THEME_SCRIPT}</ScriptOnce>
         <HeadContent />
       </head>
       <body>

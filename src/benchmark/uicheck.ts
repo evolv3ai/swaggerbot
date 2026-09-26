@@ -3,6 +3,7 @@ import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import AxeBuilder from "@axe-core/playwright";
 import { type Browser, chromium, type Page } from "playwright";
+import { THEME_KEY } from "~/components/shell/theme";
 
 /** The routes checked when `--routes` isn't given. */
 export const DEFAULT_ROUTES = ["/"];
@@ -31,7 +32,8 @@ export const MAX_TABS = 1_000;
 export const UICHECK_USAGE = `usage: pnpm tsx scripts/uicheck.ts <baseUrl> [--routes ${DEFAULT_ROUTES.join(",")}] [--json] [--out ${DEFAULT_OUT}]
 
 Checks each route of the Web UI in Chromium (Playwright) at ${[...new Set(VIEWPORTS.map((v) => v.width))].join(" and ")} wide, in
-light and in dark:
+light and in dark (the site's own theme, set as a visitor's choice before
+the page loads, with the browser's color scheme to match):
 - axe-core with the tags ${AXE_TAGS.join(" ")}: any violation fails;
 - the keyboard: Tab from the top of the page until focus comes back to
   where it started. Fails when an interactive element is never reached,
@@ -547,6 +549,18 @@ export async function checkRun(
     viewport: { width: viewport.width, height: viewport.height },
     colorScheme: viewport.scheme,
   });
+  // The theme is the visitor's choice (dark by default), read from
+  // localStorage before first paint: set it as a returning visitor would.
+  await context.addInitScript(
+    ([key, theme]) => {
+      try {
+        localStorage.setItem(key, theme);
+      } catch {
+        // No storage: the page stays in its default theme.
+      }
+    },
+    [THEME_KEY, viewport.scheme] as const,
+  );
   const page = await context.newPage();
   const cspViolations: string[] = [];
   page.on("console", (message) => {

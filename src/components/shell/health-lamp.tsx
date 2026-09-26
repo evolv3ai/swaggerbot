@@ -2,10 +2,10 @@ import { useEffect, useState } from "react";
 import { cn } from "~/lib/utils";
 
 /**
- * The service's state from `/api/health`, as a lamp on the bench. The lamp
- * itself isn't a live region: the check runs on every page load, and
- * "Checking" then "up" each time would be noise. Only a service that isn't
- * answering is announced.
+ * The service's state from `/api/health`: a round status dot and a word.
+ * It isn't a live region: the check runs on every page load, and
+ * "Checking" then "Operational" each time would be noise. Only a service
+ * that isn't answering is announced, once.
  */
 export function HealthLamp({ className }: { className?: string }) {
   const [ok, setOk] = useState<boolean>();
@@ -20,21 +20,24 @@ export function HealthLamp({ className }: { className?: string }) {
     };
   }, []);
   const label =
-    ok === undefined
-      ? "Checking the service"
-      : ok
-        ? "The service is up"
-        : "The service isn't answering";
+    ok === undefined ? "Checking" : ok ? "Operational" : "Not answering";
   return (
-    <p className={cn("flex items-center gap-2 text-sm", className)}>
+    <p
+      className={cn(
+        "flex items-center gap-1.5 whitespace-nowrap text-sm font-medium text-sb-text-muted",
+        className,
+      )}
+    >
       <span
         aria-hidden="true"
         className={cn(
-          "size-2.5 rounded-full border border-rule",
-          ok === true && "bg-lamp shadow-[0_0_8px_1px_var(--lamp)]",
-          ok === false && "bg-destructive",
+          "size-2 rounded-full",
+          ok === undefined && "border border-sb-border-strong",
+          ok === true && "bg-sb-success",
+          ok === false && "bg-sb-danger",
         )}
       />
+      <span className="sr-only">Service status: </span>
       {/* When down, the live region below says it, once. */}
       <span aria-hidden={ok === false || undefined}>{label}</span>
       <span aria-live="polite" className="sr-only">

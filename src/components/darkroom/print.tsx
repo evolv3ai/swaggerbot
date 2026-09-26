@@ -6,8 +6,8 @@ import { VerifiedStamp } from "./stamp";
 
 /** Image density by recency: the newest print is the densest; a Stale one is washed. */
 const DENSITY = [
-  { field: "bg-strip-5", text: "text-print" },
-  { field: "bg-strip-4", text: "text-print" },
+  { field: "bg-strip-5", text: "text-white" },
+  { field: "bg-strip-4", text: "text-white" },
   { field: "bg-strip-3", text: "text-[#0e0e0e]" },
 ] as const;
 /** A Stale print: warm, washed silver, a tone the certainty strip doesn't use. */

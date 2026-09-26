@@ -41,7 +41,8 @@ swagger.bot turns the name of an API into a verified Spec with its Provenance, o
 ## Brand Commitments
 
 - The name is shown as **SwaggerBot**, with its existing bot icon (`public/favicon.svg`; the `BotMark` drawing in `src/routes/index.tsx`, also on `public/og.png`). The domain is `swaggerbot.dev`; the project and its docs say `swagger.bot`. (Wes, 2026-09-25.)
-- Nothing else from the interim landing page is binding: its colours and type are open to the new visual direction.
+- **The SwaggerBot design system v2 is binding** (Wes, 2026-09-26): `docs/design/swaggerbot-design-system-v2/` (from the new logo package: SwaggerBot Blue `#0099DD`, Navy `#021C41`, Ink `#111827`; Montserrat display, IBM Plex Sans body, JetBrains Mono; the five-answer badge colours; tagline BETTER THAN SPECS). It replaces the old bot icon drawing and every earlier theme (the interim navy page and Darkroom Safelight). Its logos are used as supplied, never redrawn or recoloured.
+- **It looks like a docs site, a little more attractive than the rest** (Wes, 2026-09-26): "SwaggerBot swims in a sea of docs. It should be just slightly more attractive than all the other docs sites, yet still feel like a docs site." Every page sits in a Mintlify-grade docs shell (top bar with ⌘K search, left sidebar, "On this page"); the approved mock is `docs/design/approved-mock/`. **Dark is the default theme**; light is the alternate, chosen by the visitor.
 - Voice: plain and exact. Say what was found and how sure we are; say plainly when nothing was. Never oversell.
 
 ## Evidence on Hand

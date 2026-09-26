@@ -176,6 +176,16 @@ The deploys of 2026-09-23:
 - `mcpcheck`: the first run after the deploy FAILED on one timing (Cloudflare `lookup_api` 2.1 s, bound 2.0 s, the first Lookup on a cold server); three reruns PASS, slowest call 347–489 ms, largest result 28.4 kB.
 - `formscheck` PASS: outline p90 207 ms, operation p90 394 ms, 0 non-2xx.
 
+### `43bd12d` (2026-09-25): O3 fixes, part 1
+
+**Deployed at 22:40 CDT** (deployment `8bzyyqyd43wbq4jvnd8rilvd`), ahead of the rest of O3 so Wes can click through it. It carries #95 (WTR-143: the hatched Unknown cell, the solid dark Resolved patch, one Vendor name, the type ramp, the 34rem docs measure, the translate press) and #96 (WTR-142: underlined links, 400/429 statuses, Sources and onward links on the Spec viewer, the Search form on dead-end views, a quiet health lamp). No new env vars.
+
+**Live checks:**
+- `uicheck` PASS on `/`, `/lookup?name=stripe`, `/lookup?name=frobnicator-xyz`, `/vendors`, `/vendors/stripe.com`, the Stripe Spec viewer and `/docs` at 390 and 1280, light and dark (28 runs): axe 0, CSP 0, links 0, keyboard complete.
+- `/lookup?name=` answers 400.
+- `mcpcheck` PASS; slowest call 1.9 s, again the first Lookup on a fresh server.
+- `formscheck` PASS: outline p90 196 ms, operation p90 358 ms, 0 non-2xx.
+
 ## Gotchas
 
 - Coolify's application health check runs `curl`/`wget` **inside** the container. An image without them is rolled back as unhealthy, even when its own Docker `HEALTHCHECK` passes.
