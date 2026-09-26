@@ -1,0 +1,61 @@
+:root{
+/* Brand — sampled from the logo files */
+--sb-blue:#0099DD;
+--sb-navy:#021C41;
+--sb-ink:#111827;
+--sb-white:#FFFFFF;
+/* Blue ramp (hue of #0099DD) */
+--blue-50:#EAF7FD;--blue-100:#CCEBF9;--blue-200:#99D7F3;--blue-300:#5CBFEB;--blue-400:#26AAE4;
+--blue-500:#0099DD;--blue-600:#0080BA;--blue-700:#006696;--blue-800:#034C70;--blue-900:#05324B;
+/* Cool neutrals (ink #111827 sits at 900) */
+--gray-0:#FFFFFF;--gray-50:#F6F8FB;--gray-100:#EDF1F6;--gray-200:#DCE2EB;--gray-300:#C1CAD7;--gray-400:#96A1B2;
+--gray-500:#6B7688;--gray-600:#4B5568;--gray-700:#343D4F;--gray-800:#1F2737;--gray-900:#111827;--gray-950:#0A0F1A;
+/* Status hues */
+--green-500:#17A56B;--green-100:#D4F2E4;
+--amber-500:#E9A21B;--amber-100:#FCEDCF;
+--red-500:#E2483D;--red-100:#FBDDDA;
+/* Semantic — light theme (default) */
+--bg:var(--gray-0);
+--bg-subtle:var(--gray-50);
+--surface:var(--gray-0);
+--surface-raised:var(--gray-0);
+--surface-sunken:var(--gray-100);
+--text:var(--sb-navy);
+--text-muted:var(--gray-600);
+--text-faint:var(--gray-500);
+--text-on-accent:#FFFFFF;
+--border:var(--gray-200);
+--border-strong:var(--gray-300);
+--accent:var(--sb-blue);
+--accent-hover:var(--blue-600);
+--accent-press:var(--blue-700);
+--accent-soft:var(--blue-50);
+--accent-soft-text:var(--blue-700);
+--accent-text:var(--blue-700); /* body-size blue text — #0099DD alone is under 4.5:1 on white */
+--success:var(--green-500);--success-soft:var(--green-100);--success-text:#0B7A4D;
+--warning:var(--amber-500);--warning-soft:var(--amber-100);--warning-text:#8A5A00;
+--danger:var(--red-500);--danger-soft:var(--red-100);--danger-text:#B42A20;
+--focus-ring:0 0 0 3px color-mix(in srgb,var(--sb-blue) 40%,transparent);
+--overlay:color-mix(in srgb,var(--sb-ink) 60%,transparent);
+}
+[data-theme="dark"]{
+--bg:var(--gray-900);
+--bg-subtle:var(--gray-950);
+--surface:var(--gray-800);
+--surface-raised:var(--gray-700);
+--surface-sunken:var(--gray-950);
+--text:#FFFFFF;
+--text-muted:var(--gray-300);
+--text-faint:var(--gray-400);
+--border:var(--gray-700);
+--border-strong:var(--gray-600);
+--accent-hover:var(--blue-400);
+--accent-press:var(--blue-300);
+--accent-soft:color-mix(in srgb,var(--sb-blue) 18%,transparent);
+--accent-soft-text:var(--blue-200);
+--accent-text:var(--blue-300);
+--success-soft:color-mix(in srgb,var(--green-500) 20%,transparent);--success-text:#5FD3A2;
+--warning-soft:color-mix(in srgb,var(--amber-500) 20%,transparent);--warning-text:#F5C766;
+--danger-soft:color-mix(in srgb,var(--red-500) 20%,transparent);--danger-text:#F48A82;
+--overlay:color-mix(in srgb,#000 65%,transparent);
+}

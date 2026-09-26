@@ -7,35 +7,26 @@ related_targets: ["src/routes/__root.tsx"]
 
 # Search (`/`) and the app shell
 
-**Scope and mode:** the front door and the shell every screen inherits. Persuade (the evaluator) and Operate (the developer who needs a Spec now), equally (PRODUCT.md). This surface establishes the visual world; Lookup result, Spec viewer, Index browsing and Docs extend it.
+**Scope and mode:** the front door and the docs shell every screen inherits. Persuade (the evaluator) and Operate (the developer who needs a Spec now), equally (PRODUCT.md). Lookup result, Spec viewer, Index browsing and Docs extend it.
 
-**Audience, job, proof:** a developer types the name of an API and leaves with the right Spec's download URL, its Provenance and `verifiedAt`; an evaluator sees that it works, how sure it is, and how to plug it into an agent. Proof is live: real Lookups from the Index, live Index counts, and the Benchmark figures with their base (40 names) and run date. Nothing invented.
+**Audience, job, proof:** a developer types the name of an API and leaves with the right Spec's download URL, its Provenance and `verifiedAt`; an evaluator sees that it works, how sure it is, and how to plug it into an agent. Proof is live: real Index answers, live counts, the Benchmark with its base (40 names) and date. Nothing invented.
 
-**Chosen direction:** Darkroom Safelight, picked by Wes on 2026-09-25 from the bolder-register hand (round 3, after two re-rolls).
+**Chosen direction:** pinned by Wes on 2026-09-26: the SwaggerBot design system v2 (`docs/design/swaggerbot-design-system-v2/`) in a Mintlify-grade docs shell, dark by default; approved mock `docs/design/approved-mock/`. This replaces Darkroom Safelight (rejected by Wes after seeing it).
 
-**Constraints:** WCAG 2.2 AA in both themes, keyboard-complete; Tailwind v4 + shadcn primitives restyled into the world; no Spec content rendered as HTML; the UI holds no key (Index answers only); the SwaggerBot name and bot icon are binding (the icon's drawing is kept; its tile colour follows this world).
+**Constraints:** WCAG 2.2 AA in both themes, keyboard-complete; Tailwind v4 + shadcn primitives restyled to the design system; fonts self-hosted (CSP `font-src 'self'`); no Spec content rendered as HTML; the UI holds no key; everything WTR-142/143 fixed stays fixed (underlined body links, honest 400/429 statuses, onward links, Sources on the viewer).
 
-**Unresolved:** the exact faces (grease-pencil display, condensed instrument caps, numerals) are chosen at build; the Search headline is **"NO FAKE SPECS."** (Wes, 2026-09-25), with a subline that says what it does.
-
-## Adaptations (after the finish review, 2026-09-25)
-
-- **The chain, honestly.** The Index doesn't record which Source station found a Spec, and the UI holds no key, so every answer it shows comes from station 01. The replay and a submitted Lookup light 01 ("Answered here"), and stations 02–06 say "Not needed"; nothing pretends a path it didn't take.
-- **Station 06 is "Judged", not "Verified":** in CONTEXT.md, Verification is the re-check of an Index entry; the last step of Discovery is a Jev judgment (ADR 0001).
-- **The print's image** is a density field (recency: newest densest, Stale washed) carrying the measured answer time, not a second copy of the API's name.
-- **The test strip** is the certainty scale beside the search: one density per Outcome, Resolved densest.
-- **The grease pencil** is Permanent Marker (Apache 2.0), in caps. No self-hostable open face carries real wax grain; faking it with an SVG filter is refused, so the lettering has the marker's rough edge but no grain. **Accepted by Wes, 2026-09-25**, after the finish review scored it partial: Permanent Marker is the display face.
-- **Roll record:** seed `d05b4106`, direction scope, persuade mode. Round 1 assigned index 3 (the card catalogue), re-rolled by Wes. Round 2 (`--reroll 1`) assigned index 5 (the registry page), re-rolled bolder by Wes. Round 3 (`--reroll 2 --register bolder`) dealt challengers only, led by `signals-instruments-darkroom-safelight-bay`, which Wes chose.
+**Roll record:** seed `de69dacf`. Round 1 (assigned The Assay Office) re-rolled safer; round 2 Wes chose The Manual Page, then rejected its mock; round 3 (bolder, picture hand) re-rolled with the steer "Sleek docs", taken as the canon exit: Mintlify as the craft bar. Wes then supplied his own design system, which pins the world.
 
 ## Direction contract
 
-THESIS: A Spec is developed, not fetched. The page is a working darkroom where a typed name becomes a fixed print with its Provenance on the back. It refuses the category default: a centred search box beside a code sample over a route table.
+THESIS: SwaggerBot is the best-looking docs site in a sea of docs: a Lookup is a docs page that answers. It refuses the product-landing hero and any themed costume; it is a docs site, just slightly more attractive than the rest.
 
-OWN-WORLD: The light theme is the lit bay: safelight amber (#FFB000 to #E2A352) owns every region, with dense-black ink and deeproom-brown rules. The dark theme is the bay with the light off: deeproom brown and dense black, amber as the ink. The only tonal ladder is the silver test strip (enamel white → silver → darkroom grey → dense black), used for certainty and freshness. Enamel white is reserved for prints (Spec cards). Grease-pencil display is for one to three human words; condensed instrument caps are for labels; seven-segment numerals are for counts, times and sizes. Controls are bordered tray-edge buttons: amber-filled primary, black secondary. The raises: recency as density (the newest verification is the darkest print; Stale prints read washed); scale mapped to certainty (Resolved lands large, Unconfirmed and Ambiguous smaller and quieter); batch numerals (every print carries its Spec id and `verifiedAt` as monospaced batch marks).
+OWN-WORLD: the design system v2: ink ground (dark default), white text, SwaggerBot Blue for the mark, primary actions and the active nav item; Montserrat 800 headings and the tracked BETTER THAN SPECS eyebrow; IBM Plex Sans body; JetBrains Mono for paths and code; 16px-radius cards with 1px edges, 2px blue outline for the one highlight per view; the five answers as coloured pill badges (Resolved green, Unconfirmed amber, Ambiguous blue, No Spec neutral, Unknown outline); the robot mark as the only personality.
 
-STORY: The visitor sees the darkroom working before they touch it. They write a name on the test strip and watch the answer develop through the real Source chain, then take the fixed print away: the download URL, its Provenance and `verifiedAt`. The evaluator reads the drying line (live Index counts, the dated Benchmark) and copies the one line that adds the MCP server.
+STORY: the visitor recognises a docs site and trusts it; the search answers on the spot with the Spec, its Provenance and a one-click download; the sidebar shows the Index, the HTTP API and MCP as more pages of the same manual.
 
-FIRST VIEWPORT: Desktop: a left rail holds the SwaggerBot mark and wordmark, the nav as labelled drawers, and a "last print" panel (the most recent real verification: API, Provenance, `verifiedAt`). The main field sets a grease-pencil headline at top-left, about a third of the width. Below it sit the search line (a test-strip-labelled input) and the amber "Develop" button. Across the lower band, the six numbered stations of the real Source chain (Index · APIs.guru · Developer Portal · Vendor domain · GitHub · Verified), the active one lit. A safelight status bar carries live counts and the Benchmark with its date. Mobile: the rail becomes a top bar and the stations a two-column grid, with no horizontal scroll. Signature interaction: attract mode. On idle it replays real Index Lookups developing through the stations, labelled as a replay; it is static under reduced motion. A submitted Lookup develops the same way, then lands on /lookup.
+FIRST VIEWPORT: top bar: mark + SwaggerBot wordmark left, the ⌘K search (Lookup) centre, Vendors, GitHub, status dot and "Get an API key" right. Left sidebar groups: Get started, The Index, HTTP API, MCP. Main column: BETTER THAN SPECS eyebrow, "No fake Specs." (Montserrat 800), one-line lead, the Lookup box (2px blue outline, input + Look up, options, Try chips and "21 APIs answer without a key"), then "What you get back" (a real Resolved answer card with curl/MCP/JSON tabs) and the five answers. Right rail: On this page. Phone: top bar with menu, no rails.
 
-FORM: Darkroom safelight bay (catalog `signals-instruments-darkroom-safelight-bay`), the bolder register's dealt leader, chosen over Sneaker Box Stacks and Window-Box Toy Shelf. Seed key d05b4106 (round 3, `--reroll 2 --register bolder`).
+FORM: pinned by Wes: SwaggerBot design system v2 in a Mintlify-grade docs shell (the canon exit, executed at full craft); seed key de69dacf (round 3 steer "Sleek docs").
 
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
