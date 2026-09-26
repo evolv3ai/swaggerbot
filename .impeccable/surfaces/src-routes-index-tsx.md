@@ -30,3 +30,13 @@ FIRST VIEWPORT: top bar: mark + SwaggerBot wordmark left, the ⌘K search (Looku
 FORM: pinned by Wes: SwaggerBot design system v2 in a Mintlify-grade docs shell (the canon exit, executed at full craft); seed key de69dacf (round 3 steer "Sleek docs").
 
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
+
+## Adaptations
+
+Where the built surface departs from the direction contract or the design system v2 kit, and why:
+
+- **The primary action is "Look up"** (the design system's website UI kit, `ui_kits/website/Site.jsx`, and the first build said "Develop"). Wes was told and didn't object; it matches the kit's own example ("Buttons are verbs: Look up").
+- **Navy text on the blue buttons.** White on `#0099DD` is 3.2:1 and fails WCAG AA; navy is 5.3:1. Wes's decision. The primary hover and press go lighter (`blue-400`, `blue-300`) in both themes so the navy keeps its contrast.
+- **Fonts inside the Scalar frame fall back to system fonts.** The Spec viewer's frame is sandboxed with an opaque origin, so it can't load the site's self-hosted fonts (`font-src 'self'` never matches it). Scalar keeps the design system's colours (`SCALAR_CSS` in `src/server/spec-embed.ts`).
+
+The system-wide adaptations from the kit are recorded in `DESIGN.md` (Overview, "Adaptations from the kit").

@@ -1,0 +1,836 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-26T08:07:33Z",
+  "title": "Design System: SwaggerBot",
+  "extensions": {
+    "colorMeta": {
+      "swaggerbot-blue": {
+        "role": "primary",
+        "displayName": "SwaggerBot Blue",
+        "canonical": "#0099dd",
+        "oklch": "oklch(64.9% 0.146 239)",
+        "tonalRamp": [
+          "#05324b",
+          "#034c70",
+          "#006696",
+          "#0080ba",
+          "#0099dd",
+          "#26aae4",
+          "#5cbfeb",
+          "#99d7f3"
+        ],
+        "purpose": "The mark, the one primary action's fill, the one outlined box, focus."
+      },
+      "navy": {
+        "role": "neutral",
+        "displayName": "Logo Navy",
+        "canonical": "#021c41",
+        "oklch": "oklch(23.3% 0.078 257)",
+        "tonalRamp": [
+          "#000829",
+          "#0a264b",
+          "#29456e",
+          "#496792",
+          "#6b8bb8",
+          "#8fb0df",
+          "#b1d3ff",
+          "#cef1ff"
+        ],
+        "purpose": "Text on light; text on the blue fill in both themes."
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#111827",
+        "oklch": "oklch(21.0% 0.032 265)",
+        "tonalRamp": [
+          "#0a0f1a",
+          "#111827",
+          "#1f2737",
+          "#343d4f",
+          "#4b5568",
+          "#6b7688",
+          "#c1cad7",
+          "#edf1f6"
+        ],
+        "purpose": "The dark ground; the light theme's code ground."
+      },
+      "white": {
+        "role": "neutral",
+        "displayName": "White",
+        "canonical": "#ffffff",
+        "oklch": "oklch(100.0% 0.000 90)",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#262626",
+          "#454545",
+          "#666666",
+          "#898989",
+          "#aeaeae",
+          "#d1d1d1",
+          "#eeeeee"
+        ],
+        "purpose": "Text on dark; the light ground."
+      },
+      "blue-50": {
+        "role": "primary",
+        "displayName": "Blue 50",
+        "canonical": "#eaf7fd",
+        "oklch": "oklch(96.8% 0.016 227)",
+        "tonalRamp": [
+          "#05324b",
+          "#034c70",
+          "#006696",
+          "#0080ba",
+          "#0099dd",
+          "#26aae4",
+          "#5cbfeb",
+          "#99d7f3"
+        ]
+      },
+      "blue-200": {
+        "role": "primary",
+        "displayName": "Blue 200",
+        "canonical": "#99d7f3",
+        "oklch": "oklch(84.7% 0.074 228)",
+        "tonalRamp": [
+          "#05324b",
+          "#034c70",
+          "#006696",
+          "#0080ba",
+          "#0099dd",
+          "#26aae4",
+          "#5cbfeb",
+          "#99d7f3"
+        ]
+      },
+      "blue-300": {
+        "role": "primary",
+        "displayName": "Blue 300",
+        "canonical": "#5cbfeb",
+        "oklch": "oklch(76.3% 0.112 230)",
+        "tonalRamp": [
+          "#05324b",
+          "#034c70",
+          "#006696",
+          "#0080ba",
+          "#0099dd",
+          "#26aae4",
+          "#5cbfeb",
+          "#99d7f3"
+        ]
+      },
+      "blue-400": {
+        "role": "primary",
+        "displayName": "Blue 400",
+        "canonical": "#26aae4",
+        "oklch": "oklch(69.7% 0.136 234)",
+        "tonalRamp": [
+          "#05324b",
+          "#034c70",
+          "#006696",
+          "#0080ba",
+          "#0099dd",
+          "#26aae4",
+          "#5cbfeb",
+          "#99d7f3"
+        ]
+      },
+      "blue-700": {
+        "role": "primary",
+        "displayName": "Blue 700",
+        "canonical": "#006696",
+        "oklch": "oklch(48.6% 0.110 239)",
+        "tonalRamp": [
+          "#05324b",
+          "#034c70",
+          "#006696",
+          "#0080ba",
+          "#0099dd",
+          "#26aae4",
+          "#5cbfeb",
+          "#99d7f3"
+        ]
+      },
+      "gray-50": {
+        "role": "neutral",
+        "displayName": "Gray 50",
+        "canonical": "#f6f8fb",
+        "oklch": "oklch(97.8% 0.005 258)",
+        "tonalRamp": [
+          "#0a0f1a",
+          "#111827",
+          "#1f2737",
+          "#343d4f",
+          "#4b5568",
+          "#6b7688",
+          "#c1cad7",
+          "#edf1f6"
+        ]
+      },
+      "gray-100": {
+        "role": "neutral",
+        "displayName": "Gray 100",
+        "canonical": "#edf1f6",
+        "oklch": "oklch(95.7% 0.008 254)",
+        "tonalRamp": [
+          "#0a0f1a",
+          "#111827",
+          "#1f2737",
+          "#343d4f",
+          "#4b5568",
+          "#6b7688",
+          "#c1cad7",
+          "#edf1f6"
+        ]
+      },
+      "gray-200": {
+        "role": "neutral",
+        "displayName": "Gray 200",
+        "canonical": "#dce2eb",
+        "oklch": "oklch(91.1% 0.014 258)",
+        "tonalRamp": [
+          "#0a0f1a",
+          "#111827",
+          "#1f2737",
+          "#343d4f",
+          "#4b5568",
+          "#6b7688",
+          "#c1cad7",
+          "#edf1f6"
+        ]
+      },
+      "gray-300": {
+        "role": "neutral",
+        "displayName": "Gray 300",
+        "canonical": "#c1cad7",
+        "oklch": "oklch(83.6% 0.021 257)",
+        "tonalRamp": [
+          "#0a0f1a",
+          "#111827",
+          "#1f2737",
+          "#343d4f",
+          "#4b5568",
+          "#6b7688",
+          "#c1cad7",
+          "#edf1f6"
+        ]
+      },
+      "gray-400": {
+        "role": "neutral",
+        "displayName": "Gray 400",
+        "canonical": "#96a1b2",
+        "oklch": "oklch(70.6% 0.028 259)",
+        "tonalRamp": [
+          "#0a0f1a",
+          "#111827",
+          "#1f2737",
+          "#343d4f",
+          "#4b5568",
+          "#6b7688",
+          "#c1cad7",
+          "#edf1f6"
+        ]
+      },
+      "gray-500": {
+        "role": "neutral",
+        "displayName": "Gray 500",
+        "canonical": "#6b7688",
+        "oklch": "oklch(56.3% 0.031 260)",
+        "tonalRamp": [
+          "#0a0f1a",
+          "#111827",
+          "#1f2737",
+          "#343d4f",
+          "#4b5568",
+          "#6b7688",
+          "#c1cad7",
+          "#edf1f6"
+        ]
+      },
+      "gray-600": {
+        "role": "neutral",
+        "displayName": "Gray 600",
+        "canonical": "#4b5568",
+        "oklch": "oklch(44.8% 0.034 263)",
+        "tonalRamp": [
+          "#0a0f1a",
+          "#111827",
+          "#1f2737",
+          "#343d4f",
+          "#4b5568",
+          "#6b7688",
+          "#c1cad7",
+          "#edf1f6"
+        ]
+      },
+      "gray-700": {
+        "role": "neutral",
+        "displayName": "Gray 700",
+        "canonical": "#343d4f",
+        "oklch": "oklch(35.9% 0.034 264)",
+        "tonalRamp": [
+          "#0a0f1a",
+          "#111827",
+          "#1f2737",
+          "#343d4f",
+          "#4b5568",
+          "#6b7688",
+          "#c1cad7",
+          "#edf1f6"
+        ]
+      },
+      "gray-800": {
+        "role": "neutral",
+        "displayName": "Gray 800",
+        "canonical": "#1f2737",
+        "oklch": "oklch(27.3% 0.032 264)",
+        "tonalRamp": [
+          "#0a0f1a",
+          "#111827",
+          "#1f2737",
+          "#343d4f",
+          "#4b5568",
+          "#6b7688",
+          "#c1cad7",
+          "#edf1f6"
+        ]
+      },
+      "gray-950": {
+        "role": "neutral",
+        "displayName": "Gray 950",
+        "canonical": "#0a0f1a",
+        "oklch": "oklch(16.9% 0.025 265)",
+        "tonalRamp": [
+          "#0a0f1a",
+          "#111827",
+          "#1f2737",
+          "#343d4f",
+          "#4b5568",
+          "#6b7688",
+          "#c1cad7",
+          "#edf1f6"
+        ]
+      },
+      "green-500": {
+        "role": "tertiary",
+        "displayName": "Green 500",
+        "canonical": "#17a56b",
+        "oklch": "oklch(63.9% 0.142 159)",
+        "tonalRamp": [
+          "#001600",
+          "#00360b",
+          "#005a26",
+          "#007d46",
+          "#10a268",
+          "#4cc98c",
+          "#7aecb0",
+          "#a3ffd0"
+        ]
+      },
+      "green-100": {
+        "role": "tertiary",
+        "displayName": "Green 100",
+        "canonical": "#d4f2e4",
+        "oklch": "oklch(93.6% 0.037 166)",
+        "tonalRamp": [
+          "#001008",
+          "#132c22",
+          "#324b40",
+          "#526d61",
+          "#759184",
+          "#99b6a9",
+          "#bcd9cb",
+          "#d9f7e9"
+        ]
+      },
+      "green-text-dark": {
+        "role": "tertiary",
+        "displayName": "Green Text Dark",
+        "canonical": "#5fd3a2",
+        "oklch": "oklch(78.7% 0.128 163)",
+        "tonalRamp": [
+          "#001501",
+          "#003614",
+          "#005830",
+          "#007c50",
+          "#1fa173",
+          "#52c797",
+          "#7cebba",
+          "#a4ffd9"
+        ]
+      },
+      "green-text-light": {
+        "role": "tertiary",
+        "displayName": "Green Text Light",
+        "canonical": "#0b7a4d",
+        "oklch": "oklch(51.2% 0.116 159)",
+        "tonalRamp": [
+          "#001500",
+          "#003410",
+          "#00562c",
+          "#09794c",
+          "#3f9e6f",
+          "#67c493",
+          "#8be8b5",
+          "#b0ffd4"
+        ]
+      },
+      "amber-500": {
+        "role": "tertiary",
+        "displayName": "Amber 500",
+        "canonical": "#e9a21b",
+        "oklch": "oklch(76.2% 0.154 76)",
+        "tonalRamp": [
+          "#230000",
+          "#481300",
+          "#713200",
+          "#965400",
+          "#bd7900",
+          "#e59e11",
+          "#ffc357",
+          "#ffe285"
+        ]
+      },
+      "amber-100": {
+        "role": "tertiary",
+        "displayName": "Amber 100",
+        "canonical": "#fcedcf",
+        "oklch": "oklch(95.0% 0.043 85)",
+        "tonalRamp": [
+          "#130900",
+          "#30250b",
+          "#50432a",
+          "#71644a",
+          "#95886c",
+          "#bbac90",
+          "#decfb2",
+          "#fcedcf"
+        ]
+      },
+      "amber-text-dark": {
+        "role": "tertiary",
+        "displayName": "Amber Text Dark",
+        "canonical": "#f5c766",
+        "oklch": "oklch(85.1% 0.126 84)",
+        "tonalRamp": [
+          "#1d0200",
+          "#401d00",
+          "#643b00",
+          "#885e00",
+          "#ad810d",
+          "#d3a743",
+          "#f7ca6c",
+          "#ffe995"
+        ]
+      },
+      "amber-text-light": {
+        "role": "tertiary",
+        "displayName": "Amber Text Light",
+        "canonical": "#8a5a00",
+        "oklch": "oklch(50.8% 0.108 73)",
+        "tonalRamp": [
+          "#1f0100",
+          "#421a00",
+          "#663900",
+          "#8b5b01",
+          "#b07e36",
+          "#d7a35c",
+          "#fcc67f",
+          "#ffe5a3"
+        ]
+      },
+      "red-500": {
+        "role": "tertiary",
+        "displayName": "Red 500",
+        "canonical": "#e2483d",
+        "oklch": "oklch(61.8% 0.192 28)",
+        "tonalRamp": [
+          "#310000",
+          "#5e0000",
+          "#8e0000",
+          "#bb1d1a",
+          "#e64c41",
+          "#ff7465",
+          "#ffa190",
+          "#ffc4b3"
+        ]
+      },
+      "red-100": {
+        "role": "tertiary",
+        "displayName": "Red 100",
+        "canonical": "#fbddda",
+        "oklch": "oklch(92.1% 0.034 25)",
+        "tonalRamp": [
+          "#170505",
+          "#35201e",
+          "#563e3c",
+          "#785f5d",
+          "#9d827f",
+          "#c3a6a3",
+          "#e6c9c6",
+          "#ffe6e3"
+        ]
+      },
+      "red-text-dark": {
+        "role": "tertiary",
+        "displayName": "Red Text Dark",
+        "canonical": "#f48a82",
+        "oklch": "oklch(74.6% 0.130 25)",
+        "tonalRamp": [
+          "#290000",
+          "#520003",
+          "#7c1d1d",
+          "#a4423e",
+          "#cc6660",
+          "#f58b83",
+          "#ffb0a7",
+          "#ffd0c7"
+        ]
+      },
+      "red-text-light": {
+        "role": "tertiary",
+        "displayName": "Red Text Light",
+        "canonical": "#b42a20",
+        "oklch": "oklch(50.7% 0.176 29)",
+        "tonalRamp": [
+          "#2f0000",
+          "#5b0000",
+          "#890000",
+          "#b52b21",
+          "#df5546",
+          "#ff7c6a",
+          "#ffa593",
+          "#ffc8b6"
+        ]
+      },
+      "code-ground": {
+        "role": "neutral",
+        "displayName": "Code Ink",
+        "canonical": "#07090b",
+        "oklch": "oklch(13.8% 0.006 245)",
+        "tonalRamp": [
+          "#090b0e",
+          "#242729",
+          "#424548",
+          "#636669",
+          "#868a8c",
+          "#abaeb1",
+          "#ced1d5",
+          "#ebeff2"
+        ],
+        "purpose": "The code ground in the dark theme."
+      },
+      "code-text": {
+        "role": "neutral",
+        "displayName": "Code Silver",
+        "canonical": "#cfd5de",
+        "oklch": "oklch(87.1% 0.014 258)",
+        "tonalRamp": [
+          "#080b11",
+          "#22272d",
+          "#40454d",
+          "#61666e",
+          "#848a92",
+          "#a9aeb7",
+          "#cbd1da",
+          "#e9eff8"
+        ],
+        "purpose": "Code text in both themes."
+      },
+      "code-keyword": {
+        "role": "secondary",
+        "displayName": "Command Periwinkle",
+        "canonical": "#8fbaff",
+        "oklch": "oklch(78.5% 0.109 260)",
+        "tonalRamp": [
+          "#000430",
+          "#022258",
+          "#1e437f",
+          "#3f65a4",
+          "#6189cb",
+          "#84aff3",
+          "#a6d2ff",
+          "#c7f0ff"
+        ],
+        "purpose": "The command word in a code block; POST tag text in dark."
+      },
+      "method-post-light": {
+        "role": "secondary",
+        "displayName": "POST Blue",
+        "canonical": "#1d4ed8",
+        "oklch": "oklch(48.8% 0.217 264)",
+        "tonalRamp": [
+          "#040049",
+          "#01097a",
+          "#0930ae",
+          "#2355e0",
+          "#447dff",
+          "#67a5ff",
+          "#91ccff",
+          "#b4ebff"
+        ],
+        "purpose": "POST tag text in the light theme."
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "The page title, one per page: 40px from sm, 28px on phones."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Section headings (h2); those with an id feed the On this page rail."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "A card heading; the API name in an answer card."
+      },
+      "tagline": {
+        "displayName": "Tagline",
+        "purpose": "BETTER THAN SPECS above Search's title, and nowhere else."
+      },
+      "lead": {
+        "displayName": "Lead",
+        "purpose": "The sentence under a page title, at most 40em."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Running text."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Form labels; buttons use the same face at 13/14/16px."
+      },
+      "badge": {
+        "displayName": "Badge",
+        "purpose": "Badge text only, uppercase."
+      },
+      "code": {
+        "displayName": "Code",
+        "purpose": "Code blocks, URLs, ids, paths, HTTP methods."
+      }
+    },
+    "shadows": [
+      {
+        "name": "sb-shadow-box",
+        "value": "0 1px 0 rgb(255 255 255 / 0.03) inset, 0 20px 40px -24px rgb(0 0 0 / 0.6)",
+        "light": "0 20px 40px -24px rgb(2 28 65 / 0.35)",
+        "purpose": "The lift on the one outlined box per view."
+      },
+      {
+        "name": "sb-shadow-md",
+        "value": "0 0 0 1px #343d4f, 0 8px 20px rgb(0 0 0 / 0.4)",
+        "light": "0 2px 4px rgb(2 28 65 / 0.06), 0 6px 16px rgb(2 28 65 / 0.08)",
+        "purpose": "A raised card, in place of its edge."
+      },
+      {
+        "name": "sb-shadow-lg",
+        "value": "0 0 0 1px #4b5568, 0 20px 44px rgb(0 0 0 / 0.55)",
+        "light": "0 4px 8px rgb(2 28 65 / 0.08), 0 18px 40px rgb(2 28 65 / 0.14)",
+        "purpose": "The menu drawer over the scrim."
+      },
+      {
+        "name": "focus",
+        "value": "outline: 2px solid #0099dd; outline-offset: 2px",
+        "purpose": "Every focusable element (:focus-visible)."
+      },
+      {
+        "name": "top-bar-glass",
+        "value": "background: color-mix(in srgb, var(--sb-bg) 85%, transparent); backdrop-filter: blur(8px)",
+        "purpose": "The sticky top bar only; the system's one blur."
+      }
+    ],
+    "motion": [
+      {
+        "name": "sb-ease-out",
+        "value": "cubic-bezier(0.2, 0.8, 0.2, 1)",
+        "purpose": "Default easing for state changes (buttons, inputs, nav, chips), 150ms."
+      },
+      {
+        "name": "sb-ease-bounce",
+        "value": "cubic-bezier(0.34, 1.56, 0.64, 1)",
+        "purpose": "Reserved by the kit for small toggles (Switch); no built component uses it yet."
+      },
+      {
+        "name": "duration-state",
+        "value": "150ms",
+        "purpose": "Hover, press and focus transitions; the kit's range is 120-180ms."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "md",
+        "value": "768px",
+        "note": "Quick Lookup appears in the top bar."
+      },
+      {
+        "name": "lg",
+        "value": "1024px",
+        "note": "Sidebar and top-bar links appear; the drawer goes."
+      },
+      {
+        "name": "xl",
+        "value": "1280px",
+        "note": "On this page rail appears."
+      }
+    ],
+    "layout": {
+      "column": "860px",
+      "sidebar": "256px",
+      "rail": "220px",
+      "topBar": "60px",
+      "shellMax": "1440px"
+    }
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one key action per view, navy text on the blue fill.",
+      "html": "<button class=\"ds-btn ds-btn-primary\">Look up</button>",
+      "css": ".ds-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;border:2px solid transparent;border-radius:10px;font-family:Montserrat,ui-sans-serif,system-ui,sans-serif;font-weight:700;font-size:14px;line-height:1;cursor:pointer;transition:background-color 150ms var(--sb-ease-out,cubic-bezier(.2,.8,.2,1)),border-color 150ms,color 150ms,translate 150ms}.ds-btn:active{translate:0 1px}.ds-btn:focus-visible{outline:2px solid #0099dd;outline-offset:2px}.ds-btn-primary{background:var(--sb-accent,#0099dd);color:var(--sb-text-on-accent,#021c41)}.ds-btn-primary:hover{background:#26aae4}.ds-btn-primary:active{background:#5cbfeb}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Outlined; the edge turns blue on hover.",
+      "html": "<button class=\"ds-btn2\">Read the docs</button>",
+      "css": ".ds-btn2{display:inline-flex;align-items:center;height:40px;padding:0 16px;border:2px solid var(--sb-border-strong,#4b5568);border-radius:10px;background:transparent;color:var(--sb-text,#fff);font-family:Montserrat,ui-sans-serif,system-ui,sans-serif;font-weight:700;font-size:14px;line-height:1;cursor:pointer;transition:border-color 150ms,color 150ms}.ds-btn2:hover{border-color:var(--sb-accent,#0099dd);color:var(--sb-accent-text,#5cbfeb)}.ds-btn2:focus-visible{outline:2px solid #0099dd;outline-offset:2px}.ds-btn2:active{translate:0 1px}"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "A quieter onward action in blue text.",
+      "html": "<button class=\"ds-btn3\">Request a key</button>",
+      "css": ".ds-btn3{display:inline-flex;align-items:center;height:40px;padding:0 16px;border:2px solid transparent;border-radius:10px;background:transparent;color:var(--sb-accent-text,#5cbfeb);font-family:Montserrat,ui-sans-serif,system-ui,sans-serif;font-weight:700;font-size:14px;line-height:1;cursor:pointer}.ds-btn3:hover{background:var(--sb-accent-soft,rgba(0,153,221,.18))}.ds-btn3:focus-visible{outline:2px solid #0099dd;outline-offset:2px}"
+    },
+    {
+      "name": "Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "2px edge, 10px radius, the page ground inside; the edge turns blue on focus.",
+      "html": "<input class=\"ds-input\" placeholder=\"Stripe, Jira Cloud, Val Town…\">",
+      "css": ".ds-input{height:40px;width:100%;max-width:360px;padding:0 12px;border:2px solid var(--sb-border,#343d4f);border-radius:10px;background:var(--sb-bg,#111827);color:var(--sb-text,#fff);font:400 14px \"IBM Plex Sans\",ui-sans-serif,system-ui,sans-serif;transition:border-color 150ms}.ds-input::placeholder{color:var(--sb-text-faint,#96a1b2)}.ds-input:hover{border-color:var(--sb-border-strong,#4b5568)}.ds-input:focus-visible{border-color:#0099dd;outline:2px solid #0099dd;outline-offset:2px}"
+    },
+    {
+      "name": "Answer Badges",
+      "kind": "chip",
+      "refersTo": "badge",
+      "description": "The five answers, each named, in their fixed colours.",
+      "html": "<span class=\"ds-badge ds-ok\">Resolved</span> <span class=\"ds-badge ds-warn\">Unconfirmed</span> <span class=\"ds-badge ds-acc\">Ambiguous</span> <span class=\"ds-badge ds-neu\">No Spec</span> <span class=\"ds-badge ds-out\">Unknown</span>",
+      "css": ".ds-badge{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:9999px;font:700 11px/1 Montserrat,ui-sans-serif,system-ui,sans-serif;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}.ds-badge::before{content:\"\";width:6px;height:6px;border-radius:50%;background:currentColor}.ds-ok{background:var(--sb-success-soft,rgba(23,165,107,.2));color:var(--sb-success-text,#5fd3a2)}.ds-warn{background:var(--sb-warning-soft,rgba(233,162,27,.2));color:var(--sb-warning-text,#f5c766)}.ds-acc{background:var(--sb-accent-soft,rgba(0,153,221,.18));color:var(--sb-accent-soft-text,#99d7f3)}.ds-neu{background:var(--sb-border,#343d4f);color:var(--sb-text,#fff)}.ds-out{border:1.5px solid var(--sb-border-strong,#4b5568);color:var(--sb-text-muted,#c1cad7)}"
+    },
+    {
+      "name": "Lookup Box",
+      "kind": "card",
+      "refersTo": "lookup-box",
+      "description": "The one blue-outlined, lifted box per view: field, Look up, and Try chips.",
+      "html": "<div class=\"ds-box\"><div class=\"ds-row\"><input class=\"ds-box-in\" placeholder=\"Stripe, Jira Cloud, Val Town…\"><button class=\"ds-box-btn\">Look up</button></div><div class=\"ds-try\">Try <a class=\"ds-chip\" href=\"#\">Stripe</a><a class=\"ds-chip\" href=\"#\">GitHub</a></div></div>",
+      "css": ".ds-box{display:grid;gap:12px;padding:18px;border:2px solid var(--sb-accent,#0099dd);border-radius:16px;background:var(--sb-surface,#1f2737);box-shadow:var(--sb-shadow-box,0 1px 0 rgb(255 255 255/.03) inset,0 20px 40px -24px rgb(0 0 0/.6))}.ds-row{display:flex;gap:10px}.ds-box-in{flex:1;height:48px;padding:0 14px;border:2px solid var(--sb-border,#343d4f);border-radius:10px;background:var(--sb-bg,#111827);color:var(--sb-text,#fff);font:400 16px \"IBM Plex Sans\",system-ui,sans-serif}.ds-box-in:focus-visible{border-color:#0099dd;outline:2px solid #0099dd;outline-offset:2px}.ds-box-btn{height:48px;padding:0 18px;border:2px solid transparent;border-radius:10px;background:#0099dd;color:#021c41;font:700 16px/1 Montserrat,system-ui,sans-serif;cursor:pointer}.ds-box-btn:hover{background:#26aae4}.ds-try{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font:13px \"IBM Plex Sans\",system-ui,sans-serif;color:var(--sb-text-muted,#c1cad7)}.ds-chip{display:inline-block;padding:3px 10px;border:1px solid var(--sb-border,#343d4f);border-radius:9999px;color:var(--sb-text,#fff);text-decoration:none;transition:border-color 150ms,color 150ms}.ds-chip:hover{border-color:#0099dd;color:var(--sb-accent-text,#5cbfeb)}"
+    },
+    {
+      "name": "Code Block (one-line curl)",
+      "kind": "custom",
+      "refersTo": "code-block",
+      "description": "The Spec download command on the ink ground, id elided, with Copy.",
+      "html": "<div class=\"ds-code\"><pre><code><span class=\"ds-kw\">curl</span> -o openapi.yaml …/specs/<span class=\"ds-id\">1fdc1047…78a9</span>/published</code></pre><button class=\"ds-copy\">Copy</button></div>",
+      "css": ".ds-code{display:flex;align-items:flex-start;gap:12px;background:var(--sb-code-bg,#07090b);color:var(--sb-code-text,#cfd5de);border-radius:10px}.ds-code pre{flex:1;margin:0;padding:14px 16px;font:12.5px/1.7 \"JetBrains Mono\",ui-monospace,monospace;white-space:pre;overflow-x:auto}.ds-kw{color:#8fbaff}.ds-id{color:#5cbfeb}.ds-copy{margin:10px 10px 0 0;height:28px;padding:0 8px;border:1px solid rgb(255 255 255/.15);border-radius:6px;background:transparent;color:#cfd5de;font:500 12px \"IBM Plex Sans\",system-ui,sans-serif;cursor:pointer}.ds-copy:hover{border-color:rgb(255 255 255/.3);background:rgb(255 255 255/.1);color:#fff}.ds-copy:focus-visible{outline:2px solid #0099dd;outline-offset:2px}"
+    },
+    {
+      "name": "Sidebar Nav",
+      "kind": "nav",
+      "refersTo": "sidebar",
+      "description": "Docs sidebar group: muted items, the current one on the blue tint.",
+      "html": "<nav class=\"ds-side\"><p class=\"ds-side-h\">The Index</p><a class=\"ds-side-a\" aria-current=\"page\" href=\"#\">Vendors <span>412</span></a><a class=\"ds-side-a\" href=\"#\">Recent APIs</a><p class=\"ds-side-h\">HTTP API</p><a class=\"ds-side-a\" href=\"#\"><span class=\"ds-m\">POST</span>/api/lookup</a></nav>",
+      "css": ".ds-side{width:216px;font:14px \"IBM Plex Sans\",system-ui,sans-serif}.ds-side-h{margin:22px 0 8px;font-size:12px;font-weight:600;color:var(--sb-text,#fff)}.ds-side-h:first-child{margin-top:0}.ds-side-a{display:flex;align-items:center;padding:5px 10px;margin-left:-10px;border-radius:10px;color:var(--sb-text-muted,#c1cad7);text-decoration:none;transition:background-color 150ms,color 150ms}.ds-side-a:hover{background:rgba(0,153,221,.09);color:var(--sb-text,#fff)}.ds-side-a[aria-current]{background:var(--sb-accent-soft,rgba(0,153,221,.18));color:var(--sb-accent-text,#5cbfeb);font-weight:500}.ds-side-a span{margin-left:auto;font-size:12px}.ds-side-a:focus-visible{outline:2px solid #0099dd;outline-offset:2px}.ds-m{margin:0 6px 0 0!important;padding:1px 5px;border-radius:5px;background:rgba(110,168,255,.16);color:#8fbaff;font:500 10.5px/16px \"JetBrains Mono\",ui-monospace,monospace}"
+    },
+    {
+      "name": "Code Tabs",
+      "kind": "nav",
+      "refersTo": "card-content",
+      "description": "Tabs over code in an answer card; the selected tab has a 2px blue underline.",
+      "html": "<div class=\"ds-tabs\" role=\"tablist\"><button role=\"tab\" aria-selected=\"true\">curl</button><button role=\"tab\" aria-selected=\"false\">MCP</button><button role=\"tab\" aria-selected=\"false\">JSON</button></div>",
+      "css": ".ds-tabs{display:flex;gap:20px;padding:0 16px;border:1px solid var(--sb-border,#343d4f);border-radius:12px 12px 0 0;background:var(--sb-surface,#1f2737)}.ds-tabs button{padding:10px 0;border:0;background:none;font:500 13px \"IBM Plex Sans\",system-ui,sans-serif;color:var(--sb-text-muted,#c1cad7);cursor:pointer;transition:color 150ms}.ds-tabs button:hover{color:var(--sb-text,#fff)}.ds-tabs button[aria-selected=true]{color:var(--sb-text,#fff);box-shadow:inset 0 -2px #0099dd}.ds-tabs button:focus-visible{outline:2px solid #0099dd;outline-offset:-2px}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Docs Page That Answers",
+    "overview": "SwaggerBot swims in a sea of docs sites, and it wears their clothes on purpose: a sticky top bar with a ⌘K Lookup, a left sidebar, an \"On this page\" rail, one reading column. Every screen, the front door included, is a docs page; the one thing that sets it apart is that the page answers. A developer types the name of an API and the page hands back the Spec, its Provenance and a `curl` to copy. The attractiveness is in the finish, not in costume: the ink ground, the one blue, Montserrat's heavy headings against quiet Plex body text, and the robot mark as the only personality.\n\nThe system is the **SwaggerBot design system v2** (`docs/design/swaggerbot-design-system-v2/`: `tokens/`, `components/`, `assets/`), which `PRODUCT.md` makes binding, laid out as the approved mock (`docs/design/approved-mock/mock.html`). Tailwind v4 carries it in `src/styles/app.css`: the kit's primitives keep their names (`--blue-*`, `--gray-*`, `--green-*`); its semantic tokens are namespaced `--sb-*` (`--sb-bg`, `--sb-text-muted`, `--sb-accent-text`, …) so they don't collide with Tailwind's and shadcn's own `--accent`, `--border`, `--text-sm`, and are exposed as utilities (`bg-sb-surface`, `text-sb-text-muted`, `border-sb-border`). shadcn's names (`background`, `card`, `primary`, `ring`, …) are mapped onto them. Density is a docs site's: 15px body, generous section spacing, cards only where content is a unit (an answer, a table, a command).\n\n**Dark is the default** (`PRODUCT.md`). `:root` holds the dark theme, `[data-theme=\"light\"]` on `<html>` the light one; the top bar's toggle sets it, remembers it in localStorage, and an inline script in `__root.tsx` applies it before first paint. Without script the page is dark. Tailwind's `dark:` variant follows the attribute, not the OS.",
+    "keyCharacteristics": [
+      "A Mintlify-grade docs shell on every page but `/embed/…`: 60px top bar, 256px sidebar, 220px \"On this page\" rail, one 860px column.",
+      "Ink ground, white text; SwaggerBot Blue only for the mark, the one primary action, the one highlighted box and the active nav item.",
+      "Montserrat 800 page titles, Montserrat 700 section headings, IBM Plex Sans body, JetBrains Mono for anything copyable.",
+      "The five answers as coloured, always-labelled pill badges.",
+      "Flat, edge-defined surfaces; one lifted, blue-outlined box per view."
+    ],
+    "rules": [
+      {
+        "name": "The One Blue Rule",
+        "body": "The blue fill marks the one primary action and the mark; the blue outline marks the one highlighted box. Passive surfaces are never filled blue.",
+        "section": "colors"
+      },
+      {
+        "name": "The Navy On Blue Rule",
+        "body": "Text on the blue fill is navy (`--sb-text-on-accent`), in both themes. White on blue fails AA.",
+        "section": "colors"
+      },
+      {
+        "name": "The Five Colours Rule",
+        "body": "The five answers have fixed colours: Resolved green, Unconfirmed amber, Ambiguous blue, No Spec neutral, Unknown outline. There are no other answer states and no other answer colours.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Tagline Rule",
+        "body": "BETTER THAN SPECS above Search's title is the only line above any page title. No page carries a category kicker or eyebrow: the sidebar and the title already say where the visitor is. A Lookup names what was looked up in plain text under its lead.",
+        "section": "typography"
+      },
+      {
+        "name": "The Underlined Link Rule",
+        "body": "Every link is underlined (WCAG 1.4.1). Only nav items, the home mark, the skip link, links shaped as buttons or chips, and the Vendors table's names opt out, with `no-underline`. A Vendor's name is the bold link of its row (the whole row is the target, and highlights), underlined on hover and focus.",
+        "section": "typography"
+      },
+      {
+        "name": "The Copyable Is Mono Rule",
+        "body": "Anything a visitor might paste (a command, a URL, an id, a path) is in JetBrains Mono.",
+        "section": "typography"
+      },
+      {
+        "name": "The One Column Rule",
+        "body": "Every page's content sits in one column of at most 860px. No page widens it.",
+        "section": "layout"
+      },
+      {
+        "name": "The One Lift Rule",
+        "body": "One box per view is lifted and outlined in blue. Everything else is flat, separated by a 1px edge.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** use the `--sb-*` tokens (as `bg-sb-*`, `text-sb-*`, `border-sb-*`, or the shadcn names mapped onto them) in components, never raw hex.",
+      "**Do** keep every page in the one 860px column inside the docs shell.",
+      "**Do** write the answer's name on every AnswerBadge, and the Provenance on every Spec, so colour is never the only signal.",
+      "**Do** show a Spec's download command with `SpecDownloadCurl`: the id elided, one line from `sm`, the whole URL on Copy; and a URL or path shown as text with `Path`, so it breaks only at its separators.",
+      "**Do** check every page in both themes at phone and desktop widths (`scripts/uicheck.ts`).",
+      "**Do** use the logos as supplied (`public/brand/`), never redrawn or recoloured.",
+      "**Do** build a missing control (Select, Switch, Dialog, Toast, Tooltip) from the kit's component when a screen first needs it, with the adaptations above."
+    ],
+    "donts": [
+      "**Don't** put white text on the blue fill.",
+      "**Don't** fill passive surfaces with blue, or outline more than one box per view.",
+      "**Don't** put a kicker or eyebrow above a page title; BETTER THAN SPECS on Search is the only line there.",
+      "**Don't** use raw `swaggerbot-blue` for body-size text; use `--sb-accent-text`.",
+      "**Don't** invent answer states or colours beyond the five.",
+      "**Don't** add gradients, textures, glassmorphism or a second blur; the top bar's is the only one.",
+      "**Don't** load fonts from a CDN; the CSP allows `font-src 'self'` only.",
+      "**Don't** bring back anything from the retired themes (the interim navy page, Darkroom Safelight's amber); `PRODUCT.md` retired them."
+    ]
+  }
+}
