@@ -104,7 +104,7 @@ components:
     typography: "{typography.label}"
     rounded: "{rounded.none}"
     padding: "0 28px"
-    height: "48px"
+    height: "45px"
   button-secondary:
     backgroundColor: "{colors.dense-black}"
     textColor: "{colors.lamp}"
@@ -256,7 +256,7 @@ Mostly flat, depth by tone: the bay is the room, bay-deep is the recessed bench,
 ### Shadow Vocabulary
 - **Print lift** (`box-shadow: 0 6px 18px -6px rgb(0 0 0 / 0.45)`): only on a print. It is a sheet lying on the bench.
 - **Lamp glow** (`box-shadow: 0 0 8px 1px var(--lamp)`): only on a lit lamp (the health lamp when up).
-- **Tray edge** (a hard `0 3px 0` box-shadow in the border colour under the 2px border, so a 5px bottom edge; no blur, so it reads as the button's own edge, not a lift): the primary button's pressable depth. On `:active` the button moves down 3px (`transform`) and the edge goes to 0, leaving the 2px border: only `transform` and `box-shadow` animate, never `border-width`. The button is 45px tall plus the 3px edge, which a 3px bottom margin reserves.
+- **Tray edge** (a hard `0 3px 0` box-shadow in the border colour under the 2px border, so a 5px bottom edge; no blur, so it reads as the button's own edge, not a lift): the primary button's pressable depth. On `:active` the button moves down 3px (the CSS `translate` property, which Tailwind 4's `translate-y-*` sets) and the edge goes to 0, leaving the 2px border: only `translate` and `box-shadow` animate, never `border-width`. The button is 45px tall plus the 3px edge, which a 3px bottom margin reserves.
 
 ### Named Rules
 
@@ -271,7 +271,7 @@ Provenance is drawn as line weight, strongest to weakest: **Official** 2px solid
 ## Components
 
 ### Buttons
-- **Primary: the tray edge.** Safelight Amber fill, dense-black text (#0e0e0e in both themes), label caps 700 at 1.125rem with 0.14em tracking, 48px min height, 28px side padding, square corners, 2px dense-black border with a 5px bottom edge (the tray edge; dark: tray-edge-dark). `:active` presses in (translateY 3px, bottom edge 2px, 100ms). Hover brightens 5%. One per view (“Develop”).
+- **Primary: the tray edge.** Safelight Amber fill, dense-black text (#0e0e0e in both themes), label caps 700 at 1.125rem with 0.14em tracking, 45px min height plus the 3px tray edge (48px in all, level with the name input), 28px side padding, square corners, 2px dense-black border (the tray edge; dark: tray-edge-dark). `:active` presses in as the Tray edge entry under Shadow Vocabulary says (100ms). Hover brightens 5%. One per view (“Develop”).
 - **Secondary: black.** Dense-black fill (`bg-dense-black`, #0e0e0e in both themes), Safelight Amber label caps (0.75rem, 0.12em), 3px corner, 1px ink border, 4px 12px padding; hover brightens 125%. Used for Pause/Play and similar utility actions.
 - **Attached action:** Copy on the code line is an amber cell joined to it by a 1px ink rule.
 - **Focus:** global 2px outline in `--ring` (dense black in light, amber in dark), 3px offset. Never remove it.
