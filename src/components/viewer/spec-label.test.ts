@@ -2,7 +2,8 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { SpecView } from "~/server/spec-view";
-import { SpecHeader, SpecLabel } from "./spec-label";
+import { Sources } from "./sources";
+import { SpecHeader, SpecSummary } from "./spec-label";
 
 const specId = "a".repeat(64);
 const view: SpecView = {
@@ -59,7 +60,10 @@ const view: SpecView = {
 };
 
 const header = renderToStaticMarkup(createElement(SpecHeader, { view }));
-const label = renderToStaticMarkup(createElement(SpecLabel, { view }));
+const summary = renderToStaticMarkup(createElement(SpecSummary, { view }));
+const sources = renderToStaticMarkup(
+  createElement(Sources, { sources: view.sources }),
+);
 
 describe("SpecHeader", () => {
   it("links the Vendor to its page", () => {
@@ -69,35 +73,60 @@ describe("SpecHeader", () => {
   });
 
   it("links to the Lookup, by a name the Index answers", () => {
-    expect(header).toContain('<a href="/lookup?name=stripe">Look it up</a>');
+    expect(header).toMatch(/<a href="\/lookup\?name=stripe"[^>]*>Look it up/);
   });
 });
 
-describe("SpecLabel", () => {
+describe("Sources", () => {
   it("lists each Source with its Provenance and when it was last verified", () => {
-    expect(label).toContain('id="sources"');
-    expect(label).toMatch(
+    expect(sources).toContain('id="sources"');
+    expect(sources).toMatch(
       /Official<\/span>.*?https:\/\/stripe\.com\/openapi\.json.*?Last verified.*?24 Sept? 2026/,
     );
-    expect(label).toMatch(
+    expect(sources).toMatch(
       /Mirror<\/span>.*?https:\/\/mirror\.example\/stripe\.json.*?Last verified.*?20 Sept? 2026/,
     );
   });
+});
 
-  it("sits the Sources on the print, not the bay", () => {
-    expect(label).toContain("bg-print p-3");
-    expect(label).not.toContain("bg-bay");
-  });
-
-  it("links both downloads", () => {
-    expect(label).toContain(`href="/api/specs/${specId}/published"`);
-    expect(label).toContain(`href="/api/specs/${specId}/normalized"`);
-  });
-
-  it("leaves the Sources out for a Spec with none", () => {
-    const bare = renderToStaticMarkup(
-      createElement(SpecLabel, { view: { ...view, sources: [] } }),
+describe("SpecSummary", () => {
+  it("shows the Provenance, verifiedAt and the Spec id", () => {
+    expect(summary).toMatch(/Provenance: <\/span>Official/);
+    expect(summary).toMatch(
+      /<time dateTime="2026-09-24T10:00:00.000Z">24 Sept? 2026/,
     );
-    expect(bare).not.toContain('id="sources"');
+    expect(summary).toContain(specId);
+  });
+
+  it("is on the design system, not the Darkroom", () => {
+    for (const html of [header, summary, sources])
+      expect(html).not.toMatch(
+        /\b(bg-print|bg-bay|print-ink|font-caps|font-segment|text-ink-2)\b/,
+      );
+  });
+
+  it("links both downloads, with their sizes", () => {
+    expect(summary).toMatch(
+      new RegExp(
+        `href="/api/specs/${specId}/published"[^>]*>.*?1 kB</span></a>`,
+      ),
+    );
+    expect(summary).toContain(`href="/api/specs/${specId}/normalized"`);
+  });
+
+  it("says a Normalized Form being built can't be downloaded yet", () => {
+    const pending = renderToStaticMarkup(
+      createElement(SpecSummary, {
+        view: {
+          ...view,
+          forms: {
+            ...view.forms,
+            normalized: { status: "pending", url: view.forms.normalized.url },
+          },
+        },
+      }),
+    );
+    expect(pending).not.toContain(`href="/api/specs/${specId}/normalized"`);
+    expect(pending).toContain("being built");
   });
 });

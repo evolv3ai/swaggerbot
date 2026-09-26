@@ -31,6 +31,34 @@ export function specFormOf(value: unknown): SpecForm {
 }
 
 /**
+ * The site's theme, as the frame is asked for it (`?theme=`): its opaque
+ * origin can't read the viewer page's storage, so the page passes it. Only
+ * these two values are ever used; anything else is the default, dark.
+ */
+export type FrameTheme = "dark" | "light";
+
+/** `?theme=` as the frame reads it: `light`, or else dark (the site's default). */
+export function frameThemeOf(value: unknown): FrameTheme {
+  return value === "light" ? "light" : "dark";
+}
+
+/**
+ * Scalar's colours in the design system's (DESIGN.md; `src/styles/app.css`),
+ * for each mode: the ink ground and white text in dark, white and navy in
+ * light, SwaggerBot Blue for the accent. Its fonts fall back to the
+ * system's: the frame's opaque origin can't load ours.
+ */
+export const SCALAR_CSS = `.light-mode{--scalar-background-1:#ffffff;--scalar-background-2:#f6f8fb;--scalar-background-3:#edf1f6;--scalar-background-card:#ffffff;--scalar-color-1:#021c41;--scalar-color-2:#4b5568;--scalar-color-3:#6b7688;--scalar-color-accent:#006696;--scalar-background-accent:#eaf7fd;--scalar-border-color:#dce2eb;--scalar-button-1:#0099dd;--scalar-button-1-hover:#26aae4;--scalar-button-1-color:#021c41}
+.dark-mode{--scalar-background-1:#111827;--scalar-background-2:#1f2737;--scalar-background-3:#343d4f;--scalar-background-card:#1f2737;--scalar-color-1:#ffffff;--scalar-color-2:#c1cad7;--scalar-color-3:#96a1b2;--scalar-color-accent:#5cbfeb;--scalar-background-accent:rgba(0,153,221,.18);--scalar-border-color:#343d4f;--scalar-button-1:#0099dd;--scalar-button-1-hover:#26aae4;--scalar-button-1-color:#021c41}
+.light-mode,.dark-mode{--scalar-font:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;--scalar-font-code:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;--scalar-radius:6px;--scalar-radius-lg:10px;--scalar-radius-xl:16px}`;
+
+/** The frame's page ground, per theme, so it never flashes the other one. */
+const GROUND: Record<FrameTheme, { background: string; color: string }> = {
+  dark: { background: "#111827", color: "#ffffff" },
+  light: { background: "#ffffff", color: "#021c41" },
+};
+
+/**
  * The largest form the viewer renders inline, in bytes (decimal MB, as the
  * sizes are shown). Past it the viewer links to the downloads and the Spec
  * Outline instead: Scalar would take too long, and too much memory, to be
@@ -67,15 +95,21 @@ export function embedCsp(connectUrl: string | null): string {
 }
 
 /**
- * Scalar's configuration: the Spec at `url`, read only. "Try it" and the
+ * Scalar's configuration: the Spec at `url`, read only, in the site's
+ * `theme` (forced: its own toggle is hidden, and it follows the site's), in
+ * the design system's colours (`SCALAR_CSS`). "Try it" and the
  * API client are off (and the CSP would stop them anyway), as are
  * telemetry, its web fonts, its AI agent and MCP, the developer toolbar and
  * the document download (the sandbox allows no downloads; ours are on the
  * viewer page). No `proxyUrl`.
  */
-export function scalarConfiguration(url: string) {
+export function scalarConfiguration(url: string, theme: FrameTheme = "dark") {
   return {
     url,
+    darkMode: theme === "dark",
+    forceDarkModeState: theme,
+    hideDarkModeToggle: true,
+    customCss: SCALAR_CSS,
     hideTestRequestButton: true,
     hideClientButton: true,
     telemetry: false,
@@ -95,19 +129,23 @@ export function scalarConfiguration(url: string) {
 export function embedHtml({
   title,
   url,
+  theme = "dark",
 }: {
   title: string;
   url: string;
+  theme?: FrameTheme;
 }): string {
-  const configuration = JSON.stringify(scalarConfiguration(url));
+  const configuration = JSON.stringify(scalarConfiguration(url, theme));
+  const ground = GROUND[theme];
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="${theme}">
 <title>${escapeHtml(title)}</title>
-<style>body{margin:0}</style>
+<style>body{margin:0;background:${ground.background};color:${ground.color}}</style>
 </head>
 <body>
 <script id="api-reference" type="application/json" data-configuration="${escapeHtml(configuration)}"></script>
@@ -119,13 +157,15 @@ export function embedHtml({
 }
 
 /** A frame that says, as text, why there is nothing to show. */
-function messageHtml(message: string): string {
+function messageHtml(message: string, theme: FrameTheme): string {
+  const ground = GROUND[theme];
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="color-scheme" content="${theme}">
 <title>Spec viewer</title>
-<style>body{margin:0;padding:1rem;font:16px/1.5 system-ui,sans-serif}</style>
+<style>body{margin:0;padding:1rem;font:16px/1.5 "IBM Plex Sans",system-ui,sans-serif;background:${ground.background};color:${ground.color}}</style>
 </head>
 <body><p>${escapeHtml(message)}</p></body>
 </html>
@@ -154,8 +194,8 @@ function page(html: string, status: number, connectUrl: string | null) {
 }
 
 /**
- * `GET /embed/specs/{specId}?form=published|normalized`: the frame for that
- * form, pointed at its download URL under `baseUrl` (`PUBLIC_BASE_URL`, or
+ * `GET /embed/specs/{specId}?form=published|normalized&theme=dark|light`:
+ * the frame for that form, in that theme, pointed at its download URL under `baseUrl` (`PUBLIC_BASE_URL`, or
  * the request's own origin). A form that can't be shown (an unknown Spec, a
  * Normalized Form not built, a form over `MAX_VIEW_BYTES`) gets a page that
  * says why, and may connect nowhere.
@@ -166,13 +206,15 @@ export function embedResponse(
   getDb: () => Db,
   baseUrl?: string,
 ): Response {
-  const form = specFormOf(new URL(request.url).searchParams.get("form"));
+  const params = new URL(request.url).searchParams;
+  const form = specFormOf(params.get("form"));
+  const theme = frameThemeOf(params.get("theme"));
   if (!isSpecId(specId))
-    return page(messageHtml("That isn't a Spec id."), 400, null);
+    return page(messageHtml("That isn't a Spec id.", theme), 400, null);
   const db = getDb();
   const repo = createRepo(db);
   const spec = repo.getSpec(specId);
-  if (!spec) return page(messageHtml("No such Spec."), 404, null);
+  if (!spec) return page(messageHtml("No such Spec.", theme), 404, null);
   const api = repo.getApiWithSpecs(spec.apiId)?.api;
   const forms = createSpecForms(db);
   const bytes =
@@ -185,15 +227,18 @@ export function embedResponse(
       stored.status === "failed"
         ? `The Normalized Form couldn't be built: ${stored.error}`
         : "The Normalized Form is being built. Reload in a minute.";
-    return page(messageHtml(why), 409, null);
+    return page(messageHtml(why, theme), 409, null);
   }
   if (tooLargeToView(bytes))
     return page(
-      messageHtml("This Spec is too large to view here. Download it instead."),
+      messageHtml(
+        "This Spec is too large to view here. Download it instead.",
+        theme,
+      ),
       413,
       null,
     );
   const url = downloadUrl(specId, form, baseUrl ?? new URL(request.url).origin);
   const title = `API reference for ${api?.name ?? "a Spec"}`;
-  return page(embedHtml({ title, url }), 200, url);
+  return page(embedHtml({ title, url, theme }), 200, url);
 }
