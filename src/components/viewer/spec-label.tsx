@@ -1,89 +1,120 @@
+import { ArrowRight, ChevronRight, Download } from "lucide-react";
 import type { ReactNode } from "react";
-import { ProvenanceMark } from "~/components/darkroom/provenance-mark";
-import { VerifiedStamp } from "~/components/darkroom/stamp";
-import { Sources } from "~/components/lookup/views";
+import { dayOf } from "~/components/darkroom/stamp";
+import { Badge } from "~/components/ui/badge";
+import { buttonClass } from "~/components/ui/button";
+import { Card } from "~/components/ui/card";
+import { ProvenanceBadge } from "~/components/ui/provenance-badge";
 import { vendorHref } from "~/lib/vendor-hrefs";
 import { lookupHref } from "~/server/lookup-search";
 import type { SpecView } from "~/server/spec-view";
 import { sizeOf } from "./size";
 
 /**
- * The Spec viewer's heading: its Vendor (a link to the Vendor's page), the
- * API's name, and a link to look the API up by that name.
+ * The Spec viewer's heading: its Vendor (a link to the Vendor's page) in
+ * the eyebrow, the API's name, and a link to look the API up by that name.
  */
 export function SpecHeader({ view }: { view: SpecView }) {
   return (
     <header className="grid gap-2">
-      <p className="font-caps text-sm font-semibold uppercase tracking-[0.14em] text-ink-2">
+      <p className="font-display text-xs font-bold uppercase tracking-[0.3em] text-sb-accent-text">
         Spec viewer ·{" "}
-        <a href={vendorHref(view.vendor.id)} className="text-ink">
+        <a href={vendorHref(view.vendor.id)} className="text-sb-accent-text">
           {view.vendor.name}
         </a>
       </p>
-      <h1 className="font-caps text-4xl font-semibold uppercase leading-tight tracking-wide [overflow-wrap:anywhere] sm:text-5xl">
+      <h1
+        id="spec"
+        className="scroll-mt-20 font-display text-[28px] leading-[1.1] font-extrabold tracking-[-0.01em] text-sb-text [overflow-wrap:anywhere] sm:text-[40px]"
+      >
         {view.api.name}
       </h1>
-      <p>
-        <a href={lookupHref(view.lookupName)}>Look it up</a>
+      <p className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-2 text-[15px] text-sb-text-muted">
+        <span>
+          {specFormat(view.spec.specVersion)} · API Version{" "}
+          {view.spec.apiVersion ?? "not stated"}
+        </span>
+        <a
+          href={lookupHref(view.lookupName)}
+          className="inline-flex items-center gap-1 text-sb-text"
+        >
+          Look it up
+          <ArrowRight aria-hidden="true" className="size-3.5" />
+        </a>
       </p>
     </header>
   );
 }
 
 /**
- * The print's label: the Spec's facts, its downloads, its Validity Issues
- * and its Sources.
+ * The Spec's facts in a card: Vendor, Provenance, when it was verified, API
+ * Version, format, Standing and id; then its downloads and its Validity
+ * Issues.
  */
-export function SpecLabel({ view }: { view: SpecView }) {
+export function SpecSummary({ view }: { view: SpecView }) {
   const { spec } = view;
   return (
-    <div className="grid gap-5 px-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-10">
-      <dl className="grid grid-cols-[auto_1fr] content-start gap-x-4 gap-y-1.5 text-sm">
-        <Term>Vendor</Term>
-        <dd className="text-right">{view.vendor.name}</dd>
-        <Term>Provenance</Term>
-        <dd className="text-right">
-          {view.provenance ? (
-            <ProvenanceMark provenance={view.provenance} />
+    <Card className="overflow-hidden">
+      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 border-b border-sb-border px-4 py-3.5 sm:px-5">
+        {view.provenance ? (
+          <ProvenanceBadge provenance={view.provenance} />
+        ) : (
+          <Badge tone="outline">No confirmed Provenance</Badge>
+        )}
+        {spec.current ? <Badge tone="success">Current</Badge> : null}
+        {spec.isPreview ? <Badge tone="warning">Preview</Badge> : null}
+        {view.stale ? <Badge tone="warning">Stale</Badge> : null}
+      </div>
+      <dl className="grid grid-cols-[110px_minmax(0,1fr)] gap-x-4 gap-y-2 px-4 py-4 text-sm sm:grid-cols-[140px_minmax(0,1fr)] sm:px-5">
+        <Fact term="Vendor">
+          <a href={vendorHref(view.vendor.id)} className="text-sb-text">
+            {view.vendor.name}
+          </a>
+          {view.vendor.domain !== view.vendor.name ? (
+            <span className="text-sb-text-muted"> · {view.vendor.domain}</span>
+          ) : null}
+        </Fact>
+        <Fact term="Provenance">{view.provenance ?? "None confirmed"}</Fact>
+        <Fact term="Verified">
+          {view.verifiedAt ? (
+            <time dateTime={view.verifiedAt}>{dayOf(view.verifiedAt)}</time>
           ) : (
-            "None confirmed"
+            "Not verified"
           )}
-        </dd>
-        <Term>Verified</Term>
-        <dd className="text-right">
-          <VerifiedStamp verifiedAt={view.verifiedAt} stale={view.stale} />
-        </dd>
-        <Term>API Version</Term>
-        <dd className="text-right [overflow-wrap:anywhere]">
-          {spec.apiVersion ?? "Not stated"}
-        </dd>
-        <Term>Format</Term>
-        <dd className="text-right">{specFormat(spec.specVersion)}</dd>
-        <Term>Standing</Term>
-        <dd className="text-right">{standing(spec)}</dd>
-        <Term>Spec</Term>
-        <dd className="text-right font-mono text-xs leading-5 [overflow-wrap:anywhere]">
-          {spec.id}
-        </dd>
+          {view.stale ? (
+            <span className="text-sb-text-muted">
+              {" "}
+              · Stale: a Lookup queues a new Verification
+            </span>
+          ) : null}
+        </Fact>
+        <Fact term="API Version">
+          <span className="[overflow-wrap:anywhere]">
+            {spec.apiVersion ?? "Not stated"}
+          </span>
+        </Fact>
+        <Fact term="Format">{specFormat(spec.specVersion)}</Fact>
+        <Fact term="Standing">{standing(spec)}</Fact>
+        <Fact term="Spec id">
+          <code className="font-mono text-[12.5px] leading-5 text-sb-text [overflow-wrap:anywhere]">
+            {spec.id}
+          </code>
+        </Fact>
       </dl>
-      <div className="grid content-start gap-5">
+      <div className="grid gap-4 border-t border-sb-border px-4 py-4 sm:px-5">
         <Downloads view={view} />
         <ValidityIssues view={view} />
       </div>
-      {view.sources.length > 0 ? (
-        <div className="lg:col-span-2">
-          <Sources sources={view.sources} on="print" />
-        </div>
-      ) : null}
-    </div>
+    </Card>
   );
 }
 
-function Term({ children }: { children: ReactNode }) {
+function Fact({ term, children }: { term: string; children: ReactNode }) {
   return (
-    <dt className="font-caps uppercase tracking-wider text-print-ink-2">
-      {children}
-    </dt>
+    <>
+      <dt className="text-sb-text-muted">{term}</dt>
+      <dd className="min-w-0">{children}</dd>
+    </>
   );
 }
 
@@ -94,37 +125,48 @@ export function specFormat(specVersion: string): string {
 
 function standing(spec: SpecView["spec"]): string {
   const words = [
-    spec.current ? "Current" : spec.superseded ? "Superseded" : "Alternate",
+    spec.current
+      ? "Current Spec"
+      : spec.superseded
+        ? "Superseded"
+        : "Alternate Spec",
   ];
   if (spec.isPreview) words.push("Preview");
   return words.join(" · ");
 }
 
+const DOWNLOAD = buttonClass({ variant: "secondary", size: "sm" });
+
 function Downloads({ view }: { view: SpecView }) {
   const { published, normalized } = view.forms;
   return (
     <section aria-labelledby="downloads" className="grid gap-2">
-      <SectionHeading id="downloads">Downloads</SectionHeading>
-      <ul className="grid gap-1.5 text-sm">
-        <li className="flex flex-wrap items-baseline justify-between gap-x-4">
-          <a href={published.url}>
-            Published Form ({published.format.toUpperCase()})
+      <h3
+        id="downloads"
+        className="font-display text-[13px] font-bold text-sb-text"
+      >
+        Downloads
+      </h3>
+      <ul className="flex flex-wrap gap-2">
+        <li>
+          <a href={published.url} className={DOWNLOAD}>
+            <Download aria-hidden="true" />
+            Published Form · {published.format.toUpperCase()}
+            <Size bytes={published.bytes} />
           </a>
-          <Size bytes={published.bytes} />
         </li>
-        <li className="flex flex-wrap items-baseline justify-between gap-x-4">
+        <li>
           {normalized.status === "ready" ? (
-            <>
-              <a href={normalized.url}>Normalized Form (JSON)</a>
+            <a href={normalized.url} className={DOWNLOAD}>
+              <Download aria-hidden="true" />
+              Normalized Form · JSON
               <Size bytes={normalized.bytes} />
-            </>
+            </a>
           ) : (
-            <>
-              <span>Normalized Form (JSON)</span>
-              <span className="text-print-ink-2">
-                {normalized.status === "pending" ? "Being built" : "Failed"}
-              </span>
-            </>
+            <span className="inline-flex h-8 items-center gap-2 rounded-sm border-2 border-dashed border-sb-border px-3 text-[13px] text-sb-text-muted">
+              Normalized Form · JSON:{" "}
+              {normalized.status === "pending" ? "being built" : "failed"}
+            </span>
           )}
         </li>
       </ul>
@@ -135,9 +177,8 @@ function Downloads({ view }: { view: SpecView }) {
 function Size({ bytes }: { bytes: number }) {
   const { value, unit } = sizeOf(bytes);
   return (
-    <span className="flex items-baseline gap-1 whitespace-nowrap">
-      <span className="font-segment text-sm">{value}</span>
-      <span className="font-caps text-xs font-semibold uppercase">{unit}</span>
+    <span className="font-sans font-medium tabular-nums text-sb-text-muted">
+      {value} {unit}
     </span>
   );
 }
@@ -146,30 +187,36 @@ function ValidityIssues({ view }: { view: SpecView }) {
   const count = view.validityFindingCount;
   if (view.forms.normalized.status === "pending")
     return (
-      <p className="text-sm text-print-ink-2">
+      <p className="text-sm text-sb-text-muted">
         Validity Issues are listed once the Normalized Form is built.
       </p>
     );
   if (count === 0)
     return (
-      <p className="text-sm">
-        <span className="font-segment">0</span> Validity Issues: the Published
-        Form validates.
+      <p className="flex flex-wrap items-center gap-2 text-sm">
+        <Badge tone="success">0 Validity Issues</Badge>
+        <span className="text-sb-text-muted">
+          The Published Form validates.
+        </span>
       </p>
     );
+  const groups = view.validityIssues.length;
   return (
     <details className="group text-sm">
-      <summary className="w-fit cursor-pointer">
-        <span className="font-segment">{count}</span>{" "}
-        <span className="font-caps font-semibold uppercase tracking-[0.12em]">
-          Validity {count === 1 ? "Issue" : "Issues"}
-        </span>{" "}
-        <span className="text-print-ink-2">
-          in {view.validityIssues.length}{" "}
-          {view.validityIssues.length === 1 ? "group" : "groups"}, as published
+      <summary className="flex w-fit cursor-pointer list-none items-center gap-2 rounded-sm [&::-webkit-details-marker]:hidden">
+        <ChevronRight
+          aria-hidden="true"
+          className="size-4 text-sb-text-muted transition-transform duration-150 group-open:rotate-90"
+        />
+        <Badge tone="warning">
+          {count} Validity {count === 1 ? "Issue" : "Issues"}
+        </Badge>
+        <span className="text-sb-text-muted">
+          in {groups} {groups === 1 ? "group" : "groups"}, as published. They
+          don't stop it being shown or downloaded.
         </span>
       </summary>
-      <ol className="mt-3 grid max-h-80 gap-2 overflow-y-auto border-t border-print-ink-2 pt-3">
+      <ol className="mt-3 grid max-h-80 gap-2.5 overflow-y-auto rounded-md border border-sb-border bg-sb-bg-subtle p-3">
         {view.validityIssues.map((issue) => (
           <li
             key={`${issue.path}\u0000${issue.message}`}
@@ -178,26 +225,15 @@ function ValidityIssues({ view }: { view: SpecView }) {
             <span className="[overflow-wrap:anywhere]">
               {issue.message}
               {issue.count > 1 ? (
-                <span className="text-print-ink-2"> ×{issue.count}</span>
+                <span className="text-sb-text-muted"> ×{issue.count}</span>
               ) : null}
             </span>
-            <code className="font-mono text-xs text-print-ink-2 [overflow-wrap:anywhere]">
+            <code className="font-mono text-xs text-sb-text-muted [overflow-wrap:anywhere]">
               {issue.path}
             </code>
           </li>
         ))}
       </ol>
     </details>
-  );
-}
-
-function SectionHeading({ id, children }: { id: string; children: ReactNode }) {
-  return (
-    <h2
-      id={id}
-      className="font-caps text-sm font-semibold uppercase tracking-[0.14em] text-print-ink-2"
-    >
-      {children}
-    </h2>
   );
 }
