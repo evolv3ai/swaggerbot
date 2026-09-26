@@ -1,5 +1,6 @@
 import type { Provenance } from "~/domain/provenance";
 import type { Db } from "~/index-store/db";
+import { createRepo } from "~/index-store/repo";
 import { vendorsHref } from "~/lib/vendor-hrefs";
 import { answerVendorApis, type VendorApisApp } from "./vendor-apis";
 import {
@@ -37,6 +38,8 @@ export type VendorsPage =
 export type VendorPageApi = {
   id: string;
   name: string;
+  /** A name the Index answers a Lookup of this API by, for a link to it. */
+  lookupName: string;
   /** Its Current Spec, or null when the Index holds none. */
   currentSpec: {
     id: string;
@@ -117,17 +120,20 @@ export function vendorPage(
     return { status: 300, asked, vendors: answer.body.vendors };
   const staleAfterMs = freshnessDays * 24 * 60 * 60 * 1000;
   const { id, name, domain } = answer.body.vendor;
+  const repo = createRepo(app.db);
   return {
     status: 200,
     vendor: { id, name, domain },
     apis: answer.body.apis.map(
       ({ api, currentSpec, provenance, verifiedAt }): VendorPageApi => {
+        const lookupName = repo.lookupNameOf(api);
         if (!currentSpec)
-          return { id: api.id, name: api.name, currentSpec: null };
+          return { id: api.id, name: api.name, lookupName, currentSpec: null };
         const age = verifiedAt ? now.getTime() - Date.parse(verifiedAt) : NaN;
         return {
           id: api.id,
           name: api.name,
+          lookupName,
           currentSpec: {
             id: currentSpec.id,
             provenance,
