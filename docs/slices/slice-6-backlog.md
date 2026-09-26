@@ -177,7 +177,7 @@ The PRD's API and MCP docs page, with the "request a key" link, doesn't exist; t
 
 `/impeccable critique` of the whole UI scored **25/40** (snapshot `.impeccable/critique/2026-09-26T02-26-58Z__src-routes.md`). Wes chose to fix every P1 and P2 plus the minor findings, to guide keyless visitors with suggestions and a near-match, and to keep "Develop". Every item below is an extension inside the established world: follow `DESIGN.md` and `PRODUCT.md`, reuse `src/components/darkroom/`, add no dependencies, and don't change the direction (Darkroom Safelight). Each PR's Done-when includes `pnpm check`, `pnpm build`, `uicheck` on every route it touches at 390 and 1280 in light and dark, `impeccable detect --json` on the changed files (no new non-advisory findings), and screenshots in the PR.
 
-Order: #7 and #8 together (their files barely overlap; merge one, then merge `main` into the other), then #9, then #10.
+Linear: #7 WTR-142, #8 WTR-143, #9 WTR-144, #10 WTR-145. Order: #7 and #8 together (their files barely overlap; merge one, then merge `main` into the other), then #9, then #10.
 
 ## 7. swaggerbot: harden the UI: links look like links, honest statuses, the Spec viewer links onward
 
