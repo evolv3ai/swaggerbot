@@ -166,6 +166,16 @@ The deploys of 2026-09-23:
 - `mcpcheck` PASS: largest result 28.4 kB, slowest call 449 ms.
 - `formscheck` PASS: outline p90 232 ms, operation p90 399 ms, 0 non-2xx.
 
+### `457198c` (2026-09-25): wave 3, the docs page
+
+**Deployed at 19:36 CDT** (deployment `7tg7bj2ykoooadwouamh0cov`). It carries #94 (WTR-141: `/docs` with the HTTP API, MCP, the key rules and `#keys`, "request a key" by `mailto:hello@evolv3.ai`; "Docs" in the nav; the route table and Claude Code block leave `/`). No new env vars.
+
+**Live checks:**
+- `uicheck` PASS on `/docs` and `/` at 390 and 1280, light and dark: axe 0, CSP 0, keyboard 34/34 on `/docs`.
+- `/docs` carries the exact `mailto:` link, and its Val Town Lookup example resolves in production.
+- `mcpcheck`: the first run after the deploy FAILED on one timing (Cloudflare `lookup_api` 2.1 s, bound 2.0 s, the first Lookup on a cold server); three reruns PASS, slowest call 347–489 ms, largest result 28.4 kB.
+- `formscheck` PASS: outline p90 207 ms, operation p90 394 ms, 0 non-2xx.
+
 ## Gotchas
 
 - Coolify's application health check runs `curl`/`wget` **inside** the container. An image without them is rolled back as unhealthy, even when its own Docker `HEALTHCHECK` passes.
