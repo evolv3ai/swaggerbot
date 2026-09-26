@@ -3,6 +3,8 @@ import type { McpServer } from "@modelcontextprotocol/server";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { NAV } from "~/components/shell/nav";
+import { splitRoute } from "~/components/ui/method-badge";
 import { MCP_TOOLS, type McpDeps } from "~/mcp/server";
 import { DocsView } from "./docs-view";
 import {
@@ -14,11 +16,18 @@ import {
 } from "./reference";
 
 const html = renderToStaticMarkup(createElement(DocsView));
+/** The page's text, tags dropped and entities read. */
+const text = html
+  .replace(/<[^>]+>/g, "")
+  .replaceAll("&amp;", "&")
+  .replaceAll("&quot;", '"')
+  .replaceAll("&lt;", "<")
+  .replaceAll("&gt;", ">");
 
 describe("DocsView", () => {
   it("has the Keys section with the request-a-key mailto (D9)", () => {
     expect(html).toMatch(
-      /<section[^>]*id="keys"[\s\S]*href="mailto:hello@evolv3\.ai\?subject=swagger\.bot%20API%20key%20request"/,
+      /<section[^>]*aria-labelledby="keys"[^>]*>\s*<div[^>]*>\s*<h2 id="keys"[\s\S]*href="mailto:hello@evolv3\.ai\?subject=swagger\.bot%20API%20key%20request"/,
     );
   });
 
@@ -36,8 +45,12 @@ describe("DocsView", () => {
   });
 
   it("lists every route, GET /api/vendors included", () => {
-    for (const row of ROUTES)
-      expect(html).toContain(row.route.replaceAll("&", "&amp;"));
+    for (const row of ROUTES) {
+      const { method, rest } = splitRoute(row.route);
+      expect(method).not.toBeNull();
+      expect(html).toContain(`>${method}</span>`);
+      expect(text).toContain(rest);
+    }
     expect(ROUTES.map((r) => r.route)).toContain(
       "GET /api/vendors[?query=&cursor=&limit=]",
     );
@@ -51,7 +64,47 @@ describe("DocsView", () => {
     for (const register of MCP_TOOLS)
       register(recorder, {} as unknown as McpDeps);
     expect(MCP_TOOL_ROWS.map((t) => t.name)).toEqual(served);
-    expect(html).toContain(MCP_ADD);
+    expect(text).toContain(MCP_ADD);
+  });
+
+  it("never lets a path break inside a word", () => {
+    // Code blocks may wrap anywhere; the page's own text and paths don't.
+    const outsideCode = html.replace(/<pre[\s\S]*?<\/pre>/g, "");
+    expect(outsideCode).not.toContain("overflow-wrap:anywhere");
+    expect(html).toContain("<wbr/>");
+  });
+
+  it("has every /docs anchor the sidebar links to", () => {
+    const anchors = NAV.flatMap((g) => g.links)
+      .filter((l) => l.to === "/docs" && l.hash)
+      .map((l) => l.hash);
+    expect(anchors).toEqual(
+      expect.arrayContaining(["lookup", "vendors", "outline", "published"]),
+    );
+    for (const id of [...anchors, "mcp-add", "tools", "access", "keys"])
+      expect(html).toContain(`id="${id}"`);
+    const ids = [...html.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("gives each route example its method tag and a curl/Answer tab pair", () => {
+    for (const example of EXAMPLES) {
+      expect(html).toMatch(
+        new RegExp(`<h3 id="${example.id}"[^>]*><span[^>]*>(GET|POST)</span>`),
+      );
+    }
+    expect((html.match(/role="tab"[^>]*>curl</g) ?? []).length).toBe(
+      EXAMPLES.length,
+    );
+    expect((html.match(/role="tab"[^>]*>Answer</g) ?? []).length).toBe(
+      EXAMPLES.length,
+    );
+  });
+
+  it("carries no Darkroom styling", () => {
+    expect(html).not.toMatch(
+      /font-(caps|pencil|segment)|text-ink-2|border-rule|\bbg-bay|print-/,
+    );
   });
 });
 
