@@ -7,7 +7,7 @@ import { cn } from "~/lib/utils";
  * "Checking" then "Operational" each time would be noise. Only a service
  * that isn't answering is announced, once.
  */
-export function HealthLamp({ className }: { className?: string }) {
+export function HealthStatus({ className }: { className?: string }) {
   const [ok, setOk] = useState<boolean>();
   useEffect(() => {
     let live = true;

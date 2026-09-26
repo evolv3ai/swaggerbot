@@ -2,8 +2,8 @@ import { createServerFn } from "@tanstack/react-start";
 import type { IndexStats } from "./index-stats";
 
 /**
- * The Index facts every page's shell shows (the counts, the most recent
- * prints), read on the server. Null when the Index can't be read, so a page
+ * The Index facts every page's shell shows (the counts, the most recently
+ * verified APIs), read on the server. Null when the Index can't be read, so a page
  * still renders without them. Server-only modules are imported inside the
  * handler, keeping them out of the client bundle.
  */

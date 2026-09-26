@@ -1,7 +1,7 @@
-import { dayOf } from "~/components/darkroom/stamp";
 import { Badge } from "~/components/ui/badge";
 import { buttonClass } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
+import { dayOf } from "~/lib/dates";
 import { vendorHref } from "~/lib/vendor-hrefs";
 import { distinctDomain } from "~/lib/vendor-name";
 import type { VendorPage, VendorPageApi } from "~/server/index-browsing";
