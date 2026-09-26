@@ -53,7 +53,7 @@ const KEY_RULES = [
   "Discovery (a name the Index can't answer yet) and `fresh: true` need a key. Without one the answer is a 401 saying so.",
   "Each such Lookup uses one unit of the key's daily quota, 100 unless the key was issued with its own, counted per UTC day. The answer carries `X-Quota-Limit` and `X-Quota-Remaining`; past the quota it is a 429, `Daily quota used.`, with `Retry-After` until midnight UTC.",
   "A key sent with an Index answer is still checked, so a wrong one is never ignored: an unknown or revoked key is a 401.",
-  "Every request, with a key or without, counts against a per-IP limit of 60 a minute, shared by `/api/` and `/mcp`. Past it the answer is a 429, `Rate limit exceeded.`, with `Retry-After` in seconds.",
+  "Every request but `GET /api/health`, with a key or without, counts against a per-IP limit of 60 a minute, shared by `/api/`, `/mcp` and the site's own Lookup page. Past it the answer is a 429, `Rate limit exceeded.`, with `Retry-After` in seconds.",
 ];
 
 /**
@@ -280,7 +280,10 @@ function Mcp() {
                   <Inline text={tool.gives} />
                 </td>
                 <td
-                  className={cn(TD, "pr-0 font-mono [overflow-wrap:anywhere]")}
+                  className={cn(
+                    TD,
+                    "pr-0 font-mono [overflow-wrap:break-word]",
+                  )}
                 >
                   <span className={CELL_LABEL}>Over: </span>
                   {tool.over}

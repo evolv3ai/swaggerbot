@@ -181,7 +181,7 @@ export const EXAMPLES: Example[] = [
     id: "outline",
     route: "GET /api/apis/{apiId}/outline",
     about:
-      "The Current Spec's operations, at most 100 a page, filtered by `tag` or by `query` (a word of the path, `operationId` or summary), with the tag list. The API id keeps its slash.",
+      "The Current Spec's operations, 100 a page by default (`limit` up to 500), filtered by `tag` or by `query` (a word of the path, `operationId` or summary), with the tag list. The API id keeps its slash.",
     curl: `curl "${BASE_URL}/api/apis/val.town/api/outline?tag=me"`,
     answer: `{
   "apiId": "val.town/api",
