@@ -81,11 +81,16 @@ describe("SpecHeader", () => {
 describe("Sources", () => {
   it("lists each Source with its Provenance and when it was last verified", () => {
     expect(sources).toContain('id="sources"');
-    expect(sources).toMatch(
-      /Official<\/span>.*?https:\/\/stripe\.com\/openapi\.json.*?Last verified.*?24 Sept? 2026/,
+    // A URL may wrap after a slash, never inside a word.
+    expect(sources).toContain(
+      "<span>https://</span><span><wbr/>stripe.com/</span>",
     );
-    expect(sources).toMatch(
-      /Mirror<\/span>.*?https:\/\/mirror\.example\/stripe\.json.*?Last verified.*?20 Sept? 2026/,
+    const plain = sources.replace(/<[^>]*>/g, "");
+    expect(plain).toMatch(
+      /Official.*?https:\/\/stripe\.com\/openapi\.json.*?Last verified.*?24 Sept? 2026/,
+    );
+    expect(plain).toMatch(
+      /Mirror.*?https:\/\/mirror\.example\/stripe\.json.*?Last verified.*?20 Sept? 2026/,
     );
   });
 });

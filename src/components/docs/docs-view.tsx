@@ -3,6 +3,7 @@ import { buttonClass } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
 import { CodeBlock } from "~/components/ui/code-block";
 import { MethodBadge, splitRoute } from "~/components/ui/method-badge";
+import { Path } from "~/components/ui/path";
 import { Tabs } from "~/components/ui/tabs";
 import { dayOf } from "~/lib/dates";
 import { cn } from "~/lib/utils";
@@ -96,24 +97,6 @@ function Inline({ text }: { text: string }) {
           part
         ),
       )}
-    </>
-  );
-}
-
-/**
- * A path that may wrap only between its parts: after a `/`, before a `?`,
- * `&` or `[`, never inside a word (WTR-143).
- */
-function Path({ path }: { path: string }) {
-  return (
-    <>
-      {path.split(/(?<=\/)|(?=[?&[])/).map((part, i) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: the split is fixed text
-        <span key={i}>
-          {i ? <wbr /> : null}
-          {part}
-        </span>
-      ))}
     </>
   );
 }

@@ -9,23 +9,23 @@ import { cn } from "~/lib/utils";
  * (the same text with parts picked out). Line breaks and indentation are
  * kept; long lines wrap unless `scroll`.
  *
- * `oneLine` opts in to a display form: `children` is a shortened stand-in
+ * `elided` opts in to a display form: `children` is a shortened stand-in
  * for `code` (a part elided, as `SpecDownloadCurl` does), kept on one line
- * (scrolling sideways on a screen too narrow even for that), hidden from
- * screen readers, which read the whole of `code` instead. Copy still copies
+ * from `sm` up and wrapped at the usual size on a phone, hidden from screen
+ * readers, which read the whole of `code` instead. Copy still copies
  * `code`, never the stand-in.
  */
 export function CodeBlock({
   code,
   children,
   scroll = false,
-  oneLine = false,
+  elided = false,
   className,
 }: {
   code: string;
   children?: ReactNode;
   scroll?: boolean;
-  oneLine?: boolean;
+  elided?: boolean;
   className?: string;
 }) {
   const [copied, setCopied] = useState(false);
@@ -47,16 +47,15 @@ export function CodeBlock({
     >
       <pre
         className={cn(
-          "min-w-0 flex-1 py-3.5 font-mono leading-[1.7]",
-          oneLine
-            ? "px-2.5 text-[10.5px] max-[380px]:text-[10px] sm:px-4 sm:text-[12.5px]"
-            : "px-4 text-[12.5px]",
-          oneLine || scroll
+          "min-w-0 flex-1 px-4 py-3.5 font-mono text-[12.5px] leading-[1.7]",
+          scroll
             ? "overflow-x-auto whitespace-pre"
-            : "whitespace-pre-wrap [overflow-wrap:anywhere]",
+            : elided
+              ? "whitespace-pre-wrap [overflow-wrap:anywhere] sm:overflow-x-auto sm:whitespace-pre"
+              : "whitespace-pre-wrap [overflow-wrap:anywhere]",
         )}
       >
-        {oneLine && children ? (
+        {elided && children ? (
           <>
             <code aria-hidden="true">{children}</code>
             <span className="sr-only">{code}</span>
@@ -68,22 +67,10 @@ export function CodeBlock({
       <button
         type="button"
         onClick={copy}
-        className={cn(
-          "mt-2.5 mr-2.5 inline-flex h-7 shrink-0 items-center gap-1.5 rounded-sm border border-white/15 px-2 font-sans text-xs font-medium text-[#cfd5de] transition-colors hover:border-white/30 hover:bg-white/10 hover:text-white [&_svg]:size-3.5",
-          // A one-line block keeps its line on a phone: the button is its icon.
-          oneLine && "px-[7px] sm:px-2",
-        )}
+        className="mt-2.5 mr-2.5 inline-flex h-7 shrink-0 items-center gap-1.5 rounded-sm border border-white/15 px-2 font-sans text-xs font-medium text-[#cfd5de] transition-colors hover:border-white/30 hover:bg-white/10 hover:text-white [&_svg]:size-3.5"
       >
         {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
-        {oneLine ? (
-          <span className="sr-only sm:not-sr-only">
-            {copied ? "Copied" : "Copy"}
-          </span>
-        ) : copied ? (
-          "Copied"
-        ) : (
-          "Copy"
-        )}
+        {copied ? "Copied" : "Copy"}
       </button>
       <p className="sr-only" aria-live="polite">
         {copied ? "Copied to the clipboard" : ""}
@@ -92,7 +79,7 @@ export function CodeBlock({
   );
 }
 
-/** A Spec id as shown in a one-line command: `1fdc1047…78a9`. */
+/** A Spec id as shown in an elided command: `1fdc1047…78a9`. */
 export function elideSpecId(id: string): string {
   return id.length > 14 ? `${id.slice(0, 8)}…${id.slice(-4)}` : id;
 }
@@ -118,14 +105,17 @@ export function SpecDownloadCurl({
   if (!match) return <CodeBlock code={code} className={className} />;
   const [, , id = "", after = ""] = match;
   return (
-    <CodeBlock code={code} oneLine className={className}>
-      <span className="text-[#8fbaff]">curl</span> -o openapi.{format} …
-      <span className="hidden sm:inline">/specs</span>/
-      <span className="text-[#5cbfeb]">
-        <span className="hidden sm:inline">{elideSpecId(id)}</span>
-        <span className="sm:hidden">{`${id.slice(0, 4)}…${id.slice(-4)}`}</span>
+    <CodeBlock code={code} elided className={className}>
+      <span className="text-[#8fbaff]">curl</span> -o openapi.{format}{" "}
+      {/* The elided path never breaks inside: on a phone it takes a line. */}
+      <span className="whitespace-nowrap">
+        …<span className="hidden sm:inline">/specs</span>/
+        <span className="text-[#5cbfeb]">
+          <span className="hidden sm:inline">{elideSpecId(id)}</span>
+          <span className="sm:hidden">{`${id.slice(0, 4)}…${id.slice(-4)}`}</span>
+        </span>
+        {after}
       </span>
-      {after}
     </CodeBlock>
   );
 }

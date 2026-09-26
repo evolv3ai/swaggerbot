@@ -95,7 +95,7 @@ describe("the Resolved view", () => {
     );
   });
 
-  it("shows the download on one line, the Spec id elided, and copies it whole", () => {
+  it("shows the download elided, one line from sm up, and copies it whole", () => {
     const url = `${base}/api/specs/${specId}/published`;
     const block = markup.slice(
       markup.indexOf("<pre"),
@@ -104,7 +104,12 @@ describe("the Resolved view", () => {
     // What shows is a stand-in, hidden from screen readers...
     expect(block).toMatch(/<code aria-hidden="true">/);
     expect(block).toContain(`${specId.slice(0, 8)}…${specId.slice(-4)}`);
-    expect(block).toContain("whitespace-pre");
+    // One line from sm up; on a phone it wraps at the usual size.
+    expect(block).toContain("whitespace-pre-wrap");
+    expect(block).toContain("sm:whitespace-pre");
+    expect(block).not.toContain("text-[10.5px]");
+    // ...breaking before the elided path, never inside it.
+    expect(block).toMatch(/<span class="whitespace-nowrap">…/);
     // ...which read the whole URL, as Copy copies it.
     expect(block).toContain(
       `<span class="sr-only">curl -o openapi.yaml ${url}</span>`,
@@ -153,6 +158,9 @@ describe("the Resolved view", () => {
   it("lists the Alternate Specs and the Sources", () => {
     expect(markup).toContain(`href="/specs/${altId}"`);
     expect(text(markup)).toContain(source.url);
+    // The URL may wrap after a slash, never inside a word.
+    expect(markup).toContain("master/</span><span><wbr/>spec3.yaml</span>");
+    expect(markup).toContain("<span>https://</span>");
     expect(text(markup)).toContain("Last verified 24 Sept 2026");
   });
 
