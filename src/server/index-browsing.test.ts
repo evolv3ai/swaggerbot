@@ -176,6 +176,7 @@ describe("vendorPage", () => {
         {
           id: "bravo.com/api-1",
           name: "API 1",
+          lookupName: "API 1",
           currentSpec: {
             id: fresh,
             provenance: "Official",
@@ -186,6 +187,7 @@ describe("vendorPage", () => {
         {
           id: "bravo.com/api-2",
           name: "API 2",
+          lookupName: "API 2",
           currentSpec: {
             id: old,
             provenance: "Official",
@@ -194,7 +196,12 @@ describe("vendorPage", () => {
           },
         },
         // Its only Spec isn't confirmed.
-        { id: "bravo.com/api-3", name: "API 3", currentSpec: null },
+        {
+          id: "bravo.com/api-3",
+          name: "API 3",
+          lookupName: "API 3",
+          currentSpec: null,
+        },
       ],
     });
     expect(judge.calls).toEqual([]);

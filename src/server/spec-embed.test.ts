@@ -209,7 +209,7 @@ describe.skipIf(!probe && !process.env.CI)(
       // It did load: the frame, Scalar, and the Spec from its download URL.
       expect(served).toEqual(
         expect.arrayContaining([
-          `/embed/specs/${specId}?form=published`,
+          `/embed/specs/${specId}?form=published&theme=dark`,
           SCALAR_SCRIPT_PATH,
           `/api/specs/${specId}/published`,
         ]),

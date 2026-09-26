@@ -7,20 +7,17 @@ import { cn } from "~/lib/utils";
  * both themes, with a Copy button; a polite live region says when it has
  * copied. `code` is what is copied; `children`, when given, is what shows
  * (the same text with parts picked out). Line breaks and indentation are
- * kept; long lines wrap unless `scroll`. `label` is the button's word
- * ("Copy", or "Copy URL" beside a URL).
+ * kept; long lines wrap unless `scroll`.
  */
 export function CodeBlock({
   code,
   children,
   scroll = false,
-  label = "Copy",
   className,
 }: {
   code: string;
   children?: ReactNode;
   scroll?: boolean;
-  label?: string;
   className?: string;
 }) {
   const [copied, setCopied] = useState(false);
@@ -56,7 +53,7 @@ export function CodeBlock({
         className="mt-2.5 mr-2.5 inline-flex h-7 shrink-0 items-center gap-1.5 rounded-sm border border-white/15 px-2 font-sans text-xs font-medium text-[#cfd5de] transition-colors hover:border-white/30 hover:bg-white/10 hover:text-white [&_svg]:size-3.5"
       >
         {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
-        {copied ? "Copied" : label}
+        {copied ? "Copied" : "Copy"}
       </button>
       <p className="sr-only" aria-live="polite">
         {copied ? "Copied to the clipboard" : ""}

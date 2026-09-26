@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import { cn } from "~/lib/utils";
 import type { IndexPrint } from "~/server/index-stats";
 import { ProvenanceMark } from "./provenance-mark";
@@ -18,9 +17,7 @@ const WASHED = { field: "bg-[#a39c8f]", text: "text-[#0e0e0e]" } as const;
  * `rank` 0 is the newest) carrying the measured answer time; the facts are on
  * the label below. `developing` runs the print's one motion, the image coming
  * up out of the paper (none under reduced motion). With `href`, the API's
- * name links there (the replay links each print to its Lookup). `children`
- * sit on the label under its facts: the Spec's actions, on a Resolved
- * Lookup.
+ * name links there (the replay links each print to its Lookup).
  */
 export function Print({
   print,
@@ -29,11 +26,9 @@ export function Print({
   headingLevel: Heading = "h3",
   href,
   className,
-  children,
 }: {
   print: IndexPrint;
   href?: string;
-  children?: ReactNode;
   rank?: number;
   developing?: boolean;
   headingLevel?: "h2" | "h3";
@@ -101,7 +96,6 @@ export function Print({
             {print.specId.slice(0, 12)}
           </dd>
         </dl>
-        {children}
       </div>
     </article>
   );

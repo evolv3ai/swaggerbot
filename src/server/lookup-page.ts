@@ -15,7 +15,7 @@ import { type LookupSearch, lookupRequestOf } from "./lookup-search";
  *   key the page doesn't have.
  *
  * `baseUrl` is where this service is reached, for the `curl` and MCP calls
- * a page shows and the absolute download URL a Resolved print copies.
+ * a page shows (and the absolute download URL a Resolved view copies).
  */
 export type LookupPage =
   | { view: "name-required" }

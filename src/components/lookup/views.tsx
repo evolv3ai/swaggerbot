@@ -1,25 +1,33 @@
-import { Link } from "@tanstack/react-router";
+import { Download, FileCode } from "lucide-react";
 import type { ReactNode } from "react";
-import { CertaintyStrip } from "~/components/darkroom/certainty-strip";
-import { CodeLine } from "~/components/darkroom/code-line";
-import { Print } from "~/components/darkroom/print";
 import { ProvenanceMark } from "~/components/darkroom/provenance-mark";
-import { VerifiedStamp } from "~/components/darkroom/stamp";
-import { type ChainState, Stations } from "~/components/darkroom/stations";
+import { dayOf, VerifiedStamp } from "~/components/darkroom/stamp";
 import { SearchForm } from "~/components/search/search-form";
+import { WithOnThisPage } from "~/components/shell/on-this-page";
+import { ANSWERS, AnswerBadge } from "~/components/ui/answer-badge";
+import { Badge } from "~/components/ui/badge";
 import { buttonClass } from "~/components/ui/button";
+import { Card } from "~/components/ui/card";
+import { CodeBlock } from "~/components/ui/code-block";
+import { Tabs } from "~/components/ui/tabs";
+import { sizeOf } from "~/components/viewer/size";
 import type { Source } from "~/domain/catalog";
 import type { Outcome, OutcomeKind, SpecAnswer } from "~/domain/outcome";
+import type { Provenance } from "~/domain/provenance";
 import { cn } from "~/lib/utils";
+import { vendorHref } from "~/lib/vendor-hrefs";
 import { distinctDomain } from "~/lib/vendor-name";
 import type { LookupRequest } from "~/lookup/lookup";
 import type { LookupPage } from "~/server/lookup-page";
-import { lookupSearchOf } from "~/server/lookup-search";
+import { lookupHref } from "~/server/lookup-search";
+import { CopyUrl } from "./copy-url";
+import { type Answered, HowAnswered } from "./how-answered";
 
 type Of<K extends OutcomeKind> = Extract<Outcome, { outcome: K }>;
 type OutcomePage = Extract<LookupPage, { view: "outcome" }>;
+type SpecOutcome = Of<"Resolved"> | Of<"Unconfirmed">;
 
-/** Each Outcome's name, as the certainty strip and the glossary say it. */
+/** Each Outcome's name, as the glossary says it. */
 const OUTCOME_NAME: Record<OutcomeKind, string> = {
   Resolved: "Resolved",
   Unconfirmed: "Unconfirmed",
@@ -28,25 +36,10 @@ const OUTCOME_NAME: Record<OutcomeKind, string> = {
   Unknown: "Unknown",
 };
 
-/**
- * The test patch beside an Outcome's name: its density on the certainty
- * strip, and its size, are the answer's weight (Resolved the densest and
- * largest, Unknown an empty, hatched cell). In the dark the two densest
- * tones would vanish into the bay, so there they sit on an enamel margin,
- * a scrap of the paper they were developed on.
- */
-const PATCH: Record<OutcomeKind, string> = {
-  Resolved: "size-14 bg-strip-5 sm:size-16 dark:border-4 dark:border-print",
-  Unconfirmed: "size-12 bg-strip-4 sm:size-14 dark:border-4 dark:border-print",
-  Ambiguous: "size-10 bg-strip-3 sm:size-12",
-  NoSpec: "size-9 bg-strip-2 sm:size-10",
-  Unknown: "size-8 border-dashed bg-undeveloped sm:size-9",
-};
-
-const LINK =
-  "underline decoration-1 underline-offset-[0.2em] hover:decoration-2";
-const LABEL = "font-caps text-sm font-semibold uppercase tracking-[0.14em]";
-const H2 = "font-caps text-2xl font-semibold uppercase tracking-wide";
+const H2 =
+  "mb-3.5 scroll-mt-20 font-display text-xl font-bold tracking-[-0.01em] text-sb-text";
+const SECTION = "mt-10";
+const MUTED = "text-sb-text-muted";
 
 /** The page's title: the view's name and the name looked up. */
 export function titleOf(page: LookupPage): string {
@@ -93,149 +86,89 @@ function OutcomeView({ page }: { page: OutcomePage }) {
 }
 
 /**
- * Every view's frame: what was asked, the heading (the Outcome's name in
- * grease pencil, beside its test patch), one lead sentence and, for an
- * Outcome, where it sits on the certainty strip. `aside` is the print, when
- * there is one. With `search`, the Search form follows, holding the name
- * asked (a view that asks for another name); the rest follows below, then
- * how it was answered (`chain`: one line when the Index answered, its
- * stations behind a disclosure; all the stations otherwise), and last a link
- * to Search, `back` its text.
+ * Every view's page, a docs page in the shell: the eyebrow (what was looked
+ * up), the heading (the Outcome's name, with its AnswerBadge and where it
+ * sits among the five), one lead line, then the view's sections, with the
+ * "On this page" rail when there are several. With `search`, the Search
+ * form follows the lead, holding the name asked; without it, the page ends
+ * with a link back to Search.
  */
-function Frame({
+function Page({
   request,
   heading,
   kind,
   lead,
-  aside,
   search = false,
-  chain,
-  ms,
+  answered,
   diagnostics,
-  back = "Look up another API",
   children,
 }: {
   request?: LookupRequest;
   heading: string;
   kind?: OutcomeKind;
   lead: ReactNode;
-  aside?: ReactNode;
   search?: boolean;
-  chain?: ChainState;
-  /** How long the Index took, for the one line an Index answer's chain gets. */
-  ms?: number;
+  answered?: Answered;
   diagnostics?: string[];
-  back?: string;
   children?: ReactNode;
 }) {
+  const place = kind ? ANSWERS.findIndex((a) => a.outcome === kind) + 1 : 0;
   return (
-    <div className="grid gap-10 px-4 pt-8 pb-12 sm:px-8 lg:gap-14 lg:pt-12">
-      <section aria-labelledby="outcome" className="grid gap-6">
-        {request ? <Asked request={request} /> : null}
-        <div className="flex items-center gap-4 sm:gap-6">
-          {kind ? (
-            <span
-              aria-hidden="true"
-              className={cn(
-                "shrink-0 rounded-[2px] border border-ink",
-                PATCH[kind],
-              )}
-            />
+    <WithOnThisPage first={{ id: "outcome", label: heading }}>
+      <div className="max-w-[860px] px-4 pt-7 pb-16 sm:px-8 lg:px-14 lg:pt-11">
+        <p className="font-display text-xs font-bold uppercase tracking-[0.3em] text-sb-accent-text [overflow-wrap:anywhere]">
+          Lookup
+          {request ? (
+            <>
+              {" · "}
+              {request.name}
+            </>
           ) : null}
-          {/* A little under Search's minimum, so "Unconfirmed" fits at 390. */}
+        </p>
+        <div className="mt-2 mb-2.5 flex flex-wrap items-center gap-x-3.5 gap-y-2">
           <h1
             id="outcome"
-            className="min-w-0 font-pencil text-[clamp(2.5rem,8.5vw,6rem)] uppercase leading-[0.95] [overflow-wrap:anywhere]"
+            className="scroll-mt-20 font-display text-[28px] leading-[1.1] font-extrabold tracking-[-0.01em] text-sb-text sm:text-[40px]"
           >
             {heading}
           </h1>
-        </div>
-        {/*
-          The lead, the print, then the strip: on a phone the print (and a
-          Resolved print's actions) follows the lead, within the first
-          screen. From xl the print is a column of its own, beside both.
-        */}
-        <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)] xl:grid-rows-[auto_1fr] xl:gap-x-10">
-          <p className="max-w-[34rem] text-lg leading-relaxed text-ink-2 sm:text-xl xl:col-start-1">
-            {lead}
-          </p>
-          {aside ? (
-            <div className="grid xl:col-start-2 xl:row-span-2 xl:row-start-1">
-              {aside}
-            </div>
-          ) : null}
           {kind ? (
-            <CertaintyStrip
-              outcome={kind}
-              className="max-w-[40rem] xl:col-start-1"
-            />
+            <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+              <AnswerBadge outcome={kind} />
+              <span className="text-[13px] text-sb-text-muted">
+                {place} of 5, from sure to not found
+              </span>
+            </span>
           ) : null}
         </div>
-      </section>
-      {search ? <SearchForm name={request?.name} /> : null}
-      {children}
-      {diagnostics?.length ? <Diagnostics diagnostics={diagnostics} /> : null}
-      {chain ? (
-        <section aria-labelledby="chain" className="grid gap-4">
-          <h2 id="chain" className={H2}>
-            How it was answered
-          </h2>
-          {chain === "answered" ? (
-            // The Index answered: one line, the stations behind a disclosure.
-            <div className="grid gap-3">
-              <p>
-                Answered from the Index
-                {ms === undefined ? "" : ` in ${ms.toFixed(1)} ms`}, no later
-                station needed.
-              </p>
-              <details className="text-sm">
-                <summary className="w-fit cursor-pointer font-caps font-semibold uppercase tracking-[0.12em] text-ink-2 hover:text-ink">
-                  The six stations
-                </summary>
-                <Stations state={chain} className="mt-3" />
-              </details>
-            </div>
-          ) : (
-            <>
-              <p className="text-sm text-ink-2">
-                The Index didn't know the name. Past it, Discovery needs an API
-                key.
-              </p>
-              <Stations state={chain} />
-            </>
-          )}
-        </section>
-      ) : null}
-      {/* A view with the Search form doesn't also need a link back to it. */}
-      {search ? null : (
-        <p className="text-sm">
-          <Link to="/" className={LINK}>
-            {back}
-          </Link>
-        </p>
-      )}
-    </div>
-  );
-}
-
-/** What was looked up: the name, and the options that were sent. */
-function Asked({ request }: { request: LookupRequest }) {
-  return (
-    <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-ink-2">
-      <span className={LABEL}>Lookup</span>
-      <span className="font-mono text-sm text-ink [overflow-wrap:anywhere]">
-        {request.name}
-      </span>
-      {request.apiVersion ? (
-        <span className="text-sm">
-          API Version{" "}
-          <span className="font-mono text-ink">{request.apiVersion}</span>
-        </span>
-      ) : null}
-      {request.allowCommunity ? (
-        <span className="text-sm">Community Specs included</span>
-      ) : null}
-    </p>
+        <p className="max-w-[40em] text-[17px] text-sb-text-muted">{lead}</p>
+        {request?.apiVersion || request?.allowCommunity ? (
+          <p className="mt-2 text-[13px] text-sb-text-muted">
+            Asked with{" "}
+            {[
+              request.apiVersion ? `API Version ${request.apiVersion}` : null,
+              request.allowCommunity ? "Community Specs included" : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+        ) : null}
+        {search ? (
+          <SearchForm name={request?.name} className="mt-[26px]" />
+        ) : null}
+        {children}
+        {diagnostics?.length ? <Diagnostics diagnostics={diagnostics} /> : null}
+        {answered ? <HowAnswered answered={answered} /> : null}
+        {/* A view with the Search form doesn't also need a link back to it. */}
+        {search ? null : (
+          <p className="mt-10 text-sm">
+            <a href="/" className="text-sb-accent-text">
+              Look up another API
+            </a>
+          </p>
+        )}
+      </div>
+    </WithOnThisPage>
   );
 }
 
@@ -248,72 +181,25 @@ function ResolvedView({
   page: OutcomePage;
   outcome: Of<"Resolved">;
 }) {
-  const { api, vendor, currentSpec } = outcome;
   return (
-    <Frame
+    <Page
       request={page.request}
       heading="Resolved"
       kind="Resolved"
-      lead={
-        <>
-          {api.name}, by {vendor.name}: its Current Spec, verified from its
-          Sources, with where it came from.
-        </>
-      }
-      aside={
-        <Print
-          headingLevel="h2"
-          print={{
-            apiId: api.id,
-            apiName: api.name,
-            lookupName: page.request.name,
-            vendorName: vendor.name,
-            specId: currentSpec.id,
-            provenance: outcome.provenance,
-            verifiedAt: outcome.verifiedAt,
-            stale: page.stale,
-            ms: page.ms,
-          }}
-        >
-          <PrintActions spec={currentSpec} baseUrl={page.baseUrl} />
-        </Print>
-      }
-      chain="answered"
-      ms={page.ms}
+      lead="The name is one API, and its Spec is confirmed to describe it: here it is, with where it came from."
+      answered={{ by: "index", ms: page.ms }}
       diagnostics={outcome.diagnostics}
     >
-      <section aria-labelledby="current-spec" className="grid gap-4">
-        <h2 id="current-spec" className={H2}>
-          The Current Spec
-        </h2>
-        {/* Only what the print doesn't already say. */}
-        <Facts
-          rows={[
-            [
-              "API id",
-              <span
-                key="api"
-                className="font-mono text-sm [overflow-wrap:anywhere]"
-              >
-                {api.id}
-              </span>,
-            ],
-            ["API Version", currentSpec.apiVersion ?? "Not stated"],
-            [
-              "Spec",
-              `OpenAPI ${currentSpec.specVersion}, ${currentSpec.format.toUpperCase()}`,
-            ],
-            [
-              "Validity Issues",
-              validityIssuesOf(outcome.validityIssueCount, currentSpec),
-            ],
-            ["Normalized Form", <NormalizedForm key="nf" spec={currentSpec} />],
-          ]}
-        />
-      </section>
+      <AnswerCard page={page} outcome={outcome} spec={outcome.currentSpec} />
+      <SpecDetails
+        api={outcome.api}
+        spec={outcome.currentSpec}
+        validityIssueCount={outcome.validityIssueCount}
+        validityIssues={outcome.validityIssues}
+      />
       <AlternateSpecs specs={outcome.alternateSpecs} />
       <Sources sources={outcome.sources} />
-    </Frame>
+    </Page>
   );
 }
 
@@ -324,67 +210,34 @@ function UnconfirmedView({
   page: OutcomePage;
   outcome: Of<"Unconfirmed">;
 }) {
-  const { api, vendor, spec } = outcome;
   return (
-    <Frame
+    <Page
       request={page.request}
       heading="Unconfirmed"
       kind="Unconfirmed"
-      lead={
-        <>
-          A Spec was found for {api.name}, by {vendor.name}, but it isn't
-          confirmed to describe that API.
-        </>
-      }
-      aside={
-        // Smaller and quieter than a Resolved print: less certain.
-        <Print
-          headingLevel="h2"
-          className="max-w-sm opacity-90 xl:justify-self-start"
-          print={{
-            apiId: api.id,
-            apiName: api.name,
-            lookupName: page.request.name,
-            vendorName: vendor.name,
-            specId: spec.id,
-            provenance: null,
-            verifiedAt: outcome.verifiedAt,
-            stale: page.stale,
-            ms: page.ms,
-          }}
-        />
-      }
-      chain="answered"
-      ms={page.ms}
+      lead="A Spec was found, but it isn't confirmed to describe this API. Here it is, with the reasons for doubt."
+      answered={{ by: "index", ms: page.ms }}
       diagnostics={outcome.diagnostics}
     >
-      <section aria-labelledby="reasons" className="grid gap-3">
+      <section aria-labelledby="reasons" className="mt-8">
         <h2 id="reasons" className={H2}>
           Why it isn't confirmed
         </h2>
-        <ul className="grid max-w-[40rem] list-disc gap-1.5 pl-5">
+        <ul className="grid max-w-[40em] list-disc gap-1.5 pl-5">
           {outcome.reasons.map((reason) => (
             <li key={reason}>{reason}</li>
           ))}
         </ul>
       </section>
-      <section aria-labelledby="found-spec" className="grid gap-4">
-        <h2 id="found-spec" className={H2}>
-          The Spec found
-        </h2>
-        <SpecFacts
-          api={api}
-          vendor={vendor}
-          spec={spec}
-          provenance="None confirmed"
-          verifiedAt={outcome.verifiedAt}
-          stale={page.stale}
-          validityIssueCount={outcome.validityIssueCount}
-        />
-        <SpecActions spec={spec} />
-      </section>
+      <AnswerCard page={page} outcome={outcome} spec={outcome.spec} />
+      <SpecDetails
+        api={outcome.api}
+        spec={outcome.spec}
+        validityIssueCount={outcome.validityIssueCount}
+        validityIssues={outcome.validityIssues}
+      />
       <Sources sources={outcome.sources} />
-    </Frame>
+    </Page>
   );
 }
 
@@ -396,7 +249,7 @@ function AmbiguousView({
   outcome: Of<"Ambiguous">;
 }) {
   return (
-    <Frame
+    <Page
       request={page.request}
       heading="Ambiguous"
       kind="Ambiguous"
@@ -406,55 +259,49 @@ function AmbiguousView({
           meant: each looks it up again by its own name.
         </>
       }
-      chain="answered"
-      ms={page.ms}
+      answered={{ by: "index", ms: page.ms }}
       diagnostics={outcome.diagnostics}
     >
-      <section aria-labelledby="candidates" className="grid gap-4">
+      <section aria-labelledby="candidates" className={SECTION}>
         <h2 id="candidates" className={H2}>
           The candidates
         </h2>
-        <ol className="grid max-w-[48rem] gap-px overflow-hidden rounded-[3px] border border-rule bg-rule">
-          {outcome.candidates.map((candidate) => (
-            <li
-              key={`${candidate.apiId ?? ""}:${candidate.name}`}
-              className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 bg-bay p-4"
-            >
-              <span className="grid gap-1">
-                <Link
-                  to="/lookup"
-                  search={lookupSearchOf({
-                    ...page.request,
-                    name: candidate.name,
-                  })}
-                  className={cn(
-                    "font-caps text-lg font-semibold uppercase leading-tight tracking-wide",
-                    LINK,
-                  )}
-                >
-                  {candidate.name}
-                </Link>
-                <span className="flex flex-wrap gap-x-3 text-sm text-ink-2">
-                  {candidate.vendor ? <span>{candidate.vendor}</span> : null}
-                  {candidate.apiId ? (
-                    <span className="font-mono text-xs leading-5 [overflow-wrap:anywhere]">
-                      {candidate.apiId}
-                    </span>
-                  ) : null}
+        <Card className="overflow-hidden rounded-[12px]">
+          <ol className="divide-y divide-sb-border">
+            {outcome.candidates.map((candidate) => (
+              <li
+                key={`${candidate.apiId ?? ""}:${candidate.name}`}
+                className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1.5 px-4 py-3.5"
+              >
+                <span className="grid min-w-0 gap-0.5">
+                  <a
+                    href={requestHref({
+                      ...page.request,
+                      name: candidate.name,
+                    })}
+                    className="font-semibold text-sb-text"
+                  >
+                    {candidate.name}
+                  </a>
+                  <span className="flex flex-wrap gap-x-3 text-[13px] text-sb-text-muted">
+                    {candidate.vendor ? <span>{candidate.vendor}</span> : null}
+                    {candidate.apiId ? (
+                      <span className="font-mono text-xs leading-5 [overflow-wrap:anywhere]">
+                        {candidate.apiId}
+                      </span>
+                    ) : null}
+                  </span>
                 </span>
-              </span>
-              <span className="flex items-baseline gap-1.5">
-                <span className="sr-only">Likelihood</span>
-                <span className="font-segment text-xl leading-none">
-                  {Math.round(candidate.probability * 100)}
+                <span className="text-sm text-sb-text-muted tabular-nums">
+                  <span className="sr-only">Likelihood </span>
+                  {Math.round(candidate.probability * 100)}%
                 </span>
-                <span className="font-caps text-sm font-semibold">%</span>
-              </span>
-            </li>
-          ))}
-        </ol>
+              </li>
+            ))}
+          </ol>
+        </Card>
       </section>
-    </Frame>
+    </Page>
   );
 }
 
@@ -469,50 +316,50 @@ function NoSpecView({
   const withCommunity =
     outcome.communityAvailable && !page.request.allowCommunity;
   return (
-    <Frame
+    <Page
       request={page.request}
       heading="No Spec"
       kind="NoSpec"
       lead={
         <>
-          {api.name}, by {vendor.name}, is known, but no Spec of it{" "}
+          The API is known, but no Spec of it{" "}
           {page.request.apiVersion ? "at that API Version " : ""}can be given:
           none backed by its Vendor was found.
         </>
       }
-      chain="answered"
-      ms={page.ms}
+      answered={{ by: "index", ms: page.ms }}
       diagnostics={outcome.diagnostics}
     >
-      <section aria-labelledby="api" className="grid gap-4">
+      <section aria-labelledby="api" className={SECTION}>
         <h2 id="api" className={H2}>
           The API
         </h2>
-        <Facts
-          rows={[
-            ["API", <ApiName key="api" name={api.name} id={api.id} />],
-            ["Vendor", <VendorName key="vendor" vendor={vendor} />],
-            [
-              "Community Spec",
-              outcome.communityAvailable ? "Available" : "None found",
-            ],
-          ]}
-        />
+        <Card className="rounded-[12px]">
+          <Facts
+            rows={[
+              ["API", <ApiName key="api" name={api.name} id={api.id} />],
+              ["Vendor", <VendorName key="vendor" vendor={vendor} />],
+              [
+                "Community Spec",
+                outcome.communityAvailable ? "Available" : "None found",
+              ],
+            ]}
+          />
+        </Card>
         {withCommunity ? (
-          <p className="max-w-[40rem]">
+          <p className="mt-4 max-w-[40em]">
             A Community Spec of it exists: someone other than the Vendor
             publishes it.{" "}
-            <Link
-              to="/lookup"
-              search={lookupSearchOf({ ...page.request, allowCommunity: true })}
-              className={LINK}
+            <a
+              href={requestHref({ ...page.request, allowCommunity: true })}
+              className="text-sb-accent-text"
             >
               Look it up with Community Specs included
-            </Link>
+            </a>
           </p>
         ) : null}
       </section>
-    </Frame>
+    </Page>
   );
 }
 
@@ -524,14 +371,18 @@ function UnknownView({
   outcome: Of<"Unknown">;
 }) {
   return (
-    <Frame
+    <Page
       request={page.request}
       heading="Unknown"
       kind="Unknown"
-      lead={<>No API called “{outcome.name}” was found.</>}
+      lead={
+        <>
+          No API called “{outcome.name}” was found. Check the name, or try
+          another.
+        </>
+      }
       search
-      chain="answered"
-      ms={page.ms}
+      answered={{ by: "index", ms: page.ms }}
       diagnostics={outcome.diagnostics}
     />
   );
@@ -545,18 +396,14 @@ function NotInIndex({
   page: Extract<LookupPage, { view: "not-in-index" }>;
 }) {
   const { request, baseUrl } = page;
-  const body = JSON.stringify({
-    name: request.name,
-    ...(request.apiVersion ? { apiVersion: request.apiVersion } : {}),
-    ...(request.allowCommunity ? { allowCommunity: true } : {}),
-  });
+  const body = requestBody(request);
   const curl = `curl -X POST ${baseUrl}/api/lookup -H "Authorization: Bearer <key>" -H "Content-Type: application/json" -d ${shellQuote(body)}`;
   const mcpAdd = `claude mcp add --transport http swaggerbot ${baseUrl}/mcp --header "Authorization: Bearer <key>"`;
   const mcpCall = `lookup_api ${body}`;
   return (
-    <Frame
+    <Page
       request={request}
-      heading="Not indexed yet"
+      heading="Not in the Index yet"
       lead={
         <>
           The Index doesn't hold “{request.name}” yet. Finding it on the live
@@ -565,36 +412,36 @@ function NotInIndex({
         </>
       }
       search
-      chain="missed"
+      answered={{ by: "missed" }}
     >
-      <section aria-labelledby="discovery" className="grid max-w-[48rem] gap-5">
-        <div className="grid gap-2">
-          <h2 id="discovery" className={H2}>
-            Run Discovery with a key
-          </h2>
-          <p className="max-w-[40rem]">
+      <section aria-labelledby="discovery" className={SECTION}>
+        <h2 id="discovery" className={H2}>
+          Run Discovery with a key
+        </h2>
+        <Card className="grid gap-4 rounded-[12px] p-5">
+          <p className="max-w-[40em]">
             Send the same Lookup with your key. Once Discovery has found it, the
             name is in the Index, and this page answers it for anyone.
           </p>
-        </div>
-        <div className="grid gap-2">
-          <h3 className={cn(LABEL, "text-ink-2")}>Over HTTP</h3>
-          <CodeLine code={curl} />
-        </div>
-        <div className="grid gap-2">
-          <h3 className={cn(LABEL, "text-ink-2")}>Over MCP</h3>
-          <CodeLine code={mcpAdd} />
-          <p className="text-sm text-ink-2">Then call the tool:</p>
-          <CodeLine code={mcpCall} />
-        </div>
-        <p>
-          No key yet?{" "}
-          <a href="/docs#keys" className={LINK}>
-            How to get an API key
-          </a>
-        </p>
+          <div className="grid gap-2">
+            <h3 className="text-sm font-semibold">Over HTTP</h3>
+            <CodeBlock code={curl} className="overflow-hidden rounded-md" />
+          </div>
+          <div className="grid gap-2">
+            <h3 className="text-sm font-semibold">Over MCP</h3>
+            <CodeBlock code={mcpAdd} className="overflow-hidden rounded-md" />
+            <p className={cn("text-[13px]", MUTED)}>Then call the tool:</p>
+            <CodeBlock code={mcpCall} className="overflow-hidden rounded-md" />
+          </div>
+          <p>
+            No key yet?{" "}
+            <a href="/docs#keys" className="text-sb-accent-text">
+              How to get an API key
+            </a>
+          </p>
+        </Card>
       </section>
-    </Frame>
+    </Page>
   );
 }
 
@@ -603,47 +450,33 @@ function RateLimited({
 }: {
   page: Extract<LookupPage, { view: "rate-limited" }>;
 }) {
+  const s = page.retryAfterSeconds;
   return (
-    <Frame
+    <Page
       request={page.request}
       heading="Slow down"
-      lead={
-        <>
-          This address has sent more requests this minute than the per-IP limit
-          allows. Nothing was looked up.
-        </>
-      }
+      lead="This address has sent more requests this minute than the per-IP limit allows. Nothing was looked up."
     >
-      <section aria-labelledby="retry" className="grid gap-3">
+      <section aria-labelledby="retry" className={SECTION}>
         <h2 id="retry" className={H2}>
           Try again in
         </h2>
-        <p className="flex items-baseline gap-2">
-          <span className="font-segment text-4xl leading-none">
-            {page.retryAfterSeconds}
-          </span>
-          <span className={LABEL}>
-            {page.retryAfterSeconds === 1 ? "second" : "seconds"}
-          </span>
+        <p className="font-display text-[28px] font-extrabold tabular-nums">
+          {s} {s === 1 ? "second" : "seconds"}
         </p>
-        <p>
-          <Link
-            to="/lookup"
-            search={lookupSearchOf(page.request)}
-            reloadDocument
-            className={LINK}
-          >
+        <p className="mt-3">
+          <a href={requestHref(page.request)} className="text-sb-accent-text">
             Look up “{page.request.name}” again
-          </Link>
+          </a>
         </p>
       </section>
-    </Frame>
+    </Page>
   );
 }
 
 function NameRequired() {
   return (
-    <Frame
+    <Page
       heading="Name an API"
       lead="A Lookup needs the name of an API, such as Stripe or Jira Cloud."
       search
@@ -653,242 +486,365 @@ function NameRequired() {
 
 // ------------------------------------------------------------- Pieces
 
-/** The facts of a Spec an Outcome gives, on the bay. */
-function SpecFacts({
-  api,
-  vendor,
+/**
+ * The answer, leading with the Spec (like Search's "What you get back"):
+ * the API, its answer and Provenance, the Vendor and when it was verified,
+ * then the three actions (the Spec viewer, the download, the URL to copy)
+ * and the ways to take it from code: curl, MCP, the JSON.
+ */
+function AnswerCard({
+  page,
+  outcome,
   spec,
-  provenance,
-  verifiedAt,
-  stale,
-  validityIssueCount,
 }: {
-  api: Of<"Resolved">["api"];
-  vendor: Of<"Resolved">["vendor"];
+  page: OutcomePage;
+  outcome: SpecOutcome;
   spec: SpecAnswer;
-  provenance: ReactNode;
-  verifiedAt: string;
-  stale: boolean;
-  validityIssueCount: number;
 }) {
+  const { api, vendor } = outcome;
+  const provenance = outcome.outcome === "Resolved" ? outcome.provenance : null;
+  const published = absoluteUrl(spec.downloads.published, page.baseUrl);
+  const size = sizeOf(spec.byteLength);
+  const domain = distinctDomain(vendor.name, vendor.domain);
+  const body = requestBody(page.request);
+  const tabs = [
+    {
+      id: "curl",
+      label: "curl",
+      content: (
+        <>
+          <CodeBlock code={`curl -o openapi.${spec.format} ${published}`}>
+            <span className="text-[#8fbaff]">curl</span> -o openapi.
+            {spec.format} {published}
+          </CodeBlock>
+          <p className="border-t border-sb-border px-4 py-2.5 text-[13px] text-sb-text-muted">
+            The whole answer, as JSON:
+          </p>
+          <CodeBlock
+            code={`curl -X POST ${page.baseUrl}/api/lookup -H "Content-Type: application/json" -d ${shellQuote(body)}`}
+          />
+        </>
+      ),
+    },
+    {
+      id: "mcp",
+      label: "MCP",
+      content: (
+        <>
+          <CodeBlock
+            code={`claude mcp add --transport http swaggerbot ${page.baseUrl}/mcp`}
+          >
+            <span className="text-[#8fbaff]">claude</span> mcp add --transport
+            http swaggerbot {page.baseUrl}/mcp
+          </CodeBlock>
+          <p className="border-t border-sb-border px-4 py-2.5 text-[13px] text-sb-text-muted">
+            Then call the tool; an Index answer needs no key:
+          </p>
+          <CodeBlock code={`lookup_api ${body}`} />
+        </>
+      ),
+    },
+    {
+      id: "json",
+      label: "JSON",
+      content: (
+        <>
+          <CodeBlock code={answerJson(outcome)} />
+          <p className="border-t border-sb-border px-4 py-2.5 text-[13px] text-sb-text-muted">
+            Trimmed: the whole answer also lists the Validity Issues, below.
+          </p>
+        </>
+      ),
+    },
+  ];
   return (
-    <Facts
-      rows={[
-        ["API", <ApiName key="api" name={api.name} id={api.id} />],
-        ["Vendor", <VendorName key="vendor" vendor={vendor} />],
-        ["Provenance", provenance],
-        [
-          "Verified",
-          <VerifiedStamp
-            key="verified"
-            verifiedAt={verifiedAt}
-            stale={stale}
-            on="bay"
-          />,
-        ],
-        ["API Version", spec.apiVersion ?? "Not stated"],
-        [
-          "Spec",
-          <span key="spec" className="grid gap-0.5">
-            <span>
-              OpenAPI {spec.specVersion}, {spec.format.toUpperCase()}
+    <section aria-labelledby="spec" className={SECTION}>
+      <Card className="overflow-hidden rounded-[12px]">
+        <div className="grid gap-1 border-b border-sb-border px-4 py-3.5">
+          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+            <h2 id="spec" className="scroll-mt-20 font-semibold">
+              {api.name}
+            </h2>
+            <AnswerBadge outcome={outcome.outcome} />
+            {provenance ? <ProvenanceBadge provenance={provenance} /> : null}
+            <span className="text-[13px] text-sb-text-muted sm:ml-auto">
+              answered in {page.ms.toFixed(1)} ms
             </span>
-            <span className="font-mono text-xs leading-5 [overflow-wrap:anywhere]">
-              {spec.id}
-            </span>
-          </span>,
-        ],
-        ["Validity Issues", validityIssuesOf(validityIssueCount, spec)],
-      ]}
-    />
-  );
-}
-
-/** The Spec viewer and the two downloads, with their sizes. */
-function SpecActions({ spec }: { spec: SpecAnswer }) {
-  return (
-    <div className="grid gap-3">
-      <p>
-        <a
-          href={`/specs/${spec.id}`}
-          className={cn(LINK, "font-caps text-lg font-semibold uppercase")}
-        >
-          Open in the Spec viewer
-        </a>
-      </p>
-      <ul className="grid max-w-[40rem] gap-px overflow-hidden rounded-[3px] border border-rule bg-rule sm:grid-cols-2">
-        <li className="grid gap-1 bg-bay p-4">
-          <span className={LABEL}>Published Form</span>
-          <span className="text-sm text-ink-2">As the Vendor serves it.</span>
-          <span className="flex flex-wrap items-baseline gap-x-3">
-            <a href={spec.downloads.published} className={LINK}>
-              Download<span className="sr-only"> the Published Form</span>
+          </div>
+          <p className="text-[13px] text-sb-text-muted">
+            By{" "}
+            <a href={vendorHref(vendor.id)} className="text-sb-text">
+              {vendor.name}
             </a>
-            <span className="text-sm text-ink-2">
-              {spec.format.toUpperCase()}, <Size bytes={spec.byteLength} />
+            {domain ? ` (${domain})` : null} · Verified{" "}
+            <time dateTime={outcome.verifiedAt}>
+              {dayOf(outcome.verifiedAt)}
+            </time>
+            {page.stale ? " · Stale: a Lookup queues a new Verification" : null}
+            {provenance ? null : " · No Provenance confirmed"}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2.5 px-4 py-4">
+          <a href={`/specs/${spec.id}`} className={buttonClass()}>
+            <FileCode aria-hidden="true" />
+            Open in the Spec viewer
+          </a>
+          <a
+            href={spec.downloads.published}
+            className={buttonClass({ variant: "secondary" })}
+          >
+            <Download aria-hidden="true" />
+            Download
+            <span className="font-sans font-medium text-sb-text-muted">
+              {spec.format.toUpperCase()} · {size.value} {size.unit}
             </span>
-          </span>
-        </li>
-        <li className="grid gap-1 bg-bay p-4">
-          <span className={LABEL}>Normalized Form</span>
-          <span className="text-sm text-ink-2">
-            One bundled document in the current OpenAPI version.
-          </span>
-          <NormalizedForm spec={spec} />
-        </li>
-      </ul>
-    </div>
-  );
-}
-
-/** A Spec's Validity Issues count, or that its forms aren't checked yet. */
-function validityIssuesOf(count: number, spec: SpecAnswer): string {
-  return count === 0 && spec.normalized === "pending"
-    ? "Not checked yet"
-    : String(count);
-}
-
-/** The Normalized Form's download, or why there isn't one yet. */
-function NormalizedForm({ spec }: { spec: SpecAnswer }) {
-  return spec.normalized === "ready" ? (
-    <span className="flex flex-wrap items-baseline gap-x-3">
-      <a href={spec.downloads.normalized} className={LINK}>
-        Download<span className="sr-only"> the Normalized Form</span>
-      </a>
-      <span className="text-sm text-ink-2">
-        One bundled document in the current OpenAPI version.
-      </span>
-    </span>
-  ) : spec.normalized === "pending" ? (
-    <span>Being built. Reload in a minute.</span>
-  ) : (
-    <span>Couldn't be built; the Published Form is still usable.</span>
+            <span className="sr-only"> the Published Form</span>
+          </a>
+          <CopyUrl url={published} what="the Published Form" />
+        </div>
+        <Tabs
+          label={`Take the ${api.name} Spec`}
+          tabs={tabs}
+          listClassName="border-t border-sb-border"
+        />
+      </Card>
+    </section>
   );
 }
 
 /**
- * A Resolved print's actions, on its label: the Spec viewer (the view's one
- * primary), the Published Form's download with its format and size, and its
- * absolute URL to copy.
+ * What the answer card doesn't show: the API id, the API Version, the
+ * Spec's format and id, its Validity Issues and the Normalized Form.
  */
-function PrintActions({
+function SpecDetails({
+  api,
   spec,
-  baseUrl,
+  validityIssueCount,
+  validityIssues,
 }: {
+  api: SpecOutcome["api"];
   spec: SpecAnswer;
-  baseUrl: string;
+  validityIssueCount: number;
+  validityIssues: SpecOutcome["validityIssues"];
 }) {
-  const url = new URL(spec.downloads.published, `${baseUrl}/`).href;
+  const unchecked = validityIssueCount === 0 && spec.normalized === "pending";
   return (
-    <div className="mt-2 grid gap-3">
-      <a
-        href={`/specs/${spec.id}`}
-        className={buttonClass({ size: "lg", className: "w-full" })}
-      >
-        Open in the Spec viewer
-      </a>
-      <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <a
-          href={spec.downloads.published}
-          className={cn(LINK, "font-semibold")}
-        >
-          Download<span className="sr-only"> the Published Form</span>
-        </a>
-        <span className="text-sm text-print-ink-2">
-          Published Form, {spec.format.toUpperCase()},{" "}
-          <Size bytes={spec.byteLength} />
-        </span>
-      </p>
-      <CodeLine code={url} label="Copy URL" />
-    </div>
+    <section aria-labelledby="spec-details" className={SECTION}>
+      <h2 id="spec-details" className={H2}>
+        Spec details
+      </h2>
+      <Card className="rounded-[12px]">
+        <Facts
+          rows={[
+            [
+              "API id",
+              <span key="api" className="font-mono text-[13px]">
+                {api.id}
+              </span>,
+            ],
+            ["API Version", spec.apiVersion ?? "Not stated"],
+            [
+              "Spec",
+              <span key="spec" className="grid gap-0.5">
+                <span>
+                  {specName(spec.specVersion)} · {spec.format.toUpperCase()}
+                  {spec.isPreview ? " · Preview" : ""}
+                </span>
+                <span className="font-mono text-xs leading-5 text-sb-text-muted [overflow-wrap:anywhere]">
+                  {spec.id}
+                </span>
+              </span>,
+            ],
+            [
+              "Validity Issues",
+              <ValidityIssues
+                key="validity"
+                count={validityIssueCount}
+                issues={validityIssues}
+                unchecked={unchecked}
+              />,
+            ],
+            ["Normalized Form", <NormalizedForm key="normal" spec={spec} />],
+          ]}
+        />
+      </Card>
+    </section>
+  );
+}
+
+function ValidityIssues({
+  count,
+  issues,
+  unchecked,
+}: {
+  count: number;
+  issues: SpecOutcome["validityIssues"];
+  unchecked: boolean;
+}) {
+  if (unchecked) return <span>Not checked yet</span>;
+  if (count === 0) return <span>None</span>;
+  return (
+    <details className="group">
+      <summary className="w-fit cursor-pointer rounded-sm">
+        {count} {count === 1 ? "finding" : "findings"}; none stops the Spec
+        being used
+      </summary>
+      <ul className="mt-2 grid gap-1.5 text-[13px]">
+        {issues.map((issue) => (
+          <li
+            key={`${issue.path}:${issue.message}`}
+            className="[overflow-wrap:anywhere]"
+          >
+            {issue.message}{" "}
+            <span className="font-mono text-xs text-sb-text-muted">
+              {issue.path}
+            </span>
+            {issue.count > 1 ? (
+              <span className="text-sb-text-muted"> ×{issue.count}</span>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+function NormalizedForm({ spec }: { spec: SpecAnswer }) {
+  if (spec.normalized === "pending")
+    return <span>Being built. Reload in a minute.</span>;
+  if (spec.normalized === "failed")
+    return <span>Couldn't be built; the Published Form is still usable.</span>;
+  return (
+    <span>
+      <a href={spec.downloads.normalized} className="text-sb-accent-text">
+        Download<span className="sr-only"> the Normalized Form</span>
+      </a>{" "}
+      <span className="text-sb-text-muted">
+        · one bundled document in the current OpenAPI version
+      </span>
+    </span>
   );
 }
 
 function AlternateSpecs({ specs }: { specs: SpecAnswer[] }) {
   return (
-    <section aria-labelledby="alternates" className="grid gap-4">
+    <section aria-labelledby="alternates" className={SECTION}>
       <h2 id="alternates" className={H2}>
         Alternate Specs
       </h2>
       {specs.length === 0 ? (
-        <p className="text-ink-2">None: the Current Spec is the only one.</p>
+        <p className={MUTED}>None: the Current Spec is the only one.</p>
       ) : (
-        <ul className="grid max-w-[48rem] gap-px overflow-hidden rounded-[3px] border border-rule bg-rule">
-          {specs.map((spec) => (
-            <li
-              key={spec.id}
-              className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 bg-bay p-4"
-            >
-              <span className="grid gap-0.5">
-                <span className="font-caps text-lg font-semibold uppercase leading-tight tracking-wide">
-                  API Version {spec.apiVersion ?? "not stated"}
-                  {spec.isPreview ? " · Preview" : ""}
-                </span>
-                <span className="text-sm text-ink-2">
-                  OpenAPI {spec.specVersion}, {spec.format.toUpperCase()},{" "}
-                  <Size bytes={spec.byteLength} />
-                </span>
-              </span>
-              <span className="flex flex-wrap gap-x-4">
-                <a href={`/specs/${spec.id}`} className={LINK}>
-                  View
-                  <span className="sr-only">
-                    {" "}
-                    API Version {spec.apiVersion}
+        <Card className="overflow-hidden rounded-[12px]">
+          <ul className="divide-y divide-sb-border">
+            {specs.map((spec) => {
+              const size = sizeOf(spec.byteLength);
+              const version = `API Version ${spec.apiVersion ?? "not stated"}`;
+              return (
+                <li
+                  key={spec.id}
+                  className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1.5 px-4 py-3.5"
+                >
+                  <span className="grid gap-0.5">
+                    <span className="font-semibold">
+                      {version}
+                      {spec.isPreview ? " · Preview" : ""}
+                    </span>
+                    <span className="text-[13px] text-sb-text-muted">
+                      {specName(spec.specVersion)} · {spec.format.toUpperCase()}{" "}
+                      · {size.value} {size.unit}
+                    </span>
                   </span>
-                </a>
-                <a href={spec.downloads.published} className={LINK}>
-                  Download
-                  <span className="sr-only">
-                    {" "}
-                    API Version {spec.apiVersion}
+                  <span className="flex flex-wrap gap-x-4 text-sm">
+                    <a
+                      href={`/specs/${spec.id}`}
+                      className="text-sb-accent-text"
+                    >
+                      View<span className="sr-only"> {version}</span>
+                    </a>
+                    <a
+                      href={spec.downloads.published}
+                      className="text-sb-accent-text"
+                    >
+                      Download<span className="sr-only"> {version}</span>
+                    </a>
                   </span>
-                </a>
-              </span>
-            </li>
-          ))}
-        </ul>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
       )}
     </section>
   );
 }
 
 /**
- * Where a Spec was found: each Source's URL (as text), its Provenance and
- * when it was last verified. On the bay under a Lookup result, or `on` a
- * print's label (the Spec viewer), where it heads a section of the label.
+ * Where a Spec was found: each Source's URL (as text, never a link to it),
+ * its Provenance and when it was last verified. `on="print"` is the Spec
+ * viewer's label, TEMPORARY until the viewer moves to the design system.
  */
 export function Sources({
   sources,
-  on = "bay",
+  on = "page",
 }: {
   sources: Pick<Source, "id" | "url" | "provenance" | "lastVerifiedAt">[];
-  on?: "bay" | "print";
+  on?: "page" | "print";
 }) {
-  const print = on === "print";
+  if (on === "print") return <PrintSources sources={sources} />;
   return (
-    <section
-      aria-labelledby="sources"
-      className={cn("grid", print ? "gap-2" : "gap-4")}
-    >
-      <h2 id="sources" className={print ? cn(LABEL, "text-print-ink-2") : H2}>
+    <section aria-labelledby="sources" className={SECTION}>
+      <h2 id="sources" className={H2}>
         Sources
       </h2>
-      <ul
-        className={cn(
-          "grid max-w-[48rem] gap-px overflow-hidden border",
-          print
-            ? "rounded-[2px] border-print-ink-2 bg-print-ink-2"
-            : "rounded-[3px] border-rule bg-rule",
-        )}
+      <Card className="overflow-hidden rounded-[12px]">
+        <ul className="divide-y divide-sb-border">
+          {sources.map((source) => (
+            <li
+              key={source.id}
+              className="grid gap-1.5 px-4 py-3 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-baseline sm:gap-x-4"
+            >
+              <span>
+                <ProvenanceBadge provenance={source.provenance} />
+              </span>
+              <span className="grid min-w-0 gap-0.5">
+                <span className="font-mono text-[13px] [overflow-wrap:anywhere]">
+                  {source.url}
+                </span>
+                <span className="text-[13px] text-sb-text-muted">
+                  Last verified{" "}
+                  <time dateTime={source.lastVerifiedAt}>
+                    {dayOf(source.lastVerifiedAt)}
+                  </time>
+                </span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      </Card>
+    </section>
+  );
+}
+
+/** TEMPORARY: the Sources on the Darkroom print of the Spec viewer's label. */
+function PrintSources({
+  sources,
+}: {
+  sources: Pick<Source, "id" | "url" | "provenance" | "lastVerifiedAt">[];
+}) {
+  return (
+    <section aria-labelledby="sources" className="grid gap-2">
+      <h2
+        id="sources"
+        className="font-caps text-sm font-semibold uppercase tracking-[0.14em] text-print-ink-2"
       >
+        Sources
+      </h2>
+      <ul className="grid max-w-[48rem] gap-px overflow-hidden rounded-[2px] border border-print-ink-2 bg-print-ink-2">
         {sources.map((source) => (
           <li
             key={source.id}
-            className={cn(
-              "grid gap-1.5 sm:grid-cols-[auto_1fr] sm:items-baseline sm:gap-x-4",
-              print ? "bg-print p-3" : "bg-bay p-4",
-            )}
+            className="grid gap-1.5 bg-print p-3 sm:grid-cols-[auto_1fr] sm:items-baseline sm:gap-x-4"
           >
             <span>
               <ProvenanceMark provenance={source.provenance} />
@@ -897,17 +853,12 @@ export function Sources({
               <span className="font-mono text-sm [overflow-wrap:anywhere]">
                 {source.url}
               </span>
-              <span
-                className={cn(
-                  "text-sm",
-                  print ? "text-print-ink-2" : "text-ink-2",
-                )}
-              >
+              <span className="text-sm text-print-ink-2">
                 Last verified{" "}
                 <VerifiedStamp
                   verifiedAt={source.lastVerifiedAt}
                   stale={false}
-                  on={on}
+                  on="print"
                 />
               </span>
             </span>
@@ -918,9 +869,19 @@ export function Sources({
   );
 }
 
+/** A Provenance tier as a badge: Official the plainest, Community outlined. */
+function ProvenanceBadge({ provenance }: { provenance: Provenance }) {
+  return (
+    <Badge tone={provenance === "Community" ? "outline" : "neutral"}>
+      <span className="sr-only">Provenance: </span>
+      {provenance}
+    </Badge>
+  );
+}
+
 function Diagnostics({ diagnostics }: { diagnostics: string[] }) {
   return (
-    <section aria-labelledby="diagnostics" className="grid gap-3">
+    <section aria-labelledby="diagnostics" className={SECTION}>
       <h2 id="diagnostics" className={H2}>
         What went wrong along the way
       </h2>
@@ -935,15 +896,13 @@ function Diagnostics({ diagnostics }: { diagnostics: string[] }) {
   );
 }
 
-/** Terms and values, two columns from `sm`. */
+/** Terms and values, in a card: two columns from `sm`. */
 function Facts({ rows }: { rows: [string, ReactNode][] }) {
   return (
-    <dl className="grid max-w-[48rem] gap-x-6 gap-y-2 sm:grid-cols-[10rem_1fr]">
+    <dl className="grid gap-x-4 gap-y-1 px-4 py-3.5 text-sm sm:grid-cols-[140px_minmax(0,1fr)] sm:gap-y-2.5">
       {rows.map(([term, value]) => (
         <div key={term} className="contents">
-          <dt className="font-caps text-sm font-semibold uppercase tracking-[0.12em] text-ink-2 sm:pt-0.5">
-            {term}
-          </dt>
+          <dt className="text-sb-text-muted">{term}</dt>
           <dd className="mb-2 min-w-0 sm:mb-0">{value}</dd>
         </div>
       ))}
@@ -955,38 +914,61 @@ function ApiName({ name, id }: { name: string; id: string }) {
   return (
     <span className="grid gap-0.5">
       <span>{name}</span>
-      <span className="font-mono text-xs leading-5 [overflow-wrap:anywhere]">
+      <span className="font-mono text-xs leading-5 text-sb-text-muted [overflow-wrap:anywhere]">
         {id}
       </span>
     </span>
   );
 }
 
-/** The Vendor's name, and its domain only when that says something more. */
-function VendorName({ vendor }: { vendor: Of<"Resolved">["vendor"] }) {
+/** The Vendor's name, linked to its APIs, and its domain only when that says more. */
+function VendorName({ vendor }: { vendor: Of<"NoSpec">["vendor"] }) {
   const domain = distinctDomain(vendor.name, vendor.domain);
   return (
     <span>
-      {vendor.name}
-      {domain ? <span className="text-ink-2"> ({domain})</span> : null}
+      <a href={vendorHref(vendor.id)} className="text-sb-text">
+        {vendor.name}
+      </a>
+      {domain ? <span className="text-sb-text-muted"> ({domain})</span> : null}
     </span>
   );
 }
 
-/** A size in bytes as B, kB or MB (powers of 1000), in seven-segment. */
-function Size({ bytes }: { bytes: number }) {
-  const [n, unit] =
-    bytes < 1000
-      ? [String(bytes), "B"]
-      : bytes < 1_000_000
-        ? [(bytes / 1000).toFixed(1), "kB"]
-        : [(bytes / 1_000_000).toFixed(1), "MB"];
-  return (
-    <span className="whitespace-nowrap">
-      <span className="font-segment">{n}</span>{" "}
-      <span className="font-caps font-semibold uppercase">{unit}</span>
-    </span>
-  );
+// ------------------------------------------------------------- Helpers
+
+/** `3.0.0` → `OpenAPI 3.0.0`; `2.0` → `Swagger 2.0`. */
+export function specName(version: string): string {
+  return version.startsWith("2") ? `Swagger ${version}` : `OpenAPI ${version}`;
+}
+
+/** A download URL made absolute: a path is put under `baseUrl`. */
+export function absoluteUrl(url: string, baseUrl: string): string {
+  return url.startsWith("/") ? `${baseUrl}${url}` : url;
+}
+
+/** `/lookup?…`: the Lookup `request` asks for, as a plain link. */
+export function requestHref(request: LookupRequest): string {
+  if (!request.apiVersion && !request.allowCommunity)
+    return lookupHref(request.name);
+  const params = new URLSearchParams({ name: request.name });
+  if (request.apiVersion) params.set("apiVersion", request.apiVersion);
+  if (request.allowCommunity) params.set("allowCommunity", "1");
+  return `/lookup?${params}`;
+}
+
+/** The body of a `POST /api/lookup` (and `lookup_api`'s arguments). */
+function requestBody(request: LookupRequest): string {
+  return JSON.stringify({
+    name: request.name,
+    ...(request.apiVersion ? { apiVersion: request.apiVersion } : {}),
+    ...(request.allowCommunity ? { allowCommunity: true } : {}),
+  });
+}
+
+/** The answer's JSON, as the HTTP API gives it, less the Validity Issues. */
+function answerJson(outcome: SpecOutcome): string {
+  const { validityIssues: _issues, timings: _timings, ...rest } = outcome;
+  return JSON.stringify(rest, null, 2);
 }
 
 /** `text` as one single-quoted shell word. */

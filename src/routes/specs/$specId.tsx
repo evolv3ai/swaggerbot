@@ -1,10 +1,15 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { CircleAlert, Hourglass, Scale } from "lucide-react";
 import type { ReactNode } from "react";
+import { WithOnThisPage } from "~/components/shell/on-this-page";
+import { Badge } from "~/components/ui/badge";
+import { Card } from "~/components/ui/card";
 import { sizeOf } from "~/components/viewer/size";
+import { Sources } from "~/components/viewer/sources";
 import { SpecFrame } from "~/components/viewer/spec-frame";
 import {
   SpecHeader,
-  SpecLabel,
+  SpecSummary,
   specFormat,
 } from "~/components/viewer/spec-label";
 import { cn } from "~/lib/utils";
@@ -13,9 +18,10 @@ import { getSpecView } from "~/server/spec-page";
 import type { SpecView } from "~/server/spec-view";
 
 /**
- * The Spec viewer (Slice 6 backlog, D6): a Spec as a print. Our frame, the
- * label, carries its facts, every Spec string as text; the image is Scalar,
- * in a sandboxed frame under its own CSP (`/embed/specs/{specId}`).
+ * The Spec viewer (Slice 6 backlog, D6), a docs page: the Spec's facts,
+ * downloads, Validity Issues and Sources, every Spec string as text; then
+ * Scalar's API reference, in a sandboxed frame under its own CSP
+ * (`/embed/specs/{specId}`), in the site's theme; then the Alternate Specs.
  */
 export const Route = createFileRoute("/specs/$specId")({
   validateSearch: (search: Record<string, unknown>): { form?: "normalized" } =>
@@ -46,29 +52,48 @@ const FORM_NAMES: Record<SpecForm, string> = {
   normalized: "Normalized",
 };
 
+const H2 =
+  "mt-10 mb-3.5 scroll-mt-20 font-display text-xl font-bold tracking-[-0.01em] text-sb-text";
+
 function SpecViewer() {
   const view = Route.useLoaderData();
   return (
-    <div className="grid gap-8 px-4 pt-8 pb-12 sm:px-8 lg:pt-12">
-      <SpecHeader view={view} />
-      <article
-        aria-label={`The ${view.api.name} Spec`}
-        className="grid gap-5 rounded-[3px] bg-print p-3 text-print-ink shadow-[0_6px_18px_-6px_rgb(0_0_0/0.45)] sm:p-5"
-      >
-        <SpecLabel view={view} />
-        <FormSwitch view={view} />
-        <FrameArea view={view} />
-      </article>
-      <Alternates view={view} />
-    </div>
+    <WithOnThisPage first={{ id: "spec", label: "About this Spec" }}>
+      <div className="max-w-[1040px] px-4 pt-7 pb-16 sm:px-8 lg:px-14 lg:pt-11">
+        <SpecHeader view={view} />
+        <div className="mt-7">
+          <SpecSummary view={view} />
+        </div>
+        {view.sources.length > 0 ? (
+          <Sources sources={view.sources} headingClassName={H2} />
+        ) : null}
+        <section aria-labelledby="reference">
+          <div className="mt-10 mb-3.5 flex flex-wrap items-center justify-between gap-3">
+            <h2
+              id="reference"
+              className="scroll-mt-20 font-display text-xl font-bold tracking-[-0.01em] text-sb-text"
+            >
+              API reference
+            </h2>
+            <FormSwitch view={view} />
+          </div>
+          <FrameArea view={view} />
+        </section>
+        <Alternates view={view} />
+      </div>
+    </WithOnThisPage>
   );
 }
 
-/** Published / Normalized: links, so the switch works without script. */
+/**
+ * Published / Normalized, as a segmented control of links: it works
+ * without script, each is in the Tab order, and the one shown is
+ * `aria-current`.
+ */
 function FormSwitch({ view }: { view: SpecView }) {
   return (
-    <nav aria-label="Form" className="px-1">
-      <ul className="flex flex-wrap gap-2">
+    <nav aria-label="Form">
+      <ul className="flex rounded-full border border-sb-border bg-sb-bg-subtle p-1">
         {(["published", "normalized"] as const).map((form) => {
           const active = form === view.form;
           return (
@@ -79,12 +104,10 @@ function FormSwitch({ view }: { view: SpecView }) {
                 search={form === "normalized" ? { form } : {}}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "block rounded-[3px] border px-3 py-1.5 font-caps text-sm font-semibold uppercase tracking-[0.14em] no-underline",
-                  // Active is the black secondary, not a strip tone: the
-                  // strip only ever means certainty or recency.
+                  "flex h-8 items-center rounded-full px-3.5 text-[13px] font-semibold no-underline transition-colors duration-150",
                   active
-                    ? "border-print-ink bg-dense-black text-lamp"
-                    : "border-print-ink hover:underline hover:decoration-1 hover:underline-offset-[0.2em]",
+                    ? "bg-sb-accent text-sb-text-on-accent"
+                    : "text-sb-text-muted hover:bg-sb-accent-soft hover:text-sb-text",
                 )}
               >
                 {FORM_NAMES[form]} Form
@@ -103,11 +126,13 @@ function FrameArea({ view }: { view: SpecView }) {
   switch (view.frame) {
     case "show":
       return (
-        <SpecFrame
-          specId={view.spec.id}
-          form={view.form}
-          apiName={view.api.name}
-        />
+        <Card className="overflow-hidden">
+          <SpecFrame
+            specId={view.spec.id}
+            form={view.form}
+            apiName={view.api.name}
+          />
+        </Card>
       );
     case "too-large": {
       const bytes =
@@ -118,23 +143,29 @@ function FrameArea({ view }: { view: SpecView }) {
             : 0;
       const { value, unit } = sizeOf(bytes);
       return (
-        <FrameNote>
+        <FrameNote icon={<Scale />} title="Too large to view here">
           <p>
             This {FORM_NAMES[view.form]} Form is {value} {unit}, too large to
             view here. Download it above, or read its{" "}
-            <a href={view.outlineUrl}>Spec Outline</a> (the operations and tags,
-            as JSON).
+            <a href={view.outlineUrl} className="text-sb-accent-text">
+              Spec Outline
+            </a>{" "}
+            (the operations and tags, as JSON).
           </p>
         </FrameNote>
       );
     }
     case "pending":
       return (
-        <FrameNote>
+        <FrameNote icon={<Hourglass />} title="Being built">
           <p>
             The Normalized Form is being built. Reload the page in a minute, or
             view the{" "}
-            <Link to="/specs/$specId" params={{ specId: view.spec.id }}>
+            <Link
+              to="/specs/$specId"
+              params={{ specId: view.spec.id }}
+              className="text-sb-accent-text"
+            >
               Published Form
             </Link>{" "}
             now.
@@ -143,63 +174,94 @@ function FrameArea({ view }: { view: SpecView }) {
       );
     case "failed":
       return (
-        <FrameNote>
+        <FrameNote icon={<CircleAlert />} title="Couldn't be built">
           <p>
             The Normalized Form couldn't be built:{" "}
             <span className="[overflow-wrap:anywhere]">
               {normalized.status === "failed" ? normalized.error : ""}
             </span>
           </p>
+          <p>
+            The{" "}
+            <Link
+              to="/specs/$specId"
+              params={{ specId: view.spec.id }}
+              className="text-sb-accent-text"
+            >
+              Published Form
+            </Link>{" "}
+            is still here to view and download.
+          </p>
         </FrameNote>
       );
   }
 }
 
-function FrameNote({ children }: { children: ReactNode }) {
+function FrameNote({
+  icon,
+  title,
+  children,
+}: {
+  icon: ReactNode;
+  title: string;
+  children: ReactNode;
+}) {
   return (
-    <div
+    <Card
       role="status"
-      className="grid min-h-40 content-center gap-2 rounded-[2px] border border-print-ink px-4 py-6 text-base"
+      className="flex min-h-40 items-start gap-3.5 px-5 py-6 text-[15px]"
     >
-      {children}
-    </div>
+      <span
+        aria-hidden="true"
+        className="grid size-9 shrink-0 place-items-center rounded-md bg-sb-accent-soft text-sb-accent-text [&_svg]:size-[18px]"
+      >
+        {icon}
+      </span>
+      <div className="grid max-w-[40em] gap-1.5">
+        <p className="font-display font-bold text-sb-text">{title}</p>
+        <div className="grid gap-2 text-sb-text-muted">{children}</div>
+      </div>
+    </Card>
   );
 }
 
 function Alternates({ view }: { view: SpecView }) {
   return (
-    <section aria-labelledby="alternates" className="grid gap-3">
-      <h2
-        id="alternates"
-        className="font-caps text-2xl font-semibold uppercase tracking-wide"
-      >
+    <section aria-labelledby="alternates">
+      <h2 id="alternates" className={H2}>
         Alternate Specs
       </h2>
       {view.alternates.length === 0 ? (
-        <p className="text-sm text-ink-2">
+        <p className="max-w-[40em] text-sb-text-muted">
           The Index holds no other Spec of this API that a Lookup would answer
           with.
         </p>
       ) : (
-        <ul className="grid gap-2 text-sm">
-          {view.alternates.map((alt) => (
-            <li
-              key={alt.specId}
-              className="flex flex-wrap items-baseline gap-x-3"
-            >
-              <Link to="/specs/$specId" params={{ specId: alt.specId }}>
-                API Version {alt.apiVersion ?? "not stated"}
-              </Link>
-              <span className="text-ink-2">
-                {specFormat(alt.specVersion)}
-                {alt.current ? " · Current" : ""}
-              </span>
-              <code className="font-mono text-xs text-ink-2">
-                {alt.specId.slice(0, 12)}
-              </code>
-            </li>
-          ))}
-        </ul>
+        <Card className="overflow-hidden">
+          <ul className="divide-y divide-sb-border">
+            {view.alternates.map((alt) => (
+              <li
+                key={alt.specId}
+                className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-3 text-sm sm:px-5"
+              >
+                <Link
+                  to="/specs/$specId"
+                  params={{ specId: alt.specId }}
+                  className="font-semibold text-sb-text"
+                >
+                  API Version {alt.apiVersion ?? "not stated"}
+                </Link>
+                <span className="text-sb-text-muted">
+                  {specFormat(alt.specVersion)}
+                </span>
+                {alt.current ? <Badge tone="success">Current</Badge> : null}
+                <code className="font-mono text-xs text-sb-text-muted sm:ml-auto">
+                  {alt.specId.slice(0, 12)}
+                </code>
+              </li>
+            ))}
+          </ul>
+        </Card>
       )}
     </section>
   );
@@ -207,13 +269,19 @@ function Alternates({ view }: { view: SpecView }) {
 
 function NoSuchSpec() {
   return (
-    <div className="grid max-w-[34rem] gap-4 px-4 pt-8 sm:px-8 lg:pt-12">
-      <h1 className="font-caps text-4xl font-semibold uppercase tracking-wide">
+    <div className="grid max-w-[860px] gap-3 px-4 pt-7 pb-16 sm:px-8 lg:px-14 lg:pt-11">
+      <p className="font-display text-xs font-bold uppercase tracking-[0.3em] text-sb-accent-text">
+        Spec viewer
+      </p>
+      <h1 className="font-display text-[28px] leading-[1.1] font-extrabold tracking-[-0.01em] text-sb-text sm:text-[40px]">
         No such Spec
       </h1>
-      <p className="text-lg text-ink-2">
+      <p className="max-w-[40em] text-[17px] text-sb-text-muted">
         The Index holds no Spec with that id. Find an API by name with{" "}
-        <Link to="/">Search</Link>.
+        <Link to="/" className="text-sb-text">
+          Search
+        </Link>
+        .
       </p>
     </div>
   );

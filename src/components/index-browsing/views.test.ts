@@ -28,9 +28,17 @@ describe("VendorListView", () => {
   it("links each Vendor with its API count", () => {
     const html = list(page);
     expect(html).toContain('href="/vendors/alpha.com"');
-    expect(html).toMatch(/>2<\/span>.*?>APIs</);
-    expect(html).toMatch(/>1<\/span>.*?>API</);
+    expect(html).toMatch(/>2<\/span> APIs</);
+    expect(html).toMatch(/>1<\/span> API</);
+    expect(html).toContain("<table");
     expect(html).toContain("3–4 of 5 Vendors matching “a”");
+  });
+
+  it("leads with the live count when unfiltered", () => {
+    expect(list({ ...page, query: "", total: 21 })).toMatch(
+      />21 Vendors<\/strong> have an API in the Index/,
+    );
+    expect(list(page)).not.toContain("have an API in the Index");
   });
 
   it("has a GET filter form holding the filter", () => {
@@ -43,11 +51,12 @@ describe("VendorListView", () => {
   it("links the previous and next pages, and neither when there's one page", () => {
     const html = list(page);
     expect(html).toMatch(
-      /href="\/vendors\?query=a&amp;cursor=1" rel="prev"[^>]*>Previous page/,
+      /href="\/vendors\?query=a&amp;cursor=1" rel="prev"[^>]*>(<svg.*?<\/svg>)?Previous page/,
     );
     expect(html).toMatch(
       /href="\/vendors\?query=a&amp;cursor=5" rel="next"[^>]*>Next page/,
     );
+    expect(html).toContain(">3–4 of 5<");
     const single = list({ ...page, previous: null, next: null });
     expect(single).not.toContain("Previous page");
     expect(single).not.toContain("Next page");
@@ -94,6 +103,7 @@ describe("VendorApisView", () => {
         {
           id: "stripe.com/api",
           name: "Stripe API",
+          lookupName: "Stripe API",
           currentSpec: {
             id: "abc123def456789",
             provenance: "Official",
@@ -101,16 +111,24 @@ describe("VendorApisView", () => {
             stale: true,
           },
         },
-        { id: "stripe.com/other", name: "Other", currentSpec: null },
+        {
+          id: "stripe.com/other",
+          name: "Other",
+          lookupName: "stripe other",
+          currentSpec: null,
+        },
       ],
     });
     expect(html).toContain("<h1");
     expect(html).toContain("Stripe API");
-    expect(html).toContain(">Official<");
+    expect(html).toContain("Provenance: </span>Official</span>");
     expect(html).toContain('<time dateTime="2026-09-24T10:00:00.000Z">');
     expect(html).toContain(" · Stale");
     expect(html).toContain('href="/specs/abc123def456789"');
     expect(html).toContain("No Current Spec");
+    expect(html).toContain('href="/lookup?name=Stripe+API"');
+    expect(html).toContain('href="/lookup?name=stripe+other"');
+    expect(html.match(/View the Spec/g)).toHaveLength(1);
   });
 
   it("names a Vendor named by its domain once, and both when they differ", () => {

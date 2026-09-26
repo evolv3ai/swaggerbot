@@ -7,6 +7,7 @@ import { openDb } from "~/index-store/db";
 import { createRepo } from "~/index-store/repo";
 import { specForms } from "~/index-store/schema";
 import { createSpecForms } from "~/index-store/spec-forms";
+import { SCALAR_CSS } from "~/server/spec-embed";
 import { SpecFormsError } from "~/spec-forms/build";
 import { Route as EmbedRoute } from "./specs/$specId";
 
@@ -83,6 +84,10 @@ describe("GET /embed/specs/{specId}", () => {
     expect(JSON.parse((configuration ?? "").replaceAll("&quot;", '"'))).toEqual(
       {
         url: `http://localhost:3000/api/specs/${specId}/published`,
+        darkMode: true,
+        forceDarkModeState: "dark",
+        hideDarkModeToggle: true,
+        customCss: SCALAR_CSS,
         hideTestRequestButton: true,
         hideClientButton: true,
         telemetry: false,
@@ -107,6 +112,37 @@ describe("GET /embed/specs/{specId}", () => {
     expect(html).toContain(
       "<title>API reference for PayCo &lt;API&gt;</title>",
     );
+  });
+
+  it("renders Scalar in the site's theme, and only in dark or light", async () => {
+    const config = async (query: string) => {
+      const html = await (await get(specId, query)).text();
+      return {
+        html,
+        configuration: JSON.parse(
+          (html.match(/data-configuration="([^"]*)"/)?.[1] ?? "").replaceAll(
+            "&quot;",
+            '"',
+          ),
+        ),
+      };
+    };
+
+    const light = await config("?theme=light");
+    expect(light.configuration).toMatchObject({
+      darkMode: false,
+      forceDarkModeState: "light",
+      hideDarkModeToggle: true,
+    });
+    expect(light.html).toContain('<meta name="color-scheme" content="light">');
+    // Anything but `light` is the default, dark, and never echoed.
+    const hostile = await config('?theme="><script>alert(1)</script>');
+    expect(hostile.configuration).toMatchObject({
+      darkMode: true,
+      forceDarkModeState: "dark",
+    });
+    expect(hostile.html).not.toContain("alert(1)");
+    expect(hostile.html).toContain('<meta name="color-scheme" content="dark">');
   });
 
   it("points at the Normalized Form once it is built", async () => {
