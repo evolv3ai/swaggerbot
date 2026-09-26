@@ -19,6 +19,15 @@ export type IndexPrint = {
   stale: boolean;
   /** How long the Index took to answer, in milliseconds. */
   ms: number;
+  /** The Vendor's main domain. */
+  vendorDomain?: string | null;
+  /** The Current Spec as a Lookup answers with it, when the answer carries it. */
+  spec?: {
+    specVersion: string;
+    format: "json" | "yaml";
+    byteLength: number;
+    downloads: { published: string; normalized: string };
+  } | null;
 };
 
 /** What the Index holds, and the APIs it verified most recently. */
@@ -92,6 +101,15 @@ export function indexStats(
       verifiedAt,
       stale: !(age <= staleAfterMs),
       ms: Math.round(ms * 10) / 10,
+      vendorDomain: current.vendor.domain ?? null,
+      spec: current.currentSpec.downloads
+        ? {
+            specVersion: current.currentSpec.specVersion,
+            format: current.currentSpec.format,
+            byteLength: current.currentSpec.byteLength,
+            downloads: current.currentSpec.downloads,
+          }
+        : null,
     });
   }
 

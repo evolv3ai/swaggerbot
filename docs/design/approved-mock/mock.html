@@ -1,0 +1,75 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SwaggerBot</title>
+<style>
+@font-face{font-family:Montserrat;src:url(fonts/montserrat-latin-700-normal.woff2);font-weight:700}
+@font-face{font-family:Montserrat;src:url(fonts/montserrat-latin-800-normal.woff2);font-weight:800}
+@font-face{font-family:Plex;src:url(fonts/ibm-plex-sans-latin-400-normal.woff2);font-weight:400}
+@font-face{font-family:Plex;src:url(fonts/ibm-plex-sans-latin-500-normal.woff2);font-weight:500}
+@font-face{font-family:Plex;src:url(fonts/ibm-plex-sans-latin-600-normal.woff2);font-weight:600}
+@font-face{font-family:JBM;src:url(fonts/jetbrains-mono-latin.woff2)}
+:root{--acc:#0099DD;--acc-ink:#ffffff;--acc-soft:color-mix(in srgb,#0099DD 18%,transparent);--acc-text:#5CBFEB;
+--bg:#111827;--bg2:#0A0F1A;--card:#1F2737;--line:#343D4F;--fg:#ffffff;--mut:#C1CAD7;--mut2:#96A1B2}
+body.light{--bg:#ffffff;--bg2:#F6F8FB;--card:#ffffff;--line:#DCE2EB;--fg:#021C41;--mut:#4B5568;--mut2:#6B7688;--acc-text:#006696;--acc-soft:#EAF7FD}
+*{box-sizing:border-box;margin:0}body{background:var(--bg);color:var(--fg);font:400 15px/1.6 Plex,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:inherit}
+.top{position:sticky;top:0;display:flex;align-items:center;gap:24px;height:60px;padding:0 24px;border-bottom:1px solid var(--line);background:color-mix(in srgb,var(--bg) 85%,transparent);backdrop-filter:blur(8px)}
+.logo{display:flex;align-items:center;gap:10px;font:800 18px Montserrat;min-width:232px}.logo img{display:block}
+.search{flex:1;max-width:520px;display:flex;align-items:center;gap:10px;height:38px;padding:0 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg2);color:var(--mut)}
+.search kbd{margin-left:auto;font:500 12px Plex;border:1px solid var(--line);border-radius:6px;padding:1px 6px;color:var(--mut)}
+.tl{margin-left:auto;display:flex;gap:22px;align-items:center;color:var(--mut);font-weight:500;font-size:14px}.tl a{text-decoration:none}
+.ok{display:inline-flex;align-items:center;gap:6px}.ok i{width:8px;height:8px;border-radius:9px;background:#17A56B}
+.cta{color:var(--acc-ink)!important;background:var(--acc);padding:7px 12px;border-radius:9px;font-weight:600}
+.wrap{display:grid;grid-template-columns:256px minmax(0,1fr) 220px;max-width:1440px;margin:0 auto}
+aside{padding:26px 20px;border-right:1px solid var(--line);min-height:calc(100vh - 60px);font-size:14px}
+.grp{font-size:12px;font-weight:600;color:var(--fg);margin:22px 0 8px}.grp:first-child{margin-top:0}
+aside a{display:block;text-decoration:none;color:var(--mut);padding:5px 10px;border-radius:8px;margin-left:-10px}
+aside a.on{color:var(--acc-text);background:var(--acc-soft);font-weight:500}
+.m{font:500 10.5px JBM;padding:1px 5px;border-radius:5px;margin-right:6px;background:var(--line);color:var(--fg)}.m.p{background:rgba(110,168,255,.16);color:#8fbaff}.m.g{background:var(--acc-soft);color:var(--acc)}
+main{padding:44px 56px 60px;max-width:860px}
+.crumb{font:700 12px Montserrat;letter-spacing:.3em;text-transform:uppercase;color:var(--acc)}
+h1{font:800 40px/1.1 Montserrat;letter-spacing:-.01em;margin:8px 0 10px}
+.lead{font-size:17px;color:var(--mut);max-width:40em}
+.box{margin-top:26px;padding:18px;border:2px solid var(--acc);border-radius:16px;background:var(--card);box-shadow:0 1px 0 rgba(255,255,255,.03) inset,0 20px 40px -24px rgba(0,0,0,.6)}
+.row{display:flex;gap:10px}.in{flex:1;height:48px;display:flex;align-items:center;padding:0 14px;border:2px solid var(--line);border-radius:10px;background:var(--bg);font-size:16px;color:var(--mut)}
+.go{height:46px;padding:0 18px;border:0;border-radius:10px;background:var(--acc);color:var(--acc-ink);font:600 15px Plex}
+.opts{display:flex;gap:18px;margin-top:12px;font-size:13px;color:var(--mut)}
+.try{margin-top:14px;display:flex;flex-wrap:wrap;gap:8px;font-size:13px;color:var(--mut)}.chip{border:1px solid var(--line);border-radius:99px;padding:3px 10px;color:var(--fg);text-decoration:none}
+h2{font:700 20px Montserrat;margin:40px 0 14px;letter-spacing:-.01em}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.c{border:1px solid var(--line);border-radius:12px;padding:16px;background:var(--card)}.c b{display:block;font-weight:600;margin:10px 0 4px}.c p{font-size:13.5px;color:var(--mut)}
+.ic{width:30px;height:30px;border-radius:10px;display:grid;place-items:center;background:var(--acc-soft);color:var(--acc-text);font:600 13px JBM}
+.res{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--card)}
+.rh{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}.rh b{font-weight:600}
+.badge{font:700 11px Montserrat;letter-spacing:.06em;text-transform:uppercase;border-radius:99px;padding:3px 9px;background:color-mix(in srgb,#17A56B 20%,transparent);color:#5FD3A2}.badge.o{background:var(--line);color:var(--fg)}
+.kv{display:grid;grid-template-columns:140px 1fr;gap:8px 16px;padding:14px 16px;font-size:14px}.kv span:nth-child(odd){color:var(--mut)}
+.tabs{display:flex;gap:18px;padding:0 16px;border-top:1px solid var(--line);font-size:13px;color:var(--mut)}.tabs span{padding:10px 0}.tabs .on{color:var(--fg);box-shadow:inset 0 -2px var(--acc)}
+pre{background:#07090b;color:#cfd5de;font:12.5px/1.7 JBM,monospace;padding:14px 16px;border-top:1px solid var(--line);overflow:hidden}pre em{color:#5CBFEB;font-style:normal}pre b{color:#8fbaff;font-weight:400}
+body.light pre{background:#111827}
+.toc{padding:44px 20px;font-size:13px}.toc div{font-weight:600;margin-bottom:10px}.toc a{display:block;color:var(--mut);text-decoration:none;padding:4px 0 4px 12px;border-left:1px solid var(--line)}.toc a.on{color:var(--acc-text);border-color:var(--acc)}
+pre{overflow-x:auto}.logo img{flex:none}.cta{white-space:nowrap}
+@media (max-width:760px){.tl .ok{display:none}.logo{min-width:0}.search,.tl a:not(.cta){display:none}.wrap{grid-template-columns:minmax(0,1fr)}main{min-width:0}aside,.toc{display:none}main{padding:28px 18px}h1{font-size:28px}.cards{grid-template-columns:1fr}.row{flex-direction:column}.kv{grid-template-columns:110px 1fr}}
+</style></head><body class="ACCENT">
+<div class="top"><div class="logo"><img src="mark.png" alt="" width="30" height="30">SwaggerBot</div>
+<div class="search">⌕ Look up an API or search the docs<kbd>⌘K</kbd></div>
+<div class="tl"><a href="#">Vendors</a><a href="#">GitHub</a><span class="ok"><i></i>Operational</span><a class="cta" href="#">Get an API key</a></div></div>
+<div class="wrap"><aside>
+<div class="grp">Get started</div><a class="on" href="#">Look up an API</a><a href="#">How answers work</a><a href="#">Outcomes</a>
+<div class="grp">The Index</div><a href="#">Vendors · 21</a><a href="#">Recently verified</a><a href="#">Benchmark</a>
+<div class="grp">HTTP API</div><a href="#"><span class="m p">POST</span>/api/lookup</a><a href="#"><span class="m g">GET</span>/api/vendors</a><a href="#"><span class="m g">GET</span>/api/specs/{id}</a><a href="#"><span class="m g">GET</span>…/outline</a>
+<div class="grp">MCP</div><a href="#">Add to Claude Code</a><a href="#">Tools</a>
+</aside><main>
+<div class="crumb">Better than Specs</div>
+<h1>No fake Specs.</h1>
+<p class="lead">Name an API. SwaggerBot hands you its OpenAPI Spec, where it came from and how sure it is, or tells you straight why there isn't one.</p>
+<div class="box"><div class="row"><div class="in">Stripe, Jira Cloud, Val Town…</div><button class="go">Look up</button></div>
+<div class="opts"><span>▸ API version (optional)</span><span>☐ Include Community Specs</span></div>
+<div class="try">Try <a class="chip" href="#">Stripe</a><a class="chip" href="#">GitHub</a><a class="chip" href="#">OpenAI</a><a class="chip" href="#">Twilio</a> · <a href="#">21 APIs answer without a key →</a></div></div>
+<h2>What you get back</h2>
+<div class="res"><div class="rh"><b>Stripe API</b><span class="badge">Resolved</span><span class="badge o">Official</span><span style="margin-left:auto;color:var(--mut);font-size:13px">answered in 2.5 ms</span></div>
+<div class="kv"><span>Vendor</span><span>stripe.com</span><span>Verified</span><span>24 Sept 2026</span><span>Spec</span><span>OpenAPI 3.0.0 · YAML · 6.6 MB</span></div>
+<div class="tabs"><span class="on">curl</span><span>MCP</span><span>JSON</span></div>
+<pre><b>curl</b> -O https://swaggerbot.dev/api/specs/<em>1fdc1047…78a9</em>/published</pre></div>
+<h2>Every answer is one of five</h2>
+<div class="cards"><div class="c"><div class="ic">0</div><b>Resolved</b><p>The API and its verified Spec, with Provenance.</p></div><div class="c"><div class="ic">1</div><b>Unconfirmed</b><p>A Spec was found but not confirmed as this API's.</p></div><div class="c"><div class="ic">2</div><b>Ambiguous</b><p>The name fits more than one API. Pick one.</p></div></div>
+</main>
+<nav class="toc"><div>On this page</div><a class="on" href="#">Look up an API</a><a href="#">What you get back</a><a href="#">Every answer is one of five</a><a href="#">Use it from code</a></nav></div>
+</body></html>

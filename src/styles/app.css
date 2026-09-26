@@ -1,22 +1,67 @@
-/* The Web UI's styles: Tailwind 4, with shadcn's token names carrying the
-   darkroom world (the Search surface brief's direction contract; DESIGN.md
-   records it once built). Light is the lit bay under safelight amber; dark is
-   the bay with the light off, amber as the ink. The one tonal ladder is the
-   silver test strip (--strip-1 lightest to --strip-5 densest). */
+/* The Web UI's styles: Tailwind 4 carrying the SwaggerBot design system v2
+   (docs/design/swaggerbot-design-system-v2/tokens/). Its semantic tokens are
+   namespaced `--sb-*` here, so they sit beside Tailwind's and shadcn's own
+   names (`--accent`, `--border`, `--text-sm` mean other things there); the
+   shadcn names below are mapped onto them.
+
+   Dark is the default (PRODUCT.md): `:root` holds the design system's dark
+   theme, `[data-theme="light"]` on <html> the light one. The theme is the
+   visitor's choice (the toggle in the top bar, remembered in localStorage and
+   applied before first paint by the inline script in __root.tsx); without
+   script the page is dark. */
 
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@custom-variant dark (@media (prefers-color-scheme: dark));
+/* `dark:` follows the theme attribute, not the OS setting. */
+@custom-variant dark (
+  &:where(html:not([data-theme="light"]), html:not([data-theme="light"]) *)
+);
 
 @theme inline {
-  --font-sans: "Barlow", ui-sans-serif, system-ui, sans-serif;
-  --font-heading: "Barlow Condensed", "Barlow", ui-sans-serif, sans-serif;
-  --font-caps: "Barlow Condensed", "Barlow", ui-sans-serif, sans-serif;
-  --font-pencil: "Permanent Marker", "Barlow Condensed", cursive;
-  --font-segment: "DSEG7 Classic", "JetBrains Mono", ui-monospace, monospace;
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Montserrat", ui-sans-serif, system-ui, sans-serif;
+  --font-heading: "Montserrat", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* The design system's own tokens, as utilities (bg-sb-surface, …). */
+  --color-sb-blue: var(--sb-blue);
+  --color-sb-navy: var(--sb-navy);
+  --color-sb-bg: var(--sb-bg);
+  --color-sb-bg-subtle: var(--sb-bg-subtle);
+  --color-sb-surface: var(--sb-surface);
+  --color-sb-surface-raised: var(--sb-surface-raised);
+  --color-sb-surface-sunken: var(--sb-surface-sunken);
+  --color-sb-text: var(--sb-text);
+  --color-sb-text-muted: var(--sb-text-muted);
+  --color-sb-text-faint: var(--sb-text-faint);
+  --color-sb-text-on-accent: var(--sb-text-on-accent);
+  --color-sb-border: var(--sb-border);
+  --color-sb-border-strong: var(--sb-border-strong);
+  --color-sb-accent: var(--sb-accent);
+  --color-sb-accent-hover: var(--sb-accent-hover);
+  --color-sb-accent-soft: var(--sb-accent-soft);
+  --color-sb-accent-soft-text: var(--sb-accent-soft-text);
+  --color-sb-accent-text: var(--sb-accent-text);
+  --color-sb-success: var(--sb-success);
+  --color-sb-success-soft: var(--sb-success-soft);
+  --color-sb-success-text: var(--sb-success-text);
+  --color-sb-warning: var(--sb-warning);
+  --color-sb-warning-soft: var(--sb-warning-soft);
+  --color-sb-warning-text: var(--sb-warning-text);
+  --color-sb-danger: var(--sb-danger);
+  --color-sb-danger-soft: var(--sb-danger-soft);
+  --color-sb-danger-text: var(--sb-danger-text);
+  --color-sb-code-bg: var(--sb-code-bg);
+  --color-sb-code-text: var(--sb-code-text);
+
+  /* TEMPORARY Darkroom aliases, so the pages not yet migrated (Lookup,
+     Vendors, the Spec viewer, Docs) keep rendering on the new tokens.
+     Remove each once no page uses it (the follow-up migration issues). */
+  --font-caps: "Montserrat", ui-sans-serif, system-ui, sans-serif;
+  --font-pencil: "Montserrat", ui-sans-serif, system-ui, sans-serif;
+  --font-segment: "JetBrains Mono", ui-monospace, monospace;
   --color-bay: var(--bay);
   --color-bay-deep: var(--bay-deep);
   --color-lamp: var(--lamp);
@@ -32,6 +77,8 @@
   --color-strip-3: var(--strip-3);
   --color-strip-4: var(--strip-4);
   --color-strip-5: var(--strip-5);
+
+  /* shadcn's names. */
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -63,78 +110,168 @@
   --color-card: var(--card);
   --color-foreground: var(--foreground);
   --color-background: var(--background);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* Radii follow the mark: 6 small, 10 controls, 16 cards, 24 dialogs. */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-2xl: 24px;
+  --radius-3xl: 24px;
+  --radius-4xl: 24px;
 }
 
 :root {
-  /* The lit bay. */
-  --bay: #e8a33d;
-  --bay-deep: #dc9530;
-  --lamp: #ffb000;
-  /* The black secondary's fill (and text on amber), in both themes. Not a
-     strip step, though it has strip-5's value: see the One Ladder Rule. */
-  --dense-black: #0e0e0e;
-  --ink: #0e0e0e;
-  --ink-2: #3a2206;
-  --rule: #4b2e07;
-  /* Prints: enamel-white stock, silver-to-black image. */
-  --print: #f6f1e6;
-  --print-ink: #0e0e0e;
-  --print-ink-2: #5a554c;
-  --strip-1: #f6f1e6;
-  --strip-2: #c9c4b8;
-  --strip-3: #8c8c8c;
-  --strip-4: #3a3a3a;
-  --strip-5: #0e0e0e;
+  /* Brand, sampled from the logo files. */
+  --sb-blue: #0099dd;
+  --sb-navy: #021c41;
+  --sb-ink: #111827;
+  --sb-white: #ffffff;
+  /* Blue ramp (hue of #0099DD). */
+  --blue-50: #eaf7fd;
+  --blue-100: #ccebf9;
+  --blue-200: #99d7f3;
+  --blue-300: #5cbfeb;
+  --blue-400: #26aae4;
+  --blue-500: #0099dd;
+  --blue-600: #0080ba;
+  --blue-700: #006696;
+  --blue-800: #034c70;
+  --blue-900: #05324b;
+  /* Cool neutrals (ink #111827 sits at 900). */
+  --gray-0: #ffffff;
+  --gray-50: #f6f8fb;
+  --gray-100: #edf1f6;
+  --gray-200: #dce2eb;
+  --gray-300: #c1cad7;
+  --gray-400: #96a1b2;
+  --gray-500: #6b7688;
+  --gray-600: #4b5568;
+  --gray-700: #343d4f;
+  --gray-800: #1f2737;
+  --gray-900: #111827;
+  --gray-950: #0a0f1a;
+  /* Status hues. */
+  --green-500: #17a56b;
+  --green-100: #d4f2e4;
+  --amber-500: #e9a21b;
+  --amber-100: #fcedcf;
+  --red-500: #e2483d;
+  --red-100: #fbddda;
 
-  --background: var(--bay);
-  --foreground: var(--ink);
-  --card: var(--print);
-  --card-foreground: var(--print-ink);
-  --popover: var(--print);
-  --popover-foreground: var(--print-ink);
-  --primary: var(--lamp);
-  --primary-foreground: var(--ink);
-  --secondary: var(--ink);
-  --secondary-foreground: var(--lamp);
-  --muted: var(--bay-deep);
-  --muted-foreground: var(--ink-2);
-  --accent: var(--bay-deep);
-  --accent-foreground: var(--ink);
-  --destructive: #7a1408;
-  --border: var(--rule);
-  --input: var(--rule);
-  --ring: var(--ink);
-  --radius: 0.25rem;
-  color-scheme: light;
+  /* Semantic: the dark theme (the default). */
+  --sb-bg: var(--gray-900);
+  --sb-bg-subtle: var(--gray-950);
+  --sb-surface: var(--gray-800);
+  --sb-surface-raised: var(--gray-700);
+  --sb-surface-sunken: var(--gray-950);
+  --sb-text: #ffffff;
+  --sb-text-muted: var(--gray-300);
+  --sb-text-faint: var(--gray-400);
+  /* Navy, not white, on the blue fill: white on #0099DD is 3.2:1, under
+     WCAG AA for button-size text; navy is 5.3:1. */
+  --sb-text-on-accent: var(--sb-navy);
+  --sb-border: var(--gray-700);
+  --sb-border-strong: var(--gray-600);
+  --sb-accent: var(--sb-blue);
+  --sb-accent-hover: var(--blue-400);
+  --sb-accent-press: var(--blue-300);
+  --sb-accent-soft: color-mix(in srgb, var(--sb-blue) 18%, transparent);
+  --sb-accent-soft-text: var(--blue-200);
+  --sb-accent-text: var(--blue-300);
+  --sb-success: var(--green-500);
+  --sb-success-soft: color-mix(in srgb, var(--green-500) 20%, transparent);
+  --sb-success-text: #5fd3a2;
+  --sb-warning: var(--amber-500);
+  --sb-warning-soft: color-mix(in srgb, var(--amber-500) 20%, transparent);
+  --sb-warning-text: #f5c766;
+  --sb-danger: var(--red-500);
+  --sb-danger-soft: color-mix(in srgb, var(--red-500) 20%, transparent);
+  --sb-danger-text: #f48a82;
+  /* Code blocks are ink in both themes. */
+  --sb-code-bg: #07090b;
+  --sb-code-text: #cfd5de;
+  --sb-code-accent: var(--blue-300);
+  --sb-overlay: color-mix(in srgb, #000 65%, transparent);
+  --sb-shadow-md: 0 0 0 1px var(--gray-700), 0 8px 20px rgb(0 0 0 / 0.4);
+  --sb-shadow-lg: 0 0 0 1px var(--gray-600), 0 20px 44px rgb(0 0 0 / 0.55);
+  --sb-shadow-box:
+    0 1px 0 rgb(255 255 255 / 0.03) inset, 0 20px 40px -24px rgb(0 0 0 / 0.6);
+  --sb-ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --sb-ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* shadcn's names, onto the design system. */
+  --background: var(--sb-bg);
+  --foreground: var(--sb-text);
+  --card: var(--sb-surface);
+  --card-foreground: var(--sb-text);
+  --popover: var(--sb-surface-raised);
+  --popover-foreground: var(--sb-text);
+  --primary: var(--sb-accent);
+  --primary-foreground: var(--sb-text-on-accent);
+  --secondary: var(--sb-surface-raised);
+  --secondary-foreground: var(--sb-text);
+  --muted: var(--sb-bg-subtle);
+  --muted-foreground: var(--sb-text-muted);
+  --accent: var(--sb-accent-soft);
+  --accent-foreground: var(--sb-accent-soft-text);
+  --destructive: var(--sb-danger-text);
+  --border: var(--sb-border);
+  --input: var(--sb-border);
+  --ring: var(--sb-blue);
+  --radius: 10px;
+
+  /* TEMPORARY Darkroom aliases (see @theme above): each old name onto the
+     semantic token that plays its part. */
+  --bay: var(--sb-bg);
+  --bay-deep: var(--sb-bg-subtle);
+  --lamp: var(--sb-accent);
+  --dense-black: var(--gray-950);
+  --ink: var(--sb-text);
+  --ink-2: var(--sb-text-muted);
+  --rule: var(--sb-border);
+  --print: var(--sb-surface);
+  --print-ink: var(--sb-text);
+  --print-ink-2: var(--sb-text-muted);
+  --strip-1: var(--gray-50);
+  --strip-2: var(--gray-300);
+  --strip-3: var(--gray-500);
+  --strip-4: var(--gray-700);
+  --strip-5: var(--gray-950);
+
+  color-scheme: dark;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    /* The bay with the light off. */
-    --bay: #140b03;
-    --bay-deep: #21140a;
-    --lamp: #ffb000;
-    --ink: #ffb000;
-    --ink-2: #c58b35;
-    --rule: #6b4a1c;
-    --print: #e9e2d2;
-    --print-ink: #0e0e0e;
-    --print-ink-2: #5a554c;
-
-    --primary-foreground: #0e0e0e;
-    --secondary: var(--bay-deep);
-    --secondary-foreground: var(--lamp);
-    --destructive: #ff7a5c;
-    --ring: var(--lamp);
-    color-scheme: dark;
-  }
+:root[data-theme="light"] {
+  --sb-bg: var(--gray-0);
+  --sb-bg-subtle: var(--gray-50);
+  --sb-surface: var(--gray-0);
+  --sb-surface-raised: var(--gray-0);
+  --sb-surface-sunken: var(--gray-100);
+  --sb-text: var(--sb-navy);
+  --sb-text-muted: var(--gray-600);
+  --sb-text-faint: var(--gray-500);
+  --sb-border: var(--gray-200);
+  --sb-border-strong: var(--gray-300);
+  /* Lighter on hover in both themes: navy text keeps its contrast. */
+  --sb-accent-hover: var(--blue-400);
+  --sb-accent-press: var(--blue-300);
+  --sb-accent-soft: var(--blue-50);
+  --sb-accent-soft-text: var(--blue-700);
+  --sb-accent-text: var(--blue-700);
+  --sb-success-soft: var(--green-100);
+  --sb-success-text: #0b7a4d;
+  --sb-warning-soft: var(--amber-100);
+  --sb-warning-text: #8a5a00;
+  --sb-danger-soft: var(--red-100);
+  --sb-danger-text: #b42a20;
+  --sb-code-bg: var(--gray-900);
+  --sb-overlay: color-mix(in srgb, var(--sb-ink) 60%, transparent);
+  --sb-shadow-md: 0 2px 4px rgb(2 28 65 / 0.06), 0 6px 16px rgb(2 28 65 / 0.08);
+  --sb-shadow-lg:
+    0 4px 8px rgb(2 28 65 / 0.08), 0 18px 40px rgb(2 28 65 / 0.14);
+  --sb-shadow-box: 0 20px 40px -24px rgb(2 28 65 / 0.35);
+  color-scheme: light;
 }
 
 @layer base {
@@ -144,23 +281,24 @@
   html {
     @apply font-sans;
     -webkit-text-size-adjust: 100%;
-    scrollbar-color: var(--rule) var(--bay-deep);
+    scrollbar-color: var(--sb-border-strong) var(--sb-bg);
+    /* Anchors land below the sticky top bar. */
+    scroll-padding-top: 5rem;
   }
   body {
     @apply bg-background text-foreground antialiased;
-    caret-color: var(--ink);
-    font-variant-numeric: tabular-nums;
+    font-size: 15px;
+    line-height: 1.6;
   }
   ::selection {
-    background: var(--ink);
-    color: var(--bay);
+    background: color-mix(in srgb, var(--sb-blue) 35%, transparent);
   }
   :focus-visible {
     outline: 2px solid var(--ring);
-    outline-offset: 3px;
+    outline-offset: 2px;
   }
   /* Every link is underlined (WCAG 1.4.1). Only the nav items, the home
-     mark, the skip link and links shaped as buttons opt out, with
+     mark, the skip link and links shaped as buttons or chips opt out, with
      `no-underline`. */
   a {
     text-decoration-line: underline;
@@ -170,11 +308,12 @@
   a:hover {
     text-decoration-thickness: 2px;
   }
+  kbd {
+    font-family: var(--font-sans);
+  }
 }
 
-/* Unknown on the certainty scale: nothing developed, so no strip tone. The
-   empty cell is hatched in the rule colour so that, in either theme, it
-   can't be read as Resolved's dense black. */
+/* TEMPORARY (Lookup's certainty patches): Unknown's empty, hatched cell. */
 @utility bg-undeveloped {
   background-image: repeating-linear-gradient(
     135deg,
@@ -183,7 +322,7 @@
   );
 }
 
-/* The print's one motion: the image comes up out of the paper. */
+/* TEMPORARY (the Darkroom print, on the Lookup result). */
 @keyframes print-develop {
   from {
     opacity: 0.06;
