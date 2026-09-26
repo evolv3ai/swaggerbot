@@ -170,3 +170,78 @@ The PRD's API and MCP docs page, with the "request a key" link, doesn't exist; t
 - `pnpm check` and `pnpm build` green; `uicheck` passes on `/docs`.
 - Every `curl` on the page runs against the built server on a copy of an Index and answers as the page says (paste the runs in the PR).
 - The manual check in the PR: screenshots at 390 and 1280, light and dark.
+
+---
+
+# O3 fixes: from Impeccable's critique (2026-09-25)
+
+`/impeccable critique` of the whole UI scored **25/40** (snapshot `.impeccable/critique/2026-09-26T02-26-58Z__src-routes.md`). Wes chose to fix every P1 and P2 plus the minor findings, to guide keyless visitors with suggestions and a near-match, and to keep "Develop". Every item below is an extension inside the established world: follow `DESIGN.md` and `PRODUCT.md`, reuse `src/components/darkroom/`, add no dependencies, and don't change the direction (Darkroom Safelight). Each PR's Done-when includes `pnpm check`, `pnpm build`, `uicheck` on every route it touches at 390 and 1280 in light and dark, `impeccable detect --json` on the changed files (no new non-advisory findings), and screenshots in the PR.
+
+Order: #7 and #8 together (their files barely overlap; merge one, then merge `main` into the other), then #9, then #10.
+
+## 7. swaggerbot: harden the UI: links look like links, honest statuses, the Spec viewer links onward
+
+## Problem
+The critique's P1 #1 and P2 #5, plus status and live-region defects. The base `a` rule (`src/styles/app.css:158`) sets underline offset and thickness but never `text-decoration-line`, so any link without an `underline` class is plain text in the same colour (WCAG 1.4.1): the Spec viewer's "Published Form (YAML)" / "Normalized Form (JSON)" downloads (`src/routes/specs/$specId.tsx:140,148`), its Alternates (`:345`) and frame-note links (`:280,292`), "How it was measured" and "Read the docs" (`src/routes/index.tsx:513,522`), "Source on GitHub" (`src/components/shell/shell.tsx:209`). The Spec viewer shows no Sources (PRODUCT.md: Sources sit next to every Spec) and no way to its Vendor or Lookup. Error views answer HTTP 200. The health lamp announces twice on every page load.
+
+## Change
+- **Links:** underline every `a` in the base layer (`text-decoration-line: underline`); opt out, by class, only nav drawer items, the bot-mark home link, the skip link and links styled as buttons. Check every link on every route is either underlined or a visibly button-shaped control.
+- **Statuses** (from the route's server function, with `setResponseStatus` from `@tanstack/react-start/server`): the rate-limited `/lookup` view answers **429** with `Retry-After` (seconds, as the API does); name-required answers **400**. "Not in the Index yet" and Resolved stay 200. `/vendors?cursor=<bad>` ("No such page") answers **400**.
+- **Spec viewer** (`src/routes/specs/$specId.tsx`, `src/server/spec-page.ts`): the label shows the Current Spec's Sources (each Source URL with its Provenance and when it was last verified, as the Lookup result's Sources section does; reuse that component). The eyebrow's Vendor becomes a link to `/vendors/{vendorId}`, and add "Look it up" linking to `/lookup?name=<the API's name>`.
+- **Links between objects:** the replay prints on Search (`src/routes/index.tsx` ~469) and the rail's "Last verified" (`shell.tsx:154`) link to `/lookup?name=<API name>`.
+- **Search where it's needed:** the name-required, Unknown and "Not in the Index yet" views embed the Search form (the same component as `/`, prefilled with the name when there is one) instead of only "Look up another API"; the name-required view's link text no longer says "another".
+- **Health lamp** (`src/components/shell/health-lamp.tsx:17`): the `aria-live` region announces only a change after first render (not "Checking the service" then "The service is up" on every load); a down service is still announced.
+
+## Done when
+- The shared checks above, on `/`, `/lookup?name=stripe`, `/lookup?name=`, `/lookup?name=frobnicator-xyz`, `/vendors`, `/vendors/stripe.com`, `/specs/{Stripe's specId}`, `/docs`.
+- Tests: the statuses (429 with `Retry-After`, 400 name-required, 400 bad cursor, 200 Resolved and not-in-index); the Spec viewer's Sources and links; a computed-style check (Playwright, in `uicheck` or its own test that skips without Chromium) that every `a` in `main` has `text-decoration-line: underline` unless it carries the opt-out class.
+- PR lists each link that was plain text and is now underlined.
+
+## 8. swaggerbot: polish the Darkroom: the dark certainty strip, one Vendor name, the type ramp
+
+## Problem
+The critique's P2 #4 and the minor findings. In dark, Resolved (`#0e0e0e`) and the empty Unknown cell (`#140b03` bay) are ~1.1:1, so the certainty strip's two ends look the same (`src/components/darkroom/certainty-strip.tsx:14`), and the Resolved test patch beside the heading (`src/components/lookup/views.tsx:85`) is only an outline. Every Vendor's name equals its domain, so it shows two or three times (`vendor-apis.tsx:265-281`, `vendor-list.tsx:193-196`, "stripe.com (stripe.com)" at `views.tsx:868`). The detector found `text-[0.7rem]` (`certainty-strip.tsx:54`) off DESIGN.md's type ramp and a ~91-character measure on `/docs` (`docs-view.tsx:138`, `max-w-[40rem]`). The Develop press animates `border-width` (`index.tsx:115`, `docs-view.tsx:348`), which triggers layout. The Spec viewer's form switch uses `strip-5` as a generic active colour (`specs/$specId.tsx:241`), against the One Ladder rule.
+
+## Change
+- **Certainty strip, both themes:** the Unknown (empty) cell is drawn as empty **and** distinct from Resolved in both themes: a hatched or dashed fill in the rule colour, or the strip set on an enamel (`print`) backing in dark, your pick within DESIGN.md; every swatch pair that must differ reaches at least 3:1 against its neighbour or carries a visible pattern. The Resolved test patch is a solid, visible swatch in dark. Update DESIGN.md's certainty-strip entry to what you built.
+- **One Vendor name:** show a Vendor's domain only when it differs from its name (`vendor-apis.tsx`, `vendor-list.tsx`, `views.tsx` VendorName). Keep the Vendor id in the page's data where a link needs it.
+- **Type ramp:** replace `text-[0.7rem]` with the ramp's `label-sm` (0.75rem); keep the strip labels from wrapping at 390 (abbreviate with the full word in `aria-label`/`title` if needed).
+- **Measure:** `/docs` prose at DESIGN.md's ~34rem; forms stay at 40rem.
+- **Press:** the tray-edge press animates `transform` (and `box-shadow` if needed), not `border-width`, and looks the same.
+- **Form switch:** the Published/Normalized switch's active state uses the black secondary (`ink` / `#0e0e0e` as the buttons do), not a strip token; if that's the same value, name it through the button token so the One Ladder rule holds in code.
+- Advisory detector finding at `certainty-strip.tsx:54` gone.
+
+## Done when
+- The shared checks above, on `/`, `/lookup?name=stripe`, `/vendors`, `/vendors/stripe.com`, `/specs/{Stripe's specId}`, `/docs`, with the dark-theme screenshots of the strip in the PR and the contrast ratios measured for each adjacent swatch pair in both themes.
+- Tests: the Vendor name/domain rule (equal → once; different → both).
+
+## 9. swaggerbot: the Resolved page leads with the Spec: actions on the print, no repeats
+
+## Problem
+The critique's P1 #3. On a Resolved Lookup the print (`src/components/darkroom/print.tsx`, used in `views.tsx`) carries the Spec's facts but no actions; "The Current Spec" list repeats Vendor, Provenance, Verified and Spec; "Open in the Spec viewer" and the downloads sit ~1,400px down at 390. Six stations follow every Index answer, five saying "Not needed".
+
+## Change
+- The Resolved print's label carries the actions: **Open in the Spec viewer** (primary, `/specs/{specId}`), **Download** (Published Form, with format and size) and **Copy URL** (the Published Form's absolute download URL, with the darkroom `CodeLine` copy behaviour: keyboard-operable, announced via `aria-live`). The Normalized Form download stays in the list below.
+- "The Current Spec" keeps only what the print doesn't show (API id, API Version, Spec format/version, Validity Issues, the Normalized Form); no row repeats a print fact.
+- "How it was answered": when the Index answered, show one line ("Answered from the Index in N ms, no later station needed") with a disclosure (`<details>`) that opens the six stations; when a later station answered (a keyed Lookup), show them all as now.
+- At 390, the viewer link and the Download are within the first screen (≤ 844px) of a Resolved page.
+
+## Done when
+- The shared checks above, on `/lookup?name=stripe`, `/lookup?name=github` and one Stale answer if the Index copy has one.
+- Tests: the Resolved view renders the three actions with the right URLs; no fact appears both on the print and in the list; the stations collapse for an Index answer and don't for a later station.
+- A measured position (Playwright): the top of "Open in the Spec viewer" at 390 is ≤ 844px.
+
+## 10. swaggerbot: guide keyless visitors to what the Index holds
+
+## Problem
+The critique's P1 #2. With a few dozen APIs in the Index, most typed names land on "Not in the Index yet", which needs a key obtained by email. Nothing tells a visitor what does answer without a key: no suggestions, no near-match on a miss (`/lookup?name=strpe` never mentions Stripe), and Search doesn't say how many APIs answer.
+
+## Change
+- **Suggestions on Search:** the name field gets a native `<datalist>` of the Index's API names (from `api_names` joined to `apis`, only APIs with a Current Spec; server-rendered with the page, no client fetch). Works without script.
+- **A line under the field:** "{N} APIs answer without a key · browse them", N from the Index (`indexStats`), linking to `/vendors`.
+- **Near-match on a miss:** the "Not in the Index yet" view first shows "Did you mean …" with up to three Index API names close to what was typed (case-insensitive; a normalized-name edit distance ≤ 2, or the typed text as a prefix/substring of a name), each a link to `/lookup?name=<that name>`, then the Discovery commands as now. No near-match → the view is unchanged.
+- Server-side only; no new route, no new dependency; the Lookup's answer itself doesn't change (the near-match is a view concern, computed in `src/server/lookup-page.ts` from the Index).
+
+## Done when
+- The shared checks above, on `/`, `/lookup?name=strpe`, `/lookup?name=frobnicator-xyz`.
+- Tests: the datalist holds exactly the Index's names with a Current Spec; `strpe` → "Stripe API"; `frobnicator-xyz` → no suggestion; case and spacing don't matter; at most three.
