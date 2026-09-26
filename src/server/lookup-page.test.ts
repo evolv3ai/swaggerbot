@@ -176,6 +176,7 @@ describe("answerLookupPage", () => {
       view: "outcome",
       request: { name: "Stripe" },
       stale: false,
+      baseUrl: "http://localhost:3000",
       outcome: {
         outcome: "Resolved",
         api: { name: "Stripe API" },

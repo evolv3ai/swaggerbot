@@ -5,12 +5,15 @@ import { cn } from "~/lib/utils";
  * A line to copy (a command, a call) on dense black, with the attached amber
  * Copy; a polite live region says when it has copied. Line breaks and
  * indentation in `code` are kept, so an answer's JSON reads as printed.
+ * `label` is the button's word ("Copy", or "Copy URL" beside a URL).
  */
 export function CodeLine({
   code,
+  label = "Copy",
   className,
 }: {
   code: string;
+  label?: string;
   className?: string;
 }) {
   const [copied, setCopied] = useState(false);
@@ -38,7 +41,7 @@ export function CodeLine({
             code.includes("\n") && "flex items-start pt-3",
           )}
         >
-          {copied ? "Copied" : "Copy"}
+          {copied ? "Copied" : label}
         </button>
       </div>
       <p className="sr-only" aria-live="polite">

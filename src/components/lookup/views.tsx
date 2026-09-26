@@ -96,8 +96,10 @@ function OutcomeView({ page }: { page: OutcomePage }) {
  * grease pencil, beside its test patch), one lead sentence and, for an
  * Outcome, where it sits on the certainty strip. `aside` is the print, when
  * there is one. With `search`, the Search form follows, holding the name
- * asked (a view that asks for another name); the rest follows below, and
- * last a link to Search, `back` its text.
+ * asked (a view that asks for another name); the rest follows below, then
+ * how it was answered (`chain`: one line when the Index answered, its
+ * stations behind a disclosure; all the stations otherwise), and last a link
+ * to Search, `back` its text.
  */
 function Frame({
   request,
@@ -107,6 +109,7 @@ function Frame({
   aside,
   search = false,
   chain,
+  ms,
   diagnostics,
   back = "Look up another API",
   children,
@@ -118,6 +121,8 @@ function Frame({
   aside?: ReactNode;
   search?: boolean;
   chain?: ChainState;
+  /** How long the Index took, for the one line an Index answer's chain gets. */
+  ms?: number;
   diagnostics?: string[];
   back?: string;
   children?: ReactNode;
@@ -144,16 +149,26 @@ function Frame({
             {heading}
           </h1>
         </div>
-        <div className="grid items-start gap-10 xl:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)]">
-          <div className="grid gap-6">
-            <p className="max-w-[34rem] text-lg leading-relaxed text-ink-2 sm:text-xl">
-              {lead}
-            </p>
-            {kind ? (
-              <CertaintyStrip outcome={kind} className="max-w-[40rem]" />
-            ) : null}
-          </div>
-          {aside}
+        {/*
+          The lead, the print, then the strip: on a phone the print (and a
+          Resolved print's actions) follows the lead, within the first
+          screen. From xl the print is a column of its own, beside both.
+        */}
+        <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)] xl:grid-rows-[auto_1fr] xl:gap-x-10">
+          <p className="max-w-[34rem] text-lg leading-relaxed text-ink-2 sm:text-xl xl:col-start-1">
+            {lead}
+          </p>
+          {aside ? (
+            <div className="grid xl:col-start-2 xl:row-span-2 xl:row-start-1">
+              {aside}
+            </div>
+          ) : null}
+          {kind ? (
+            <CertaintyStrip
+              outcome={kind}
+              className="max-w-[40rem] xl:col-start-1"
+            />
+          ) : null}
         </div>
       </section>
       {search ? <SearchForm name={request?.name} /> : null}
@@ -161,17 +176,33 @@ function Frame({
       {diagnostics?.length ? <Diagnostics diagnostics={diagnostics} /> : null}
       {chain ? (
         <section aria-labelledby="chain" className="grid gap-4">
-          <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-            <h2 id="chain" className={H2}>
-              How it was answered
-            </h2>
-            <p className="text-sm text-ink-2">
-              {chain === "missed"
-                ? "The Index didn't know the name. Past it, Discovery needs an API key."
-                : "From the Index, with no key: no later station was needed."}
-            </p>
-          </div>
-          <Stations state={chain} />
+          <h2 id="chain" className={H2}>
+            How it was answered
+          </h2>
+          {chain === "answered" ? (
+            // The Index answered: one line, the stations behind a disclosure.
+            <div className="grid gap-3">
+              <p>
+                Answered from the Index
+                {ms === undefined ? "" : ` in ${ms.toFixed(1)} ms`}, no later
+                station needed.
+              </p>
+              <details className="text-sm">
+                <summary className="w-fit cursor-pointer font-caps font-semibold uppercase tracking-[0.12em] text-ink-2 hover:text-ink">
+                  The six stations
+                </summary>
+                <Stations state={chain} className="mt-3" />
+              </details>
+            </div>
+          ) : (
+            <>
+              <p className="text-sm text-ink-2">
+                The Index didn't know the name. Past it, Discovery needs an API
+                key.
+              </p>
+              <Stations state={chain} />
+            </>
+          )}
         </section>
       ) : null}
       {/* A view with the Search form doesn't also need a link back to it. */}
@@ -242,25 +273,42 @@ function ResolvedView({
             stale: page.stale,
             ms: page.ms,
           }}
-        />
+        >
+          <PrintActions spec={currentSpec} baseUrl={page.baseUrl} />
+        </Print>
       }
       chain="answered"
+      ms={page.ms}
       diagnostics={outcome.diagnostics}
     >
       <section aria-labelledby="current-spec" className="grid gap-4">
         <h2 id="current-spec" className={H2}>
           The Current Spec
         </h2>
-        <SpecFacts
-          api={outcome.api}
-          vendor={outcome.vendor}
-          spec={currentSpec}
-          provenance={<ProvenanceMark provenance={outcome.provenance} />}
-          verifiedAt={outcome.verifiedAt}
-          stale={page.stale}
-          validityIssueCount={outcome.validityIssueCount}
+        {/* Only what the print doesn't already say. */}
+        <Facts
+          rows={[
+            [
+              "API id",
+              <span
+                key="api"
+                className="font-mono text-sm [overflow-wrap:anywhere]"
+              >
+                {api.id}
+              </span>,
+            ],
+            ["API Version", currentSpec.apiVersion ?? "Not stated"],
+            [
+              "Spec",
+              `OpenAPI ${currentSpec.specVersion}, ${currentSpec.format.toUpperCase()}`,
+            ],
+            [
+              "Validity Issues",
+              validityIssuesOf(outcome.validityIssueCount, currentSpec),
+            ],
+            ["Normalized Form", <NormalizedForm key="nf" spec={currentSpec} />],
+          ]}
         />
-        <SpecActions spec={currentSpec} />
       </section>
       <AlternateSpecs specs={outcome.alternateSpecs} />
       <Sources sources={outcome.sources} />
@@ -306,6 +354,7 @@ function UnconfirmedView({
         />
       }
       chain="answered"
+      ms={page.ms}
       diagnostics={outcome.diagnostics}
     >
       <section aria-labelledby="reasons" className="grid gap-3">
@@ -357,6 +406,7 @@ function AmbiguousView({
         </>
       }
       chain="answered"
+      ms={page.ms}
       diagnostics={outcome.diagnostics}
     >
       <section aria-labelledby="candidates" className="grid gap-4">
@@ -430,6 +480,7 @@ function NoSpecView({
         </>
       }
       chain="answered"
+      ms={page.ms}
       diagnostics={outcome.diagnostics}
     >
       <section aria-labelledby="api" className="grid gap-4">
@@ -479,6 +530,7 @@ function UnknownView({
       lead={<>No API called “{outcome.name}” was found.</>}
       search
       chain="answered"
+      ms={page.ms}
       diagnostics={outcome.diagnostics}
     />
   );
@@ -645,12 +697,7 @@ function SpecFacts({
             </span>
           </span>,
         ],
-        [
-          "Validity Issues",
-          validityIssueCount === 0 && spec.normalized === "pending"
-            ? "Not checked yet"
-            : String(validityIssueCount),
-        ],
+        ["Validity Issues", validityIssuesOf(validityIssueCount, spec)],
       ]}
     />
   );
@@ -686,17 +733,72 @@ function SpecActions({ spec }: { spec: SpecAnswer }) {
           <span className="text-sm text-ink-2">
             One bundled document in the current OpenAPI version.
           </span>
-          {spec.normalized === "ready" ? (
-            <a href={spec.downloads.normalized} className={LINK}>
-              Download<span className="sr-only"> the Normalized Form</span>
-            </a>
-          ) : spec.normalized === "pending" ? (
-            <span>Being built. Reload in a minute.</span>
-          ) : (
-            <span>Couldn't be built; the Published Form is still usable.</span>
-          )}
+          <NormalizedForm spec={spec} />
         </li>
       </ul>
+    </div>
+  );
+}
+
+/** A Spec's Validity Issues count, or that its forms aren't checked yet. */
+function validityIssuesOf(count: number, spec: SpecAnswer): string {
+  return count === 0 && spec.normalized === "pending"
+    ? "Not checked yet"
+    : String(count);
+}
+
+/** The Normalized Form's download, or why there isn't one yet. */
+function NormalizedForm({ spec }: { spec: SpecAnswer }) {
+  return spec.normalized === "ready" ? (
+    <span className="flex flex-wrap items-baseline gap-x-3">
+      <a href={spec.downloads.normalized} className={LINK}>
+        Download<span className="sr-only"> the Normalized Form</span>
+      </a>
+      <span className="text-sm text-ink-2">
+        One bundled document in the current OpenAPI version.
+      </span>
+    </span>
+  ) : spec.normalized === "pending" ? (
+    <span>Being built. Reload in a minute.</span>
+  ) : (
+    <span>Couldn't be built; the Published Form is still usable.</span>
+  );
+}
+
+/**
+ * A Resolved print's actions, on its label: the Spec viewer (the view's one
+ * primary), the Published Form's download with its format and size, and its
+ * absolute URL to copy.
+ */
+function PrintActions({
+  spec,
+  baseUrl,
+}: {
+  spec: SpecAnswer;
+  baseUrl: string;
+}) {
+  const url = new URL(spec.downloads.published, `${baseUrl}/`).href;
+  return (
+    <div className="mt-2 grid gap-3">
+      <a
+        href={`/specs/${spec.id}`}
+        className="no-underline mb-[3px] flex min-h-[45px] items-center justify-center rounded-none border-2 border-[#0e0e0e] bg-lamp px-7 text-center font-caps text-lg font-bold uppercase tracking-[0.14em] text-[#0e0e0e] shadow-[0_3px_0_#0e0e0e] transition-[box-shadow,translate] duration-100 hover:brightness-105 active:translate-y-[3px] active:shadow-none dark:border-[#9a6400] dark:shadow-[0_3px_0_#9a6400] dark:active:shadow-none"
+      >
+        Open in the Spec viewer
+      </a>
+      <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <a
+          href={spec.downloads.published}
+          className={cn(LINK, "font-semibold")}
+        >
+          Download<span className="sr-only"> the Published Form</span>
+        </a>
+        <span className="text-sm text-print-ink-2">
+          Published Form, {spec.format.toUpperCase()},{" "}
+          <Size bytes={spec.byteLength} />
+        </span>
+      </p>
+      <CodeLine code={url} label="Copy URL" />
     </div>
   );
 }

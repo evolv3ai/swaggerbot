@@ -15,7 +15,7 @@ import { type LookupSearch, lookupRequestOf } from "./lookup-search";
  *   key the page doesn't have.
  *
  * `baseUrl` is where this service is reached, for the `curl` and MCP calls
- * a page shows.
+ * a page shows and the absolute download URL a Resolved print copies.
  */
 export type LookupPage =
   | { view: "name-required" }
@@ -32,6 +32,7 @@ export type LookupPage =
       ms: number;
       /** Verified longer ago than the freshness window: still the answer, queued for Verification. */
       stale: boolean;
+      baseUrl: string;
     }
   | { view: "not-in-index"; request: LookupRequest; baseUrl: string };
 
@@ -73,15 +74,12 @@ export async function answerLookupPage(
   const started = performance.now();
   const answer = await answerLookup(lookup, undefined, getApp(), gate);
   const ms = Math.round((performance.now() - started) * 10) / 10;
+  const baseUrl = (publicBaseUrl ?? new URL(request.url).origin).replace(
+    /\/+$/,
+    "",
+  );
   if (answer.status !== 200)
-    return {
-      view: "not-in-index",
-      request: lookup,
-      baseUrl: (publicBaseUrl ?? new URL(request.url).origin).replace(
-        /\/+$/,
-        "",
-      ),
-    };
+    return { view: "not-in-index", request: lookup, baseUrl };
 
   const outcome = answer.body;
   const now = gate.now?.() ?? new Date();
@@ -93,5 +91,6 @@ export async function answerLookupPage(
     outcome,
     ms,
     stale: verifiedAt !== undefined && !(age <= freshnessMs(freshnessDays)),
+    baseUrl,
   };
 }

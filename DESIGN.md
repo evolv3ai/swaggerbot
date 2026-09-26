@@ -271,7 +271,7 @@ Provenance is drawn as line weight, strongest to weakest: **Official** 2px solid
 ## Components
 
 ### Buttons
-- **Primary: the tray edge.** Safelight Amber fill, dense-black text (#0e0e0e in both themes), label caps 700 at 1.125rem with 0.14em tracking, 45px min height plus the 3px tray edge (48px in all, level with the name input), 28px side padding, square corners, 2px dense-black border (the tray edge; dark: tray-edge-dark). `:active` presses in as the Tray edge entry under Shadow Vocabulary says (100ms). Hover brightens 5%. One per view (“Develop”).
+- **Primary: the tray edge.** Safelight Amber fill, dense-black text (#0e0e0e in both themes), label caps 700 at 1.125rem with 0.14em tracking, 45px min height plus the 3px tray edge (48px in all, level with the name input), 28px side padding, square corners, 2px dense-black border (the tray edge; dark: tray-edge-dark). `:active` presses in as the Tray edge entry under Shadow Vocabulary says (100ms). Hover brightens 5%. One per view: “Develop” where there is Search; on a Resolved Lookup, which has no Search form, “Open in the Spec viewer” on the print’s label, full width.
 - **Secondary: black.** Dense-black fill (`bg-dense-black`, #0e0e0e in both themes), Safelight Amber label caps (0.75rem, 0.12em), 3px corner, 1px ink border, 4px 12px padding; hover brightens 125%. Used for Pause/Play and similar utility actions.
 - **Attached action:** Copy on the code line is an amber cell joined to it by a 1px ink rule.
 - **Focus:** global 2px outline in `--ring` (dense black in light, amber in dark), 3px offset. Never remove it.
