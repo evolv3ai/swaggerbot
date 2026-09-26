@@ -112,7 +112,7 @@ function SearchForm({
           />
           <button
             type="submit"
-            className="min-h-12 rounded-none border-2 border-b-[5px] border-[#0e0e0e] bg-lamp dark:border-[#9a6400] px-7 font-caps text-lg font-bold uppercase tracking-[0.14em] text-[#0e0e0e] transition-[border-width,transform] duration-100 hover:brightness-105 active:translate-y-[3px] active:border-b-2"
+            className="mb-[3px] min-h-[45px] rounded-none border-2 border-[#0e0e0e] bg-lamp px-7 font-caps text-lg font-bold uppercase tracking-[0.14em] text-[#0e0e0e] shadow-[0_3px_0_#0e0e0e] transition-[box-shadow,translate] duration-100 hover:brightness-105 active:translate-y-[3px] active:shadow-none dark:border-[#9a6400] dark:shadow-[0_3px_0_#9a6400] dark:active:shadow-none"
           >
             Develop
           </button>
@@ -232,7 +232,7 @@ function Replay({
           <button
             type="button"
             onClick={() => setPaused((p) => !p)}
-            className="rounded-[3px] border border-ink bg-[#0e0e0e] px-3 py-1 font-caps text-xs font-semibold uppercase tracking-[0.12em] text-lamp hover:brightness-125"
+            className="rounded-[3px] border border-ink bg-dense-black px-3 py-1 font-caps text-xs font-semibold uppercase tracking-[0.12em] text-lamp hover:brightness-125"
           >
             {paused ? "Play" : "Pause"}
           </button>
