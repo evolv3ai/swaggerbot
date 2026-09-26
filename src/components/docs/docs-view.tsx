@@ -1,7 +1,10 @@
-import { CodeLine } from "~/components/darkroom/code-line";
 import { dayOf } from "~/components/darkroom/stamp";
 import { WithOnThisPage } from "~/components/shell/on-this-page";
 import { buttonClass } from "~/components/ui/button";
+import { Card } from "~/components/ui/card";
+import { CodeBlock } from "~/components/ui/code-block";
+import { MethodBadge, splitRoute } from "~/components/ui/method-badge";
+import { Tabs } from "~/components/ui/tabs";
 import { cn } from "~/lib/utils";
 import {
   BASE_URL,
@@ -17,23 +20,28 @@ import {
   ROUTES,
 } from "./reference";
 
-const LINK =
-  "underline decoration-1 underline-offset-[0.2em] hover:decoration-2";
-const LABEL = "font-caps text-sm font-semibold uppercase tracking-[0.14em]";
-const H2 = "font-caps text-2xl font-semibold uppercase tracking-wide";
-const H3 = "font-mono text-base font-semibold [overflow-wrap:anywhere]";
-const PROSE = "max-w-[34rem] leading-relaxed";
+/** A section heading: Montserrat, sentence case, with a rule above. */
+const H2 =
+  "scroll-mt-20 font-display text-[22px] leading-tight font-bold tracking-[-0.01em] text-sb-text sm:text-2xl";
+/** A heading inside a section. */
+const H3 =
+  "scroll-mt-20 font-display text-base font-bold tracking-[-0.005em] text-sb-text";
+/** Body prose at a comfortable measure (WTR-143: 34rem). */
+const PROSE = "max-w-[34rem] leading-relaxed text-sb-text";
+const SECTION = "grid gap-6 border-t border-sb-border pt-10";
+const NOTE = "max-w-[34rem] text-sm leading-relaxed text-sb-text-muted";
+
+const TABLE = "w-full border-collapse text-left text-sm";
 const TH =
-  "border-b border-rule py-2 pr-4 text-left align-bottom font-caps text-xs font-semibold uppercase tracking-[0.14em] text-ink-2";
+  "border-b border-sb-border bg-sb-surface-sunken px-4 py-2.5 text-left align-bottom text-xs font-semibold text-sb-text-muted";
 const TD =
-  "border-b border-rule py-2.5 pr-4 align-top max-sm:block max-sm:border-0 max-sm:p-0";
+  "border-t border-sb-border px-4 py-3 align-top max-sm:block max-sm:border-0 max-sm:p-0";
 /** Below `sm` a row stacks: its cells one under another, the header hidden. */
 const TR =
-  "max-sm:grid max-sm:gap-1 max-sm:border-b max-sm:border-rule max-sm:py-3";
-const CELL_LABEL =
-  "font-caps text-xs font-semibold uppercase tracking-[0.14em] text-ink-2 sm:hidden";
+  "max-sm:grid max-sm:gap-1.5 max-sm:border-t max-sm:border-sb-border max-sm:px-4 max-sm:py-3.5 max-sm:first:border-t-0";
+const CELL_LABEL = "text-xs font-semibold text-sb-text-muted sm:hidden";
 
-/** The page's sections, in order, for the contents list. */
+/** The page's sections, in order, for the contents list (below xl). */
 const SECTIONS = [
   { id: "http-api", label: "HTTP API" },
   { id: "mcp", label: "MCP" },
@@ -58,6 +66,21 @@ const KEY_RULES = [
   "Every request but `GET /api/health`, with a key or without, counts against a per-IP limit of 60 a minute, shared by `/api/`, `/mcp` and the site's own Lookup page. Past it the answer is a 429, `Rate limit exceeded.`, with `Retry-After` in seconds.",
 ];
 
+/** Inline code in running text: mono on a sunken chip. */
+function Code({ children }: { children: string }) {
+  return (
+    <code
+      className={cn(
+        "rounded-[4px] border border-sb-border bg-sb-surface-sunken px-[0.3em] py-px font-mono text-[0.86em] text-sb-text [box-decoration-break:clone]",
+        // A short one is never split over two lines.
+        children.length <= 32 && "whitespace-nowrap",
+      )}
+    >
+      {children}
+    </code>
+  );
+}
+
 /**
  * Text with `code` spans: the words between backticks are set in mono, as
  * every identifier on the page is.
@@ -68,14 +91,43 @@ function Inline({ text }: { text: string }) {
       {text.split("`").map((part, i) =>
         i % 2 ? (
           // biome-ignore lint/suspicious/noArrayIndexKey: the split is fixed text
-          <code key={i} className="font-mono text-[0.92em]">
-            {part}
-          </code>
+          <Code key={i}>{part}</Code>
         ) : (
           part
         ),
       )}
     </>
+  );
+}
+
+/**
+ * A path that may wrap only between its parts: after a `/`, before a `?`,
+ * `&` or `[`, never inside a word (WTR-143).
+ */
+function Path({ path }: { path: string }) {
+  return (
+    <>
+      {path.split(/(?<=\/)|(?=[?&[])/).map((part, i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: the split is fixed text
+        <span key={i}>
+          {i ? <wbr /> : null}
+          {part}
+        </span>
+      ))}
+    </>
+  );
+}
+
+/** A route as the tables show it: its method tag, then the path in mono. */
+function Route({ route }: { route: string }) {
+  const { method, rest } = splitRoute(route);
+  return (
+    <span className="inline-flex max-w-full items-baseline gap-2">
+      {method ? <MethodBadge method={method} /> : null}
+      <span className="min-w-0 font-mono text-[13px] text-sb-text [overflow-wrap:break-word]">
+        <Path path={rest} />
+      </span>
+    </span>
   );
 }
 
@@ -86,12 +138,17 @@ function Inline({ text }: { text: string }) {
 export function DocsView() {
   return (
     <WithOnThisPage>
-      <div className="grid gap-10 px-4 pt-8 pb-12 sm:px-8 lg:gap-14 lg:pt-12">
-        <header className="grid gap-6">
-          <h1 className="font-pencil text-[clamp(3.25rem,8.5vw,6rem)] uppercase leading-[0.95]">
-            Docs
-          </h1>
-          <p className="max-w-[34rem] text-lg leading-relaxed text-ink-2 sm:text-xl">
+      <div className="grid max-w-[860px] gap-10 px-4 pt-7 pb-16 sm:px-8 lg:px-14 lg:pt-11">
+        <header className="grid gap-4">
+          <div>
+            <p className="font-display text-xs font-bold uppercase tracking-[0.3em] text-sb-accent-text">
+              Docs
+            </p>
+            <h1 className="mt-2 font-display text-[28px] leading-[1.1] font-extrabold tracking-[-0.01em] text-sb-text sm:text-[40px]">
+              HTTP API and MCP
+            </h1>
+          </div>
+          <p className="max-w-[34rem] text-[17px] leading-relaxed text-sb-text-muted">
             Everything this site shows, programs get over HTTP and agents over
             MCP, in the same words. Answers from the Index are open to anyone;
             Discovery needs a key.
@@ -101,13 +158,16 @@ export function DocsView() {
             className="grid gap-2 xl:hidden"
             data-toc-skip
           >
-            <h2 id="contents" className={cn(LABEL, "text-ink-2")}>
+            <h2
+              id="contents"
+              className="text-[13px] font-semibold text-sb-text"
+            >
               On this page
             </h2>
-            <ul className="flex flex-wrap gap-x-6 gap-y-2">
+            <ul className="flex flex-wrap gap-x-5 gap-y-1.5 text-sm">
               {SECTIONS.map((s) => (
                 <li key={s.id}>
-                  <a href={`#${s.id}`} className={LINK}>
+                  <a href={`#${s.id}`} className="text-sb-accent-text">
                     {s.label}
                   </a>
                 </li>
@@ -126,13 +186,9 @@ export function DocsView() {
 
 function HttpApi() {
   return (
-    <section
-      aria-labelledby="http-api-title"
-      id="http-api"
-      className="grid gap-8"
-    >
+    <section aria-labelledby="http-api" className={SECTION}>
       <div className="grid gap-3">
-        <h2 id="http-api-title" className={H2}>
+        <h2 id="http-api" className={H2}>
           HTTP API
         </h2>
         <p className={PROSE}>
@@ -142,12 +198,12 @@ function HttpApi() {
         </p>
       </div>
       <RouteTable />
-      <div className="grid gap-10">
-        <p className={cn(PROSE, "text-sm text-ink-2")}>
-          Each example is a real call to {BASE_URL} and the answer it gave on{" "}
-          {dayOf(RECORDED_AT)}, for Val Town's API. Ids and dates change as the
-          Index verifies Specs again; the shape of each answer doesn't.
-        </p>
+      <p className={NOTE}>
+        Each example is a real call to {BASE_URL} and the answer it gave on{" "}
+        {dayOf(RECORDED_AT)}, for Val Town's API. Ids and dates change as the
+        Index verifies Specs again; the shape of each answer doesn't.
+      </p>
+      <div className="grid gap-12">
         {EXAMPLES.map((example) => (
           <RouteExample key={example.id} example={example} />
         ))}
@@ -158,70 +214,96 @@ function HttpApi() {
 
 function RouteTable() {
   return (
-    <div className="grid gap-2">
-      <h3 id="routes" className={cn(LABEL, "text-ink-2")}>
+    <div className="grid gap-3">
+      <h3 id="routes" className={H3}>
         The routes
       </h3>
-      <table aria-labelledby="routes" className="w-full max-w-[64rem] text-sm">
-        <thead className="max-sm:sr-only">
-          <tr>
-            <th scope="col" className={TH}>
-              Route
-            </th>
-            <th scope="col" className={TH}>
-              Gives
-            </th>
-            <th scope="col" className={cn(TH, "pr-0")}>
-              Key
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {ROUTES.map((row) => (
-            <tr key={row.route} className={TR}>
-              <th
-                scope="row"
-                className={cn(
-                  TD,
-                  "text-left sm:w-[38%] font-mono font-normal [overflow-wrap:anywhere]",
-                )}
-              >
-                {row.route}
+      <Card className="overflow-hidden rounded-[12px]">
+        <table aria-labelledby="routes" className={TABLE}>
+          <thead className="max-sm:sr-only">
+            <tr>
+              <th scope="col" className={TH}>
+                Route
               </th>
-              <td className={TD}>
-                <Inline text={row.gives} />
-              </td>
-              <td className={cn(TD, "pr-0")}>
-                <span className={CELL_LABEL}>Key: </span>
-                {row.key}
-              </td>
+              <th scope="col" className={TH}>
+                Gives
+              </th>
+              <th scope="col" className={TH}>
+                Key
+              </th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {ROUTES.map((row) => (
+              <tr key={row.route} className={TR}>
+                <th scope="row" className={cn(TD, "font-normal sm:w-[40%]")}>
+                  <Route route={row.route} />
+                </th>
+                <td className={cn(TD, "text-sb-text")}>
+                  <Inline text={row.gives} />
+                </td>
+                <td className={cn(TD, "text-sb-text-muted sm:w-[7.5rem]")}>
+                  <span className={CELL_LABEL}>Key: </span>
+                  {row.key}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
     </div>
   );
 }
 
-function RouteExample({ example }: { example: Example }) {
-  const title = `${example.id}-title`;
+/** A route's heading: its method tag, the path in mono, and what case it is. */
+function RouteHeading({ id, route }: { id: string; route: string }) {
+  const { method, rest } = splitRoute(route);
+  const [path, ...cases] = rest.split(", ");
   return (
-    <section
-      aria-labelledby={title}
-      id={example.id}
-      className="grid max-w-[56rem] scroll-mt-20 gap-3"
+    <h3
+      id={id}
+      className="flex scroll-mt-20 flex-wrap items-center gap-x-2.5 gap-y-1 text-sb-text"
     >
-      <h3 id={title} className={H3}>
-        {example.route}
-      </h3>
+      {method ? <MethodBadge method={method} size="md" /> : null}
+      <span className="min-w-0 font-mono text-[15px] font-semibold [overflow-wrap:break-word]">
+        <Path path={path ?? ""} />
+      </span>
+      {cases.length ? (
+        <span className="font-display text-[15px] font-bold text-sb-text-muted">
+          {cases.join(", ")}
+        </span>
+      ) : null}
+    </h3>
+  );
+}
+
+function RouteExample({ example }: { example: Example }) {
+  return (
+    <section aria-labelledby={example.id} className="grid gap-3.5">
+      <RouteHeading id={example.id} route={example.route} />
       <p className={PROSE}>
         <Inline text={example.about} />
       </p>
-      <CodeLine code={example.curl} />
-      <p className={cn(LABEL, "text-ink-2")}>Answer</p>
-      <CodeLine code={example.answer} />
+      <Card className="overflow-hidden rounded-[12px]">
+        <Tabs
+          label={`${example.route}: the call and its answer`}
+          listClassName="border-b border-sb-border"
+          tabs={[
+            {
+              id: "curl",
+              label: "curl",
+              content: <CodeBlock code={example.curl} />,
+            },
+            {
+              id: "answer",
+              label: "Answer",
+              content: <CodeBlock code={example.answer} />,
+            },
+          ]}
+        />
+      </Card>
       {example.note ? (
-        <p className="text-sm text-ink-2">
+        <p className={NOTE}>
           <Inline text={example.note} />
         </p>
       ) : null}
@@ -231,83 +313,104 @@ function RouteExample({ example }: { example: Example }) {
 
 function Mcp() {
   return (
-    <section aria-labelledby="mcp-title" id="mcp" className="grid gap-8">
+    <section aria-labelledby="mcp" className={SECTION}>
       <div className="grid gap-3">
-        <h2 id="mcp-title" className={H2}>
+        <h2 id="mcp" className={H2}>
           MCP
         </h2>
         <p className={PROSE}>
           For agents: an MCP server over Streamable HTTP, stateless, with five
           tools that answer as the HTTP API does. Each result carries its JSON
-          as <code className="font-mono text-[0.92em]">structuredContent</code>{" "}
-          and a text that starts with a sentence for the agent and the next call
-          to make.
+          as <Code>structuredContent</Code> and a text that starts with a
+          sentence for the agent and the next call to make.
         </p>
-      </div>
-      <div className="grid max-w-[56rem] gap-3">
-        <h3 className={cn(LABEL, "text-ink-2")}>The endpoint</h3>
-        <CodeLine code={MCP_URL} />
-      </div>
-      <div id="mcp-add" className="grid max-w-[56rem] scroll-mt-20 gap-3">
-        <h3 className={cn(LABEL, "text-ink-2")}>Add it to Claude Code</h3>
-        <CodeLine code={MCP_ADD} />
-        <p className="text-sm text-ink-2">
-          With a key, for Discovery and <code className="font-mono">fresh</code>
-          :
-        </p>
-        <CodeLine code={MCP_ADD_WITH_KEY} />
-      </div>
-      <div className="grid gap-2">
-        <h3 id="tools" className={cn(LABEL, "text-ink-2")}>
-          The five tools
-        </h3>
-        <table aria-labelledby="tools" className="w-full max-w-[64rem] text-sm">
-          <thead className="max-sm:sr-only">
-            <tr>
-              <th scope="col" className={TH}>
-                Tool
-              </th>
-              <th scope="col" className={TH}>
-                Gives
-              </th>
-              <th scope="col" className={cn(TH, "pr-0")}>
-                Over
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {MCP_TOOL_ROWS.map((tool) => (
-              <tr key={tool.name} className={TR}>
-                <th
-                  scope="row"
-                  className={cn(
-                    TD,
-                    "text-left sm:w-[34%] font-mono font-normal [overflow-wrap:anywhere]",
-                  )}
-                >
-                  <span className="font-semibold">{tool.name}</span>
-                  <span className="block text-xs text-ink-2">{tool.args}</span>
-                </th>
-                <td className={TD}>
-                  <Inline text={tool.gives} />
-                </td>
-                <td
-                  className={cn(
-                    TD,
-                    "pr-0 font-mono [overflow-wrap:break-word]",
-                  )}
-                >
-                  <span className={CELL_LABEL}>Over: </span>
-                  {tool.over}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
       </div>
       <div className="grid gap-3">
-        <h3 className={cn(LABEL, "text-ink-2")}>Result sizes</h3>
-        <ul className={cn(PROSE, "grid list-disc gap-2 pl-5")}>
+        <h3 className={H3}>The endpoint</h3>
+        <CodeBlock
+          code={MCP_URL}
+          className="overflow-hidden rounded-[12px] border border-sb-border"
+        />
+      </div>
+      <div className="grid gap-3">
+        <h3 id="mcp-add" className={H3}>
+          Add it to Claude Code
+        </h3>
+        <CodeBlock
+          code={MCP_ADD}
+          className="overflow-hidden rounded-[12px] border border-sb-border"
+        >
+          <span className="text-[#8fbaff]">claude</span>
+          {MCP_ADD.slice("claude".length)}
+        </CodeBlock>
+        <p className={NOTE}>
+          With a key, for Discovery and <Code>fresh</Code>:
+        </p>
+        <CodeBlock
+          code={MCP_ADD_WITH_KEY}
+          className="overflow-hidden rounded-[12px] border border-sb-border"
+        >
+          <span className="text-[#8fbaff]">claude</span>
+          {MCP_ADD_WITH_KEY.slice("claude".length)}
+        </CodeBlock>
+      </div>
+      <div className="grid gap-3">
+        <h3 id="tools" className={H3}>
+          The five tools
+        </h3>
+        <Card className="overflow-hidden rounded-[12px]">
+          <table aria-labelledby="tools" className={TABLE}>
+            <thead className="max-sm:sr-only">
+              <tr>
+                <th scope="col" className={TH}>
+                  Tool
+                </th>
+                <th scope="col" className={TH}>
+                  Gives
+                </th>
+                <th scope="col" className={TH}>
+                  Over
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {MCP_TOOL_ROWS.map((tool) => (
+                <tr key={tool.name} className={TR}>
+                  <th
+                    scope="row"
+                    className={cn(
+                      TD,
+                      "font-normal sm:w-[32%] [overflow-wrap:break-word]",
+                    )}
+                  >
+                    <span className="font-mono text-[13px] font-semibold text-sb-text">
+                      {tool.name}
+                    </span>
+                    <span className="mt-0.5 block font-mono text-xs text-sb-text-muted">
+                      {tool.args}
+                    </span>
+                  </th>
+                  <td className={cn(TD, "text-sb-text")}>
+                    <Inline text={tool.gives} />
+                  </td>
+                  <td className={cn(TD, "sm:w-[28%]")}>
+                    <span className={CELL_LABEL}>Over: </span>
+                    <Route route={tool.over} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      </div>
+      <div className="grid gap-3">
+        <h3 className={H3}>Result sizes</h3>
+        <ul
+          className={cn(
+            PROSE,
+            "grid list-disc gap-2 pl-5 marker:text-sb-text-faint",
+          )}
+        >
           {RESULT_SIZES.map((item) => (
             <li key={item}>
               <Inline text={item} />
@@ -321,49 +424,61 @@ function Mcp() {
 
 function Access() {
   return (
-    <section aria-labelledby="access-title" id="access" className="grid gap-3">
-      <h2 id="access-title" className={H2}>
-        Keys and limits
-      </h2>
-      <p className={PROSE}>
-        The same rules hold over HTTP and MCP. A key is sent as{" "}
-        <code className="font-mono [overflow-wrap:anywhere]">
-          Authorization: Bearer &lt;key&gt;
-        </code>
-        .
-      </p>
-      <ul className={cn(PROSE, "grid list-disc gap-2 pl-5")}>
-        {KEY_RULES.map((item) => (
-          <li key={item}>
-            <Inline text={item} />
-          </li>
-        ))}
-      </ul>
+    <section aria-labelledby="access" className={SECTION}>
+      <div className="grid gap-3">
+        <h2 id="access" className={H2}>
+          Keys and limits
+        </h2>
+        <p className={PROSE}>
+          The same rules hold over HTTP and MCP. A key is sent as{" "}
+          <Code>Authorization: Bearer &lt;key&gt;</Code>.
+        </p>
+      </div>
+      <Card className="max-w-[38rem] rounded-[12px]">
+        <ul className="divide-y divide-sb-border">
+          {KEY_RULES.map((item) => (
+            <li
+              key={item}
+              className="flex gap-3 px-4 py-3.5 leading-relaxed text-sb-text sm:px-5"
+            >
+              <span
+                aria-hidden="true"
+                className="mt-[0.6em] size-1.5 shrink-0 rounded-full bg-sb-accent"
+              />
+              <span>
+                <Inline text={item} />
+              </span>
+            </li>
+          ))}
+        </ul>
+      </Card>
     </section>
   );
 }
 
 function Keys() {
   return (
-    <section aria-labelledby="keys-title" id="keys" className="grid gap-4">
-      <h2 id="keys-title" className={H2}>
-        Request a key
-      </h2>
-      <p className={PROSE}>
-        Keys are issued by hand, each with its daily quota; there are no
-        accounts. Ask by email, and the key's secret is sent to you once, when
-        it is made.
-      </p>
-      <p>
-        <a href={KEY_REQUEST_HREF} className={buttonClass({ size: "lg" })}>
+    <section aria-labelledby="keys" className={SECTION}>
+      <Card variant="outline" className="grid max-w-[38rem] gap-4 p-5 sm:p-6">
+        <h2 id="keys" className={H2}>
           Request a key
-        </a>
-      </p>
-      <p className="text-sm text-ink-2">
-        Or write to{" "}
-        <span className="font-mono text-ink">{KEY_REQUEST_EMAIL}</span> with the
-        subject “swagger.bot API key request”.
-      </p>
+        </h2>
+        <p className="leading-relaxed text-sb-text">
+          Keys are issued by hand, each with its daily quota; there are no
+          accounts. Ask by email, and the key's secret is sent to you once, when
+          it is made.
+        </p>
+        <p>
+          <a href={KEY_REQUEST_HREF} className={buttonClass({ size: "lg" })}>
+            Request a key
+          </a>
+        </p>
+        <p className="text-sm text-sb-text-muted">
+          Or write to{" "}
+          <span className="font-mono text-sb-text">{KEY_REQUEST_EMAIL}</span>{" "}
+          with the subject “swagger.bot API key request”.
+        </p>
+      </Card>
     </section>
   );
 }
