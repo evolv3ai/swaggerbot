@@ -11,7 +11,13 @@ import type { LookupApp } from "~/lookup/http";
 import { createLookup, type IndexedLookup } from "~/lookup/lookup";
 import { createRateLimiter } from "~/lookup/rate-limit";
 import { answerLookupPage, type LookupPageDeps } from "./lookup-page";
-import { LookupSearch, lookupRequestOf, lookupSearchOf } from "./lookup-search";
+import { lookupPageResponse } from "./lookup-page-response";
+import {
+  LookupSearch,
+  lookupHref,
+  lookupRequestOf,
+  lookupSearchOf,
+} from "./lookup-search";
 
 const dir = mkdtempSync(join(tmpdir(), "swaggerbot-lookup-page-"));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -307,6 +313,50 @@ describe("answerLookupPage", () => {
       name: "stripe",
       apiVersion: "2024-06-20",
     });
+  });
+});
+
+describe("lookupPageResponse", () => {
+  it("answers a rate-limited view 429 with Retry-After in seconds, as the API does", async () => {
+    const { app } = fakeApp(null);
+    const d = deps(app, {
+      gate: {
+        rateLimiter: createRateLimiter({ perMinute: 1 }),
+        clientIpHeader: "x-forwarded-for",
+        dailyQuota: 100,
+      },
+    });
+    await answerLookupPage({ name: "stripe" }, d);
+    const page = await answerLookupPage({ name: "stripe" }, d);
+
+    expect(lookupPageResponse(page)).toEqual({
+      status: 429,
+      headers: { "retry-after": "60" },
+    });
+  });
+
+  it("answers a Lookup with no name 400", async () => {
+    const { app } = fakeApp(null);
+    const page = await answerLookupPage({ name: " " }, deps(app));
+    expect(lookupPageResponse(page)).toEqual({ status: 400, headers: {} });
+  });
+
+  it("answers Resolved, and a name not in the Index yet, 200", async () => {
+    const { app } = realApp();
+    const resolved = await answerLookupPage({ name: "stripe" }, deps(app));
+    const missing = await answerLookupPage({ name: "Val Town" }, deps(app));
+
+    expect(resolved).toMatchObject({ outcome: { outcome: "Resolved" } });
+    expect(lookupPageResponse(resolved)).toEqual({ status: 200, headers: {} });
+    expect(missing.view).toBe("not-in-index");
+    expect(lookupPageResponse(missing)).toEqual({ status: 200, headers: {} });
+  });
+});
+
+describe("lookupHref", () => {
+  it("links to a default Lookup of the name, encoded as the router writes it", () => {
+    expect(lookupHref("Stripe API")).toBe("/lookup?name=Stripe+API");
+    expect(lookupHref("a&b=c")).toBe("/lookup?name=a%26b%3Dc");
   });
 });
 

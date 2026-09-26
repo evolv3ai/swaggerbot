@@ -1,4 +1,5 @@
 import { createCsrfMiddleware, createStart } from "@tanstack/react-start";
+import { pageStatus } from "~/server/page-status";
 import { securityHeaders } from "~/server/security-headers";
 
 // With a start instance, TanStack Start no longer adds its default CSRF
@@ -8,5 +9,5 @@ const csrf = createCsrfMiddleware({
 });
 
 export const startInstance = createStart(() => ({
-  requestMiddleware: [csrf, securityHeaders],
+  requestMiddleware: [csrf, securityHeaders, pageStatus],
 }));

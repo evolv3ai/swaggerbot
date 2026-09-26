@@ -12,6 +12,7 @@ import {
   judgeTabWalk,
   parseUicheckArgs,
   routeSlug,
+  routeTarget,
   runFailures,
   type TabStep,
   tabWalkEnded,
@@ -67,6 +68,20 @@ describe("parseUicheckArgs", () => {
       expect(parsed.error).toContain(error);
       expect(parsed.exitCode).toBe(2);
     }
+  });
+});
+
+describe("routeTarget", () => {
+  it.each([
+    ["/", { path: "/" }],
+    ["/docs#keys", { path: "/docs#keys" }],
+    ["/lookup?name=#400", { path: "/lookup?name=", expectedStatus: 400 }],
+    [
+      "/vendors?cursor=x#400",
+      { path: "/vendors?cursor=x", expectedStatus: 400 },
+    ],
+  ])("%s", (route, target) => {
+    expect(routeTarget(route)).toEqual(target);
   });
 });
 
@@ -184,6 +199,7 @@ describe("runFailures and uicheckLines", () => {
       unreached: [],
       noFocusIndicator: [],
     },
+    plainLinks: [],
     cspViolations: [],
   };
 
@@ -191,6 +207,21 @@ describe("runFailures and uicheckLines", () => {
     expect(runFailures(clean)).toEqual([]);
     expect(runFailures({ ...clean, status: 404 })).toEqual([
       "the page answered HTTP 404",
+    ]);
+  });
+
+  it("holds a route to the status it names", () => {
+    expect(runFailures({ ...clean, status: 400, expectedStatus: 400 })).toEqual(
+      [],
+    );
+    expect(runFailures({ ...clean, status: 200, expectedStatus: 400 })).toEqual(
+      ["the page answered HTTP 200, not 400"],
+    );
+  });
+
+  it("fails a link that isn't underlined", () => {
+    expect(runFailures({ ...clean, plainLinks: ['a "Docs"'] })).toEqual([
+      'link not underlined: a "Docs"',
     ]);
   });
 
@@ -212,8 +243,8 @@ describe("runFailures and uicheckLines", () => {
     expect(lines).toEqual([
       "UI check: http://localhost:3000",
       "",
-      "PASS / 390 light  axe 0 · keyboard 1/1 · CSP 0 · out/root-390-light.png",
-      "FAIL / 390 dark   axe 0 · keyboard 1/1 · CSP 0 · out/root-390-dark.png",
+      "PASS / 390 light  axe 0 · keyboard 1/1 · links 0 · CSP 0 · out/root-390-light.png",
+      "FAIL / 390 dark   axe 0 · keyboard 1/1 · links 0 · CSP 0 · out/root-390-dark.png",
       "  the page answered HTTP 500",
       "",
       "FAIL (1 of 2 runs)",
@@ -241,6 +272,7 @@ describe.skipIf(!probe && !process.env.CI)("checkRun on fixture pages", () => {
       "focus-trap",
       "no-focus-ring",
       "csp",
+      "plain-link",
     ]) {
       const body = readFileSync(join(FIXTURES, `${name}.html`), "utf8");
       const headers: Record<string, string> = {
@@ -313,6 +345,25 @@ describe.skipIf(!probe && !process.env.CI)("checkRun on fixture pages", () => {
   it("fails a button with no focus ring", async () => {
     const run = await check("/no-focus-ring");
     expect(run.keyboard.noFocusIndicator).toEqual(['button "Go"']);
+  }, 30_000);
+
+  it("fails a link in <main> that isn't underlined and doesn't opt out", async () => {
+    const run = await check("/plain-link");
+    expect(run.plainLinks).toEqual(['a "Plain text"']);
+    expect(run.failures).toEqual(['link not underlined: a "Plain text"']);
+  }, 30_000);
+
+  it("holds a route to the status after #", async () => {
+    // The fixture server's 404 is plain text, so axe finds faults in it;
+    // only the status is at issue here.
+    const missing = await check("/nowhere#404");
+    expect(missing.status).toBe(404);
+    expect(missing.failures.filter((f) => f.startsWith("the page"))).toEqual(
+      [],
+    );
+    expect((await check("/ok#404")).failures).toEqual([
+      "the page answered HTTP 200, not 404",
+    ]);
   }, 30_000);
 
   it("fails a CSP violation in the console", async () => {

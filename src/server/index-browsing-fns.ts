@@ -9,7 +9,8 @@ function text(value: unknown): string | undefined {
 
 /**
  * The `/vendors` page: one page of the Vendor list (`vendorsPage`), read
- * on the server. Server-only modules are imported inside the handler,
+ * on the server, served with its status (a bad cursor is a 400).
+ * Server-only modules are imported inside the handler,
  * keeping them out of the client bundle.
  */
 export const getVendorsPage = createServerFn({ method: "GET" })
@@ -18,11 +19,15 @@ export const getVendorsPage = createServerFn({ method: "GET" })
     cursor: text(input.cursor),
   }))
   .handler(async ({ data }): Promise<VendorsPage> => {
-    const [{ getApp }, { vendorsPage }] = await Promise.all([
-      import("./app-instance"),
-      import("./index-browsing"),
-    ]);
-    return vendorsPage(getApp().db, data);
+    const [{ setResponseStatus }, { getApp }, { vendorsPage }] =
+      await Promise.all([
+        import("@tanstack/react-start/server"),
+        import("./app-instance"),
+        import("./index-browsing"),
+      ]);
+    const page = vendorsPage(getApp().db, data);
+    setResponseStatus(page.status);
+    return page;
   });
 
 /**

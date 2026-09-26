@@ -298,6 +298,26 @@ export function createRepo(db: Db) {
     },
 
     /**
+     * A name the Index answers a Lookup of `api` by: its own name when that
+     * is remembered for it, else the shortest name remembered for it (as
+     * `normalizeName` left it), else its own name. For links to its Lookup.
+     */
+    lookupNameOf(api: Pick<Api, "id" | "name">): string {
+      const names = db
+        .select({ name: apiNames.nameNormalized })
+        .from(apiNames)
+        .where(eq(apiNames.apiId, api.id))
+        .orderBy(
+          asc(sql`length(${apiNames.nameNormalized})`),
+          asc(apiNames.nameNormalized),
+        )
+        .all()
+        .map((row) => row.name);
+      if (names.includes(normalizeName(api.name))) return api.name;
+      return names[0] ?? api.name;
+    },
+
+    /**
      * The Vendors of the APIs remembered under a name that starts with the
      * word or words `name` (`jira` → `jira cloud platform rest`), distinct,
      * by id.

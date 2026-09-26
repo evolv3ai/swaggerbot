@@ -1,4 +1,4 @@
-import type { Api, Vendor } from "~/domain/catalog";
+import type { Api, Source, Vendor } from "~/domain/catalog";
 import { bestProvenance, type Provenance } from "~/domain/provenance";
 import type { ValidityIssue } from "~/domain/spec-forms";
 import type { Db } from "~/index-store/db";
@@ -20,6 +20,8 @@ export type AlternateSpec = {
 /** What the Spec viewer (`/specs/{specId}`) shows around the frame. */
 export type SpecView = {
   api: Api;
+  /** A name the Index answers a Lookup of the API by, for a link to it. */
+  lookupName: string;
   vendor: Vendor;
   spec: {
     id: string;
@@ -34,6 +36,8 @@ export type SpecView = {
   provenance: Provenance | null;
   /** When a Source at that Provenance was last verified. */
   verifiedAt: string | null;
+  /** Where this Spec was found: each Source, as a Lookup result lists them. */
+  sources: Pick<Source, "id" | "url" | "provenance" | "lastVerifiedAt">[];
   stale: boolean;
   /** The form the page shows. */
   form: SpecForm;
@@ -59,7 +63,7 @@ export type SpecView = {
 
 /**
  * The Spec viewer's facts for `specId`, from the Index alone: its API and
- * Vendor, its own Provenance and `verifiedAt`, both forms with their sizes,
+ * Vendor, its own Provenance, `verifiedAt` and Sources, both forms with their sizes,
  * its Validity Issues, and the API's other Specs as a default Lookup answers
  * them (`currentFromIndex`). Reads only. `null` for an unknown Spec.
  */
@@ -128,6 +132,7 @@ export function specView(
 
   return {
     api: stored.api,
+    lookupName: repo.lookupNameOf(stored.api),
     vendor: stored.vendor,
     spec: {
       id: spec.id,
@@ -139,6 +144,12 @@ export function specView(
     },
     provenance,
     verifiedAt,
+    sources: sources.map(({ id, url, provenance, lastVerifiedAt }) => ({
+      id,
+      url,
+      provenance,
+      lastVerifiedAt,
+    })),
     stale: !(age <= freshnessDays * 24 * 60 * 60 * 1000),
     form,
     forms: {
