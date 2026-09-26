@@ -1,5 +1,6 @@
 import { useId } from "react";
 import { vendorHref } from "~/lib/vendor-hrefs";
+import { distinctDomain } from "~/lib/vendor-name";
 import type { VendorsPage } from "~/server/index-browsing";
 
 /**
@@ -66,7 +67,7 @@ function FilterForm({ query }: { query: string }) {
           />
           <button
             type="submit"
-            className="min-h-10 rounded-[3px] border border-ink bg-[#0e0e0e] px-4 font-caps text-sm font-semibold uppercase tracking-[0.12em] text-lamp hover:brightness-125"
+            className="min-h-10 rounded-[3px] border border-ink bg-dense-black px-4 font-caps text-sm font-semibold uppercase tracking-[0.12em] text-lamp hover:brightness-125"
           >
             Filter
           </button>
@@ -120,9 +121,11 @@ function Results({ page }: { page: Extract<VendorsPage, { status: 200 }> }) {
                 >
                   {vendor.name}
                 </a>
-                <span className="font-mono text-xs text-ink-2 [overflow-wrap:anywhere]">
-                  {vendor.id}
-                </span>
+                {distinctDomain(vendor.name, vendor.id) ? (
+                  <span className="font-mono text-xs text-ink-2 [overflow-wrap:anywhere]">
+                    {vendor.id}
+                  </span>
+                ) : null}
               </span>
               <span className="flex shrink-0 items-baseline gap-1.5">
                 <span className="font-segment text-2xl leading-none">

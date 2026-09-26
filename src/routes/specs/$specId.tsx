@@ -80,9 +80,11 @@ function FormSwitch({ view }: { view: SpecView }) {
                 aria-current={active ? "page" : undefined}
                 className={cn(
                   "block rounded-[3px] border px-3 py-1.5 font-caps text-sm font-semibold uppercase tracking-[0.14em] no-underline",
+                  // Active is the black secondary, not a strip tone: the
+                  // strip only ever means certainty or recency.
                   active
-                    ? "border-print-ink bg-strip-5 text-print"
-                    : "border-print-ink hover:bg-strip-2",
+                    ? "border-print-ink bg-dense-black text-lamp"
+                    : "border-print-ink hover:underline hover:decoration-1 hover:underline-offset-[0.2em]",
                 )}
               >
                 {FORM_NAMES[form]} Form

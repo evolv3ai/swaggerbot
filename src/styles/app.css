@@ -20,6 +20,7 @@
   --color-bay: var(--bay);
   --color-bay-deep: var(--bay-deep);
   --color-lamp: var(--lamp);
+  --color-dense-black: var(--dense-black);
   --color-ink: var(--ink);
   --color-ink-2: var(--ink-2);
   --color-rule: var(--rule);
@@ -76,6 +77,9 @@
   --bay: #e8a33d;
   --bay-deep: #dc9530;
   --lamp: #ffb000;
+  /* The black secondary's fill (and text on amber), in both themes. Not a
+     strip step, though it has strip-5's value: see the One Ladder Rule. */
+  --dense-black: #0e0e0e;
   --ink: #0e0e0e;
   --ink-2: #3a2206;
   --rule: #4b2e07;
@@ -166,6 +170,17 @@
   a:hover {
     text-decoration-thickness: 2px;
   }
+}
+
+/* Unknown on the certainty scale: nothing developed, so no strip tone. The
+   empty cell is hatched in the rule colour so that, in either theme, it
+   can't be read as Resolved's dense black. */
+@utility bg-undeveloped {
+  background-image: repeating-linear-gradient(
+    135deg,
+    var(--rule) 0 1.5px,
+    transparent 1.5px 5px
+  );
 }
 
 /* The print's one motion: the image comes up out of the paper. */

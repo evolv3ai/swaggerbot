@@ -158,7 +158,7 @@ function Replay({
           <button
             type="button"
             onClick={() => setPaused((p) => !p)}
-            className="rounded-[3px] border border-ink bg-[#0e0e0e] px-3 py-1 font-caps text-xs font-semibold uppercase tracking-[0.12em] text-lamp hover:brightness-125"
+            className="rounded-[3px] border border-ink bg-dense-black px-3 py-1 font-caps text-xs font-semibold uppercase tracking-[0.12em] text-lamp hover:brightness-125"
           >
             {paused ? "Play" : "Pause"}
           </button>
