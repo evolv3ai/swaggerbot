@@ -66,9 +66,10 @@ const sources = renderToStaticMarkup(
 );
 
 describe("SpecHeader", () => {
-  it("links the Vendor to its page", () => {
+  it("links the Vendor to its page in the meta line, with no kicker", () => {
+    expect(header).not.toContain("Spec viewer");
     expect(header).toMatch(
-      /Spec viewer ·.*<a href="\/vendors\/stripe.com"[^>]*>Stripe<\/a>/,
+      /<\/h1><p[^>]*>.*By <a href="\/vendors\/stripe.com"[^>]*>Stripe<\/a>.*Look it up/,
     );
   });
 

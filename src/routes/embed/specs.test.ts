@@ -104,6 +104,7 @@ describe("GET /embed/specs/{specId}", () => {
     expect(scripts.map((s) => s[1]?.match(/src="([^"]+)"/)?.[1])).toEqual([
       undefined,
       "/embed/memory-storage.js",
+      "/embed/frame-viewport.js",
       "/embed/scalar-api-reference.js",
     ]);
     expect(scripts[0]?.[1]).toContain('type="application/json"');

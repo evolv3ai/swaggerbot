@@ -18,7 +18,7 @@ import { H2, LEAD, PAGE, PageTitle } from "./page";
 export function VendorListView({ page }: { page: VendorsPage }) {
   return (
     <div className={PAGE}>
-      <PageTitle eyebrow="The Index">Vendors</PageTitle>
+      <PageTitle>Vendors</PageTitle>
       <p className={LEAD}>
         {page.status === 200 && !page.query ? (
           <>
@@ -144,12 +144,21 @@ function Results({ page }: { page: Extract<VendorsPage, { status: 200 }> }) {
                 return (
                   <tr
                     key={vendor.id}
-                    className="border-t border-sb-border transition-colors hover:bg-sb-accent-soft"
+                    className="relative border-t border-sb-border transition-colors hover:bg-sb-accent-soft"
                   >
                     <th scope="row" className="px-4 py-3 text-left font-normal">
+                      {/*
+                       * In the table the Vendor's name is plainly the row's
+                       * link (bold, the row highlights, the pointer); an
+                       * underline on every row reads as noise. It opts out
+                       * of uicheck's underlined-link rule with the documented
+                       * class (`LINK_OPT_OUT`, `no-underline`), and underlines
+                       * on hover and focus. The link covers the whole row
+                       * (`after:absolute`), so the row is the target.
+                       */}
                       <a
                         href={vendorHref(vendor.id)}
-                        className="font-semibold text-sb-text [overflow-wrap:anywhere]"
+                        className="font-semibold text-sb-text no-underline after:absolute after:inset-0 hover:underline focus-visible:underline [overflow-wrap:anywhere]"
                       >
                         {vendor.name}
                       </a>

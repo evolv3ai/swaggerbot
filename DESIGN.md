@@ -122,10 +122,13 @@ Brand colours are sampled from the logo files: SwaggerBot Blue `#0099DD`, Navy `
 
 ## Typography
 
-- **Display: Montserrat 700/800.** Page titles (800, 28px → 40px from `sm`, sentence case), section headings (700, 1.25rem), buttons, badges, and the eyebrow (700, 0.75rem, uppercase, 0.3em tracking, `sb-accent-text`).
+- **Display: Montserrat 700/800.** Page titles (800, 28px → 40px from `sm`, sentence case), section headings (700, 1.25rem), buttons, badges, and the eyebrow (700, 0.75rem, uppercase, 0.3em tracking, `sb-accent-text`). The eyebrow is the brand tagline, BETTER THAN SPECS, on Search only: no page carries a category kicker above its title (the sidebar and the title say where the visitor is), and a Lookup says the name looked up in plain text under its lead.
 - **Body: IBM Plex Sans 400/500/600**, 15px on 1.6. The lead under a title is 17px in `sb-text-muted`, at most 40em wide.
 - **Mono: JetBrains Mono** for code, URLs, ids, paths and HTTP methods, usually at 13px.
-- Every link is underlined (WCAG 1.4.1); only nav items, the home mark, the skip link and links shaped as buttons or chips opt out with `no-underline`.
+- Every link is underlined (WCAG 1.4.1); only nav items, the home mark, the skip link and links shaped as buttons or chips opt out with `no-underline`. The Vendors table's names opt out too: each is the bold link of its row (the whole row is the target), underlined on hover and focus.
+- A Spec's download command shows on one line (`curl -o openapi.yaml …/specs/1fdc1047…78a9/published`, the id elided and in the accent; `CodeBlock`'s `oneLine`, via `SpecDownloadCurl`); Copy and screen readers get the whole URL. Other code blocks wrap as before.
+- A Lookup states its answer once above the card: the heading names it, the card carries the badge.
+- Every route's main column shares one measure (`max-w-[860px]`), the Spec viewer's included.
 
 ## Layout
 

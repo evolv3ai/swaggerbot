@@ -36,7 +36,7 @@ function Vendor({ page }: { page: Extract<VendorPage, { status: 200 }> }) {
       : null;
   return (
     <>
-      <PageTitle eyebrow="Vendor">{vendor.name}</PageTitle>
+      <PageTitle>{vendor.name}</PageTitle>
       <dl className="flex flex-wrap gap-x-8 gap-y-2 text-sm">
         {domain ? (
           <div className="flex items-baseline gap-2">
@@ -155,9 +155,7 @@ function ApiCard({ api }: { api: VendorPageApi }) {
 function Several({ page }: { page: Extract<VendorPage, { status: 300 }> }) {
   return (
     <section aria-labelledby="several">
-      <PageTitle eyebrow="Vendors" id="several">
-        Several Vendors
-      </PageTitle>
+      <PageTitle id="several">Several Vendors</PageTitle>
       <p className={LEAD}>
         “{page.asked}” matches {page.vendors.length} Vendors in the Index. Pick
         one:
@@ -196,9 +194,7 @@ function Several({ page }: { page: Extract<VendorPage, { status: 300 }> }) {
 function NotInIndex({ page }: { page: Extract<VendorPage, { status: 404 }> }) {
   return (
     <section aria-labelledby="not-in-index">
-      <PageTitle eyebrow="Vendors" id="not-in-index">
-        Not in the Index
-      </PageTitle>
+      <PageTitle id="not-in-index">Not in the Index</PageTitle>
       <p className={LEAD}>
         No Vendor “{page.asked}” in the Index. Only Vendors with an API already
         in the Index are listed. A Lookup finds an API and adds it, with its

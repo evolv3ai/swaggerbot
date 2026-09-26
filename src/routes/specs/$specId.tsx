@@ -59,7 +59,7 @@ function SpecViewer() {
   const view = Route.useLoaderData();
   return (
     <WithOnThisPage first={{ id: "spec", label: "About this Spec" }}>
-      <div className="max-w-[1040px] px-4 pt-7 pb-16 sm:px-8 lg:px-14 lg:pt-11">
+      <div className="max-w-[860px] px-4 pt-7 pb-16 sm:px-8 lg:px-14 lg:pt-11">
         <SpecHeader view={view} />
         <div className="mt-7">
           <SpecSummary view={view} />
@@ -270,9 +270,6 @@ function Alternates({ view }: { view: SpecView }) {
 function NoSuchSpec() {
   return (
     <div className="grid max-w-[860px] gap-3 px-4 pt-7 pb-16 sm:px-8 lg:px-14 lg:pt-11">
-      <p className="font-display text-xs font-bold uppercase tracking-[0.3em] text-sb-accent-text">
-        Spec viewer
-      </p>
       <h1 className="font-display text-[28px] leading-[1.1] font-extrabold tracking-[-0.01em] text-sb-text sm:text-[40px]">
         No such Spec
       </h1>

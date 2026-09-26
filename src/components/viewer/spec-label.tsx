@@ -11,18 +11,13 @@ import type { SpecView } from "~/server/spec-view";
 import { sizeOf } from "./size";
 
 /**
- * The Spec viewer's heading: its Vendor (a link to the Vendor's page) in
- * the eyebrow, the API's name, and a link to look the API up by that name.
+ * The Spec viewer's heading: the API's name, then a meta line with the Spec
+ * format and API Version, its Vendor (a link to the Vendor's page) and a
+ * link to look the API up by that name.
  */
 export function SpecHeader({ view }: { view: SpecView }) {
   return (
     <header className="grid gap-2">
-      <p className="font-display text-xs font-bold uppercase tracking-[0.3em] text-sb-accent-text">
-        Spec viewer ·{" "}
-        <a href={vendorHref(view.vendor.id)} className="text-sb-accent-text">
-          {view.vendor.name}
-        </a>
-      </p>
       <h1
         id="spec"
         className="scroll-mt-20 font-display text-[28px] leading-[1.1] font-extrabold tracking-[-0.01em] text-sb-text [overflow-wrap:anywhere] sm:text-[40px]"
@@ -33,6 +28,12 @@ export function SpecHeader({ view }: { view: SpecView }) {
         <span>
           {specFormat(view.spec.specVersion)} · API Version{" "}
           {view.spec.apiVersion ?? "not stated"}
+        </span>
+        <span>
+          By{" "}
+          <a href={vendorHref(view.vendor.id)} className="text-sb-text">
+            {view.vendor.name}
+          </a>
         </span>
         <a
           href={lookupHref(view.lookupName)}

@@ -2,11 +2,11 @@ import { Download, FileCode } from "lucide-react";
 import type { ReactNode } from "react";
 import { SearchForm } from "~/components/search/search-form";
 import { WithOnThisPage } from "~/components/shell/on-this-page";
-import { ANSWERS, AnswerBadge } from "~/components/ui/answer-badge";
+import { AnswerBadge } from "~/components/ui/answer-badge";
 import { Badge } from "~/components/ui/badge";
 import { buttonClass } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
-import { CodeBlock } from "~/components/ui/code-block";
+import { CodeBlock, SpecDownloadCurl } from "~/components/ui/code-block";
 import { Tabs } from "~/components/ui/tabs";
 import { sizeOf } from "~/components/viewer/size";
 import type { Source } from "~/domain/catalog";
@@ -85,18 +85,18 @@ function OutcomeView({ page }: { page: OutcomePage }) {
 }
 
 /**
- * Every view's page, a docs page in the shell: the eyebrow (what was looked
- * up), the heading (the Outcome's name, with its AnswerBadge and where it
- * sits among the five), one lead line, then the view's sections, with the
- * "On this page" rail when there are several. With `search`, the Search
- * form follows the lead, holding the name asked; without it, the page ends
- * with a link back to Search.
+ * Every view's page, a docs page in the shell: the heading (the Outcome's
+ * name, said once: the answer card carries its badge), one lead line, then
+ * a meta line with what was looked up (unless the lead already quotes it)
+ * and how, then the view's sections, with the "On this page" rail when
+ * there are several. With `search`, the Search form follows, holding the
+ * name asked; without it, the page ends with a link back to Search.
  */
 function Page({
   request,
   heading,
-  kind,
   lead,
+  namedInLead = false,
   search = false,
   answered,
   diagnostics,
@@ -104,52 +104,33 @@ function Page({
 }: {
   request?: LookupRequest;
   heading: string;
-  kind?: OutcomeKind;
   lead: ReactNode;
+  namedInLead?: boolean;
   search?: boolean;
   answered?: Answered;
   diagnostics?: string[];
   children?: ReactNode;
 }) {
-  const place = kind ? ANSWERS.findIndex((a) => a.outcome === kind) + 1 : 0;
+  const asked = request
+    ? [
+        namedInLead ? null : `You looked up “${request.name}”`,
+        request.apiVersion ? `API Version ${request.apiVersion}` : null,
+        request.allowCommunity ? "Community Specs included" : null,
+      ].filter(Boolean)
+    : [];
   return (
     <WithOnThisPage first={{ id: "outcome", label: heading }}>
       <div className="max-w-[860px] px-4 pt-7 pb-16 sm:px-8 lg:px-14 lg:pt-11">
-        <p className="font-display text-xs font-bold uppercase tracking-[0.3em] text-sb-accent-text [overflow-wrap:anywhere]">
-          Lookup
-          {request ? (
-            <>
-              {" · "}
-              {request.name}
-            </>
-          ) : null}
-        </p>
-        <div className="mt-2 mb-2.5 flex flex-wrap items-center gap-x-3.5 gap-y-2">
-          <h1
-            id="outcome"
-            className="scroll-mt-20 font-display text-[28px] leading-[1.1] font-extrabold tracking-[-0.01em] text-sb-text sm:text-[40px]"
-          >
-            {heading}
-          </h1>
-          {kind ? (
-            <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-              <AnswerBadge outcome={kind} />
-              <span className="text-[13px] text-sb-text-muted">
-                {place} of 5, from sure to not found
-              </span>
-            </span>
-          ) : null}
-        </div>
+        <h1
+          id="outcome"
+          className="mb-2.5 scroll-mt-20 font-display text-[28px] leading-[1.1] font-extrabold tracking-[-0.01em] text-sb-text sm:text-[40px]"
+        >
+          {heading}
+        </h1>
         <p className="max-w-[40em] text-[17px] text-sb-text-muted">{lead}</p>
-        {request?.apiVersion || request?.allowCommunity ? (
-          <p className="mt-2 text-[13px] text-sb-text-muted">
-            Asked with{" "}
-            {[
-              request.apiVersion ? `API Version ${request.apiVersion}` : null,
-              request.allowCommunity ? "Community Specs included" : null,
-            ]
-              .filter(Boolean)
-              .join(" · ")}
+        {asked.length ? (
+          <p className="mt-2 text-[13px] text-sb-text-muted [overflow-wrap:anywhere]">
+            {asked.join(" · ")}
           </p>
         ) : null}
         {search ? (
@@ -184,7 +165,6 @@ function ResolvedView({
     <Page
       request={page.request}
       heading="Resolved"
-      kind="Resolved"
       lead="The name is one API, and its Spec is confirmed to describe it: here it is, with where it came from."
       answered={{ by: "index", ms: page.ms }}
       diagnostics={outcome.diagnostics}
@@ -213,7 +193,6 @@ function UnconfirmedView({
     <Page
       request={page.request}
       heading="Unconfirmed"
-      kind="Unconfirmed"
       lead="A Spec was found, but it isn't confirmed to describe this API. Here it is, with the reasons for doubt."
       answered={{ by: "index", ms: page.ms }}
       diagnostics={outcome.diagnostics}
@@ -251,7 +230,7 @@ function AmbiguousView({
     <Page
       request={page.request}
       heading="Ambiguous"
-      kind="Ambiguous"
+      namedInLead
       lead={
         <>
           “{page.request.name}” could mean more than one API. Pick the one you
@@ -318,7 +297,6 @@ function NoSpecView({
     <Page
       request={page.request}
       heading="No Spec"
-      kind="NoSpec"
       lead={
         <>
           The API is known, but no Spec of it{" "}
@@ -373,7 +351,7 @@ function UnknownView({
     <Page
       request={page.request}
       heading="Unknown"
-      kind="Unknown"
+      namedInLead
       lead={
         <>
           No API called “{outcome.name}” was found. Check the name, or try
@@ -403,6 +381,7 @@ function NotInIndex({
     <Page
       request={request}
       heading="Not in the Index yet"
+      namedInLead
       lead={
         <>
           The Index doesn't hold “{request.name}” yet. Finding it on the live
@@ -512,10 +491,7 @@ function AnswerCard({
       label: "curl",
       content: (
         <>
-          <CodeBlock code={`curl -o openapi.${spec.format} ${published}`}>
-            <span className="text-[#8fbaff]">curl</span> -o openapi.
-            {spec.format} {published}
-          </CodeBlock>
+          <SpecDownloadCurl url={published} format={spec.format} />
           <p className="border-t border-sb-border px-4 py-2.5 text-[13px] text-sb-text-muted">
             The whole answer, as JSON:
           </p>

@@ -8,7 +8,7 @@ import { ANSWERS, AnswerBadge } from "~/components/ui/answer-badge";
 import { Badge } from "~/components/ui/badge";
 import { buttonClass } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
-import { CodeBlock } from "~/components/ui/code-block";
+import { CodeBlock, SpecDownloadCurl } from "~/components/ui/code-block";
 import { Tabs } from "~/components/ui/tabs";
 import { sizeOf } from "~/components/viewer/size";
 import type { OutcomeKind } from "~/domain/outcome";
@@ -132,31 +132,14 @@ function Search() {
               {BENCHMARK.wrong} wrong of {BENCHMARK.resolved} Resolved answers
             </strong>
             , on {BENCHMARK.runs} runs over the {BENCHMARK.names}-name set,
-            after two label corrections.{" "}
+            after two label corrections.
+            {facts
+              ? ` The Index now holds ${count(facts.vendors, "Vendor")}, ${count(facts.apis, "API")} and ${count(facts.specs, "Spec")}.`
+              : null}{" "}
             <a href={BENCHMARK.href} className="text-sb-accent-text">
               How it was measured
             </a>
           </p>
-          {facts ? (
-            <dl className="mt-5 flex flex-wrap gap-x-10 gap-y-3">
-              {(
-                [
-                  ["Vendors", facts.vendors],
-                  ["APIs", facts.apis],
-                  ["Specs", facts.specs],
-                ] as const
-              ).map(([label, n]) => (
-                <div key={label} className="grid">
-                  <dt className="text-xs font-semibold text-sb-text-muted">
-                    {label} in the Index
-                  </dt>
-                  <dd className="font-display text-2xl font-extrabold tabular-nums">
-                    {n}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          ) : null}
         </section>
       </div>
     </WithOnThisPage>
@@ -197,6 +180,11 @@ function TryRow({ facts }: { facts: IndexStats | null }) {
   );
 }
 
+/** `21 Vendors`, `1 API`. */
+function count(n: number, noun: string): string {
+  return `${n} ${noun}${n === 1 ? "" : "s"}`;
+}
+
 /** An API's name, short, for a chip: `The Plaid API` → `Plaid`. */
 function chipName(apiName: string): string {
   return apiName.replace(/^the\s+/i, "").replace(/\s+API$/i, "") || apiName;
@@ -221,12 +209,10 @@ function ResolvedExample({ api }: { api: RecentApi }) {
           id: "curl",
           label: "curl",
           content: (
-            <CodeBlock
-              code={`curl -o openapi.${spec.format} ${spec.downloads.published}`}
-            >
-              <span className="text-[#8fbaff]">curl</span> -o openapi.
-              {spec.format} {spec.downloads.published}
-            </CodeBlock>
+            <SpecDownloadCurl
+              url={spec.downloads.published}
+              format={spec.format}
+            />
           ),
         },
         {
