@@ -1,4 +1,5 @@
 import { Card } from "~/components/ui/card";
+import { Path } from "~/components/ui/path";
 import { ProvenanceBadge } from "~/components/ui/provenance-badge";
 import type { Source } from "~/domain/catalog";
 import { dayOf } from "~/lib/dates";
@@ -33,7 +34,7 @@ export function Sources({
               </span>
               <span className="grid min-w-0 gap-0.5">
                 <span className="font-mono text-[13px] text-sb-text [overflow-wrap:anywhere]">
-                  {source.url}
+                  <Path path={source.url} />
                 </span>
                 <span className="text-[13px] text-sb-text-muted">
                   Last verified{" "}

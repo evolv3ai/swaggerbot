@@ -7,6 +7,7 @@ import { Badge } from "~/components/ui/badge";
 import { buttonClass } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
 import { CodeBlock, SpecDownloadCurl } from "~/components/ui/code-block";
+import { Path } from "~/components/ui/path";
 import { Tabs } from "~/components/ui/tabs";
 import { sizeOf } from "~/components/viewer/size";
 import type { Source } from "~/domain/catalog";
@@ -780,7 +781,7 @@ export function Sources({
               </span>
               <span className="grid min-w-0 gap-0.5">
                 <span className="font-mono text-[13px] [overflow-wrap:anywhere]">
-                  {source.url}
+                  <Path path={source.url} />
                 </span>
                 <span className="text-[13px] text-sb-text-muted">
                   Last verified{" "}

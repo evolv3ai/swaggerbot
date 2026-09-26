@@ -126,7 +126,8 @@ Brand colours are sampled from the logo files: SwaggerBot Blue `#0099DD`, Navy `
 - **Body: IBM Plex Sans 400/500/600**, 15px on 1.6. The lead under a title is 17px in `sb-text-muted`, at most 40em wide.
 - **Mono: JetBrains Mono** for code, URLs, ids, paths and HTTP methods, usually at 13px.
 - Every link is underlined (WCAG 1.4.1); only nav items, the home mark, the skip link and links shaped as buttons or chips opt out with `no-underline`. The Vendors table's names opt out too: each is the bold link of its row (the whole row is the target), underlined on hover and focus.
-- A Spec's download command shows on one line (`curl -o openapi.yaml …/specs/1fdc1047…78a9/published`, the id elided and in the accent; `CodeBlock`'s `oneLine`, via `SpecDownloadCurl`); Copy and screen readers get the whole URL. Other code blocks wrap as before.
+- A Spec's download command is elided (`curl -o openapi.yaml …/specs/1fdc1047…78a9/published`, the id in the accent; `CodeBlock`'s `elided`, via `SpecDownloadCurl`): one line from `sm` up; on a phone it wraps at the usual 12.5px with the labelled Copy, like every other block. Copy and screen readers get the whole URL. Other code blocks wrap as before.
+- A URL or path shown as text (Sources, the docs routes) breaks only after a `/` or before `?`, `&`, `[` (`ui/path.tsx`), never mid-word.
 - A Lookup states its answer once above the card: the heading names it, the card carries the badge.
 - Every route's main column shares one measure (`max-w-[860px]`), the Spec viewer's included.
 
