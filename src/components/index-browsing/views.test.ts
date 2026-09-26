@@ -59,6 +59,20 @@ describe("VendorListView", () => {
     expect(html).toContain('href="/"');
   });
 
+  it("shows a Vendor's id only when it differs from its name", () => {
+    const html = list({
+      ...page,
+      vendors: [
+        { id: "stripe.com", name: "stripe.com", apiCount: 1 },
+        { id: "alpha.com", name: "Alpha", apiCount: 2 },
+      ],
+    });
+    expect(html.match(/>stripe\.com</g)).toHaveLength(1);
+    expect(html).toContain('href="/vendors/stripe.com"');
+    expect(html).toContain(">Alpha<");
+    expect(html).toContain(">alpha.com<");
+  });
+
   it("links a refused page back to the first", () => {
     const html = list({
       status: 400,
@@ -97,6 +111,23 @@ describe("VendorApisView", () => {
     expect(html).toContain(" · Stale");
     expect(html).toContain('href="/specs/abc123def456789"');
     expect(html).toContain("No Current Spec");
+  });
+
+  it("names a Vendor named by its domain once, and both when they differ", () => {
+    const page = (name: string) =>
+      vendor({
+        status: 200,
+        vendor: { id: "stripe.com", name, domain: "stripe.com" },
+        apis: [],
+      });
+    const once = page("stripe.com");
+    expect(once.match(/stripe\.com</g)).toHaveLength(1);
+    expect(once).not.toContain("Domain");
+    expect(once).not.toContain("Vendor id");
+    const both = page("Stripe");
+    expect(both).toContain(">Stripe<");
+    expect(both).toMatch(/Domain<\/dt><dd[^>]*>stripe\.com</);
+    expect(both).not.toContain("Vendor id");
   });
 
   it("lists the matching Vendors as links (300)", () => {

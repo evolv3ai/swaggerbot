@@ -20,7 +20,7 @@ const LINK =
 const LABEL = "font-caps text-sm font-semibold uppercase tracking-[0.14em]";
 const H2 = "font-caps text-2xl font-semibold uppercase tracking-wide";
 const H3 = "font-mono text-base font-semibold [overflow-wrap:anywhere]";
-const PROSE = "max-w-[40rem] leading-relaxed";
+const PROSE = "max-w-[34rem] leading-relaxed";
 const TH =
   "border-b border-rule py-2 pr-4 text-left align-bottom font-caps text-xs font-semibold uppercase tracking-[0.14em] text-ink-2";
 const TD =
@@ -345,7 +345,7 @@ function Keys() {
       <p>
         <a
           href={KEY_REQUEST_HREF}
-          className="inline-flex min-h-12 items-center rounded-none border-2 border-b-[5px] border-[#0e0e0e] bg-lamp px-7 font-caps text-lg font-bold uppercase tracking-[0.14em] text-[#0e0e0e] no-underline transition-[border-width,transform] duration-100 hover:brightness-105 active:translate-y-[3px] active:border-b-2 dark:border-[#9a6400]"
+          className="mb-[3px] inline-flex min-h-[45px] items-center rounded-none border-2 border-[#0e0e0e] bg-lamp px-7 font-caps text-lg font-bold uppercase tracking-[0.14em] text-[#0e0e0e] no-underline shadow-[0_3px_0_#0e0e0e] transition-[box-shadow,transform] duration-100 hover:brightness-105 active:translate-y-[3px] active:shadow-none dark:border-[#9a6400] dark:shadow-[0_3px_0_#9a6400] dark:active:shadow-none"
         >
           Request a key
         </a>

@@ -3,6 +3,7 @@ name: SwaggerBot
 description: A working darkroom where the name of an API is developed into a verified Spec, printed with its Provenance.
 colors:
   lamp: "#ffb000"
+  dense-black: "#0e0e0e"
   bay: "#e8a33d"
   bay-deep: "#dc9530"
   ink: "#0e0e0e"
@@ -105,7 +106,7 @@ components:
     padding: "0 28px"
     height: "48px"
   button-secondary:
-    backgroundColor: "{colors.strip-5}"
+    backgroundColor: "{colors.dense-black}"
     textColor: "{colors.lamp}"
     typography: "{typography.label-sm}"
     rounded: "{rounded.control}"
@@ -188,6 +189,7 @@ A monochrome amber room with one silver-to-black ladder and one enamel stock; th
 
 ### Primary
 - **Safelight Amber** (lamp): the lamp itself, identical in both themes. Fills the primary tray-edge button, the lit (current) station, the Copy button, the health lamp's glow, and is the ink of the dark theme. Text on it is always dense black.
+- **Dense Black** (dense-black, `bg-dense-black`): the black secondary's fill and the Spec viewer's active form switch, identical in both themes. It has strip-5's value but is not a strip step: naming it apart keeps the One Ladder Rule true in code.
 
 ### Neutral (the bay)
 - **Lit Bay** (bay / bay-dark): the page ground. Light: warm safelight orange. Dark: near-black deeproom brown.
@@ -254,7 +256,7 @@ Mostly flat, depth by tone: the bay is the room, bay-deep is the recessed bench,
 ### Shadow Vocabulary
 - **Print lift** (`box-shadow: 0 6px 18px -6px rgb(0 0 0 / 0.45)`): only on a print. It is a sheet lying on the bench.
 - **Lamp glow** (`box-shadow: 0 0 8px 1px var(--lamp)`): only on a lit lamp (the health lamp when up).
-- **Tray edge** (a 5px bottom border, not a shadow): the primary button's pressable depth; it compresses to 2px and moves down 3px on `:active`.
+- **Tray edge** (a hard `0 3px 0` box-shadow in the border colour under the 2px border, so a 5px bottom edge; no blur, so it reads as the button's own edge, not a lift): the primary button's pressable depth. On `:active` the button moves down 3px (`transform`) and the edge goes to 0, leaving the 2px border: only `transform` and `box-shadow` animate, never `border-width`. The button is 45px tall plus the 3px edge, which a 3px bottom margin reserves.
 
 ### Named Rules
 
@@ -269,8 +271,8 @@ Provenance is drawn as line weight, strongest to weakest: **Official** 2px solid
 ## Components
 
 ### Buttons
-- **Primary: the tray edge.** Safelight Amber fill, dense-black text (#0e0e0e in both themes), label caps 700 at 1.125rem with 0.14em tracking, 48px min height, 28px side padding, square corners, 2px dense-black border with a 5px bottom edge (dark: tray-edge-dark). `:active` presses in (translateY 3px, bottom edge 2px, 100ms). Hover brightens 5%. One per view (“Develop”).
-- **Secondary: black.** Dense-black fill (#0e0e0e in both themes), Safelight Amber label caps (0.75rem, 0.12em), 3px corner, 1px ink border, 4px 12px padding; hover brightens 125%. Used for Pause/Play and similar utility actions.
+- **Primary: the tray edge.** Safelight Amber fill, dense-black text (#0e0e0e in both themes), label caps 700 at 1.125rem with 0.14em tracking, 48px min height, 28px side padding, square corners, 2px dense-black border with a 5px bottom edge (the tray edge; dark: tray-edge-dark). `:active` presses in (translateY 3px, bottom edge 2px, 100ms). Hover brightens 5%. One per view (“Develop”).
+- **Secondary: black.** Dense-black fill (`bg-dense-black`, #0e0e0e in both themes), Safelight Amber label caps (0.75rem, 0.12em), 3px corner, 1px ink border, 4px 12px padding; hover brightens 125%. Used for Pause/Play and similar utility actions.
 - **Attached action:** Copy on the code line is an amber cell joined to it by a 1px ink rule.
 - **Focus:** global 2px outline in `--ring` (dense black in light, amber in dark), 3px offset. Never remove it.
 
@@ -294,7 +296,13 @@ An outlined label-caps tag (0.75rem, 0.12em, 1px 6px, 2px corner) in `currentCol
 Numbered cells (01–06: Index, APIs.guru, Developer Portal, Vendor domain, GitHub, Judged) in a rule-gapped grid. Each: seven-segment number, title-caps name, a one-line ink-2 note, 16px padding. The station a Lookup is at is lit (amber fill, dense black text, #3a2206 note, `aria-current="step"`, 500ms colour transition). After the Index answers, 01 shows a black “Answered here” tag and 02–06 say “Not needed”. Show only the path actually taken.
 
 ### Certainty strip
-The Outcome scale as a five-cell strip with a 1px rule outline and 2px corner: a 16px swatch per Outcome (strip-5 → strip-2, Unknown empty) over a bay-deep label cell in label caps, with a caption. It is the legend for every certainty encoding; the Lookup result's one-view-per-Outcome must use the same tones.
+The Outcome scale as a five-cell strip with a 1px rule outline and 2px corner: a 16px swatch per Outcome (strip-5 → strip-2) over a bay-deep label cell in label-sm caps (0.75rem, 0.12em, one line), with a caption. It is the legend for every certainty encoding; the Lookup result's one-view-per-Outcome must use the same tones.
+
+- **Unknown** is empty and hatched (`bg-undeveloped`: 1.5px lines of the rule colour every 5px at 135°, the bay showing through), in both themes. Without it, Resolved's dense black and the empty dark bay are 1.01:1 and the strip's two ends look the same. The strip is not set on enamel (the Enamel Rule).
+- **Below `sm`** the two long names are abbreviated (“Unconf.”, “Ambig.”); the full name stays for screen readers and in each cell's `title`.
+- **The answer's cell** is outlined 2px in ink with its label reversed (ink fill, bay text).
+- **Measured neighbours** (same in both themes, as the strip tones don't change): strip-5/strip-4 1.7:1, strip-4/strip-3 3.38:1, strip-3/strip-2 1.93:1; every cell is named in words beneath it, so the tone is never the only cue. strip-2 against the hatched Unknown: the pattern, plus 7.13:1 (light) / 4.6:1 (dark) against the hatch lines.
+- **The test patch** beside a Lookup's Outcome heading uses the same tones and sizes by weight. In the dark theme the two densest (Resolved, Unconfirmed) sit on a 4px enamel margin, a scrap of the paper they were developed on (strip-5 on print-dark 14.96:1, print-dark on bay-dark 15.08:1), because on the dark bay they would be only an outline (1.01:1, 1.7:1). Unknown's patch is dashed and hatched.
 
 ### Code line
 Dense-black (strip-5) field, enamel mono text, 1px ink border, 3px corner, 10px 12px padding, with the attached amber Copy; a polite live region announces “Copied”.
@@ -323,9 +331,10 @@ One motion only: **print-develop**, 2.4s `cubic-bezier(0.16, 1, 0.3, 1)`, opacit
 - **Don't** introduce a second accent hue, gradients, or glass/blur surfaces.
 - **Don't** set more than three words in Permanent Marker, or use it more than once per view, or for anything but a display line.
 - **Don't** use seven-segment for anything but numbers, or mono for anything but data.
-- **Don't** add shadows to anything but a print (lift) or a lit lamp (glow).
+- **Don't** add shadows to anything but a print (lift), a lit lamp (glow) or the tray edge (a hard, unblurred bottom edge).
 - **Don't** put more than one amber tray-edge primary in a view.
 - **Don't** add animation beyond print-develop and the two micro-transitions, and don't run any of them under reduced motion.
 - **Don't** show a station, Source or path the Lookup didn't take, or any invented count, customer or testimonial.
 - **Don't** render any Spec content as live HTML outside the sandboxed frame.
+- **Don't** animate `border-width` or anything else that triggers layout; the tray-edge press is `transform` and `box-shadow`.
 - **Don't** use rule-coloured borders as the only indicator of an interactive control in the dark theme (rule-dark on bay-dark is 2.43:1); interactive borders use ink.

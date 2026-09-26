@@ -8,6 +8,7 @@ import { VerifiedStamp } from "~/components/darkroom/stamp";
 import { type ChainState, Stations } from "~/components/darkroom/stations";
 import type { Outcome, OutcomeKind, SpecAnswer } from "~/domain/outcome";
 import { cn } from "~/lib/utils";
+import { distinctDomain } from "~/lib/vendor-name";
 import type { LookupRequest } from "~/lookup/lookup";
 import type { LookupPage } from "~/server/lookup-page";
 import { lookupSearchOf } from "~/server/lookup-search";
@@ -27,14 +28,16 @@ const OUTCOME_NAME: Record<OutcomeKind, string> = {
 /**
  * The test patch beside an Outcome's name: its density on the certainty
  * strip, and its size, are the answer's weight (Resolved the densest and
- * largest, Unknown an empty cell).
+ * largest, Unknown an empty, hatched cell). In the dark the two densest
+ * tones would vanish into the bay, so there they sit on an enamel margin,
+ * a scrap of the paper they were developed on.
  */
 const PATCH: Record<OutcomeKind, string> = {
-  Resolved: "size-14 bg-strip-5 sm:size-16",
-  Unconfirmed: "size-12 bg-strip-4 sm:size-14",
+  Resolved: "size-14 bg-strip-5 sm:size-16 dark:border-4 dark:border-print",
+  Unconfirmed: "size-12 bg-strip-4 sm:size-14 dark:border-4 dark:border-print",
   Ambiguous: "size-10 bg-strip-3 sm:size-12",
   NoSpec: "size-9 bg-strip-2 sm:size-10",
-  Unknown: "size-8 border-dashed bg-transparent sm:size-9",
+  Unknown: "size-8 border-dashed bg-undeveloped sm:size-9",
 };
 
 const LINK =
@@ -810,10 +813,13 @@ function ApiName({ name, id }: { name: string; id: string }) {
   );
 }
 
+/** The Vendor's name, and its domain only when that says something more. */
 function VendorName({ vendor }: { vendor: Of<"Resolved">["vendor"] }) {
+  const domain = distinctDomain(vendor.name, vendor.domain);
   return (
     <span>
-      {vendor.name} <span className="text-ink-2">({vendor.domain})</span>
+      {vendor.name}
+      {domain ? <span className="text-ink-2"> ({domain})</span> : null}
     </span>
   );
 }

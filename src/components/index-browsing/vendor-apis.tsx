@@ -1,6 +1,7 @@
 import { ProvenanceMark } from "~/components/darkroom/provenance-mark";
 import { VerifiedStamp } from "~/components/darkroom/stamp";
 import { vendorHref } from "~/lib/vendor-hrefs";
+import { distinctDomain } from "~/lib/vendor-name";
 import type { VendorPage, VendorPageApi } from "~/server/index-browsing";
 
 /**
@@ -26,6 +27,13 @@ export function VendorApisView({ page }: { page: VendorPage }) {
 
 function Vendor({ page }: { page: Extract<VendorPage, { status: 200 }> }) {
   const { vendor, apis } = page;
+  // Most Vendors are named by their domain, which is also their id: say it once.
+  const domain = distinctDomain(vendor.name, vendor.domain);
+  const id =
+    distinctDomain(vendor.name, vendor.id) &&
+    distinctDomain(vendor.domain, vendor.id)
+      ? vendor.id
+      : null;
   return (
     <>
       <header className="grid gap-2">
@@ -33,20 +41,22 @@ function Vendor({ page }: { page: Extract<VendorPage, { status: 200 }> }) {
           {vendor.name}
         </h1>
         <dl className="flex flex-wrap gap-x-8 gap-y-2 text-sm">
-          <div className="flex items-baseline gap-2">
-            <dt className="font-caps font-semibold uppercase tracking-[0.12em] text-ink-2">
-              Vendor id
-            </dt>
-            <dd className="font-mono [overflow-wrap:anywhere]">{vendor.id}</dd>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <dt className="font-caps font-semibold uppercase tracking-[0.12em] text-ink-2">
-              Domain
-            </dt>
-            <dd className="font-mono [overflow-wrap:anywhere]">
-              {vendor.domain}
-            </dd>
-          </div>
+          {id ? (
+            <div className="flex items-baseline gap-2">
+              <dt className="font-caps font-semibold uppercase tracking-[0.12em] text-ink-2">
+                Vendor id
+              </dt>
+              <dd className="font-mono [overflow-wrap:anywhere]">{id}</dd>
+            </div>
+          ) : null}
+          {domain ? (
+            <div className="flex items-baseline gap-2">
+              <dt className="font-caps font-semibold uppercase tracking-[0.12em] text-ink-2">
+                Domain
+              </dt>
+              <dd className="font-mono [overflow-wrap:anywhere]">{domain}</dd>
+            </div>
+          ) : null}
           <div className="flex items-baseline gap-2">
             <dt className="font-caps font-semibold uppercase tracking-[0.12em] text-ink-2">
               APIs
@@ -161,9 +171,11 @@ function Several({ page }: { page: Extract<VendorPage, { status: 300 }> }) {
             >
               {vendor.name}
             </a>
-            <span className="font-mono text-xs text-ink-2 [overflow-wrap:anywhere]">
-              {vendor.id}
-            </span>
+            {distinctDomain(vendor.name, vendor.id) ? (
+              <span className="font-mono text-xs text-ink-2 [overflow-wrap:anywhere]">
+                {vendor.id}
+              </span>
+            ) : null}
           </li>
         ))}
       </ul>
