@@ -155,6 +155,17 @@ The deploys of 2026-09-23:
 - `mcpcheck` PASS: largest result 28.4 kB, slowest call 577 ms.
 - `formscheck` PASS: outline p90 299 ms, operation p90 355 ms, 0 non-2xx.
 
+### `03d61f9` (2026-09-25): wave 2, the darkroom Search, Lookup result, Vendors and Spec viewer
+
+**Deployed at 19:00 CDT** (deployment `9rpbhf1htcoxk8okchrsecpg`). It carries #90 (backlog O1: the darkroom shell and Search, `DESIGN.md`; the old landing page is retired), #91 (WTR-140: `/vendors` and `/vendors/{vendorId}`), #92 (WTR-138: `/lookup`, keyless, so only Index answers resolve) and #93 (WTR-139: `/specs/{specId}`, Scalar in a sandboxed frame from `/embed/specs/{specId}`). No new env vars.
+
+**Live checks:**
+- `uicheck` PASS on `/`, `/lookup?name=stripe`, `/vendors`, `/vendors/stripe.com` and the Stripe Spec viewer at 390 and 1280, light and dark: axe 0, CSP 0, keyboard complete on every page.
+- `/embed/specs/…` carries `Content-Security-Policy: sandbox allow-scripts; default-src 'none'; …`, and the Spec downloads carry `Access-Control-Allow-Origin: *` and `X-Content-Type-Options: nosniff`.
+- `/vendors?cursor=10` answers 200, with no redirect.
+- `mcpcheck` PASS: largest result 28.4 kB, slowest call 449 ms.
+- `formscheck` PASS: outline p90 232 ms, operation p90 399 ms, 0 non-2xx.
+
 ## Gotchas
 
 - Coolify's application health check runs `curl`/`wget` **inside** the container. An image without them is rolled back as unhealthy, even when its own Docker `HEALTHCHECK` passes.
