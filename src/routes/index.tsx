@@ -1,7 +1,6 @@
-import { createFileRoute, useLoaderData } from "@tanstack/react-router";
+import { createFileRoute, Link, useLoaderData } from "@tanstack/react-router";
 import { useEffect, useId, useRef, useState } from "react";
 import { CertaintyStrip } from "~/components/darkroom/certainty-strip";
-import { CodeLine } from "~/components/darkroom/code-line";
 import { Print } from "~/components/darkroom/print";
 import { dayOf } from "~/components/darkroom/stamp";
 import { type ChainState, Stations } from "~/components/darkroom/stations";
@@ -23,9 +22,6 @@ const BENCHMARK = {
   runs: 2,
   href: "https://github.com/evolv3ai/swaggerbot/blob/main/docs/slices/slice-4-result.md",
 };
-
-const MCP_ADD =
-  "claude mcp add --transport http swaggerbot https://swaggerbot.dev/mcp";
 
 /** How long a replayed answer sits at the Index station before it's answered. */
 const CHECKING_MS = 900;
@@ -258,7 +254,7 @@ function Replay({
 function StatusBar({ facts }: { facts: IndexStats | null }) {
   return (
     <section
-      aria-label="The Index, the Benchmark and Claude Code"
+      aria-label="The Index, the Benchmark and the docs"
       className="-mx-4 grid gap-6 border-t border-rule bg-bay-deep px-4 py-6 sm:-mx-8 sm:px-8 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] xl:items-center xl:gap-12"
     >
       {facts ? (
@@ -290,12 +286,15 @@ function StatusBar({ facts }: { facts: IndexStats | null }) {
           How it was measured
         </a>
       </p>
-      <div className="grid gap-2">
-        <p className="font-caps text-xs font-semibold uppercase tracking-[0.14em] text-ink-2">
-          Add it to Claude Code
-        </p>
-        <CodeLine code={MCP_ADD} />
-      </div>
+      <p className="text-sm leading-relaxed">
+        <span className="font-caps font-semibold uppercase tracking-[0.12em]">
+          For agents and programs:
+        </span>{" "}
+        the same answers over MCP and the HTTP API.{" "}
+        <Link to="/docs" className="whitespace-nowrap">
+          Read the docs
+        </Link>
+      </p>
     </section>
   );
 }

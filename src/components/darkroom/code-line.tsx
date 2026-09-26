@@ -3,7 +3,8 @@ import { cn } from "~/lib/utils";
 
 /**
  * A line to copy (a command, a call) on dense black, with the attached amber
- * Copy; a polite live region says when it has copied.
+ * Copy; a polite live region says when it has copied. Line breaks and
+ * indentation in `code` are kept, so an answer's JSON reads as printed.
  */
 export function CodeLine({
   code,
@@ -25,13 +26,17 @@ export function CodeLine({
   return (
     <div className={cn("grid", className)}>
       <div className="flex min-w-0 items-stretch overflow-hidden rounded-[3px] border border-ink bg-strip-5">
-        <code className="min-w-0 flex-1 px-3 py-2.5 font-mono text-sm leading-relaxed text-print [overflow-wrap:anywhere]">
+        <code className="min-w-0 flex-1 px-3 py-2.5 font-mono text-sm leading-relaxed text-print whitespace-pre-wrap [overflow-wrap:anywhere]">
           {code}
         </code>
         <button
           type="button"
           onClick={copy}
-          className="shrink-0 border-l border-ink bg-lamp px-3 font-caps text-sm font-bold uppercase tracking-[0.12em] text-[#0e0e0e]"
+          className={cn(
+            "shrink-0 border-l border-ink bg-lamp px-3 font-caps text-sm font-bold uppercase tracking-[0.12em] text-[#0e0e0e]",
+            // On a block of several lines, Copy sits by its first line.
+            code.includes("\n") && "flex items-start pt-3",
+          )}
         >
           {copied ? "Copied" : "Copy"}
         </button>

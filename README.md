@@ -2,7 +2,7 @@
 
 # swagger.bot
 
-swagger.bot turns the name of an API into a verified OpenAPI/Swagger Spec with its Provenance, or says honestly why it can't. It is a single TanStack Start app (HTTP API, MCP endpoint and web UI) with the Index in SQLite. See [`docs/PRD.md`](docs/PRD.md) for what it does and why, [`CONTEXT.md`](CONTEXT.md) for the glossary and [`docs/adr/`](docs/adr/) for the decisions behind it.
+swagger.bot turns the name of an API into a verified OpenAPI/Swagger Spec with its Provenance, or says honestly why it can't. It is a single TanStack Start app (HTTP API, MCP endpoint and web UI) with the Index in SQLite. See [`docs/PRD.md`](docs/PRD.md) for what it does and why, [`CONTEXT.md`](CONTEXT.md) for the glossary and [`docs/adr/`](docs/adr/) for the decisions behind it. To use it rather than run it, read the docs at [swaggerbot.dev/docs](https://swaggerbot.dev/docs): the HTTP API with a `curl` and its answer for each route, the MCP server, the key rules and how to request a key.
 
 ## Install
 
@@ -89,6 +89,8 @@ Beside them, the Outcome carries the Validity Issues of the Spec it answers with
 To check the forms and the navigation on a deployment, run `pnpm tsx scripts/formscheck.ts https://swaggerbot.dev` (`--names GitHub,Stripe,Cloudflare` by default, `--json` for the whole report, `--help` for the rest). For each name it sends `POST /api/lookup` (an Index answer; set `LOADCHECK_KEY` to send it as the bearer, so a name missing from the Index is found by a Discovery, one quota unit each), which must be Resolved; if the Current Spec's forms are `pending`, it asks the outline every 5 s for up to 2 minutes. Then it downloads both forms from the Outcome's `downloads` (the Published bytes' sha256 must be the Spec id, the Normalized Form JSON with `openapi` 3.1.x), GETs the outline, 5 of its operations (the first, the last and 3 evenly spaced between them) and `GET /api/vendors/{vendorId}/apis`, which must list the API. Requests are paced under the default 60/min per-IP limit, and a 429 is retried after its `retry-after`. It prints each request's time and size, the outline and operation p90s and any non-2xx answer, and exits 0 when every step succeeded, outline p90 < 500 ms, operation p90 < 2 s and every download finished within 60 s; otherwise it exits 1, naming what failed.
 
 ## Access
+
+The same rules, with a worked example of each route, are on the site at [`/docs`](https://swaggerbot.dev/docs).
 
 `POST /api/lookup` takes `{ "name", "apiVersion"?, "allowCommunity"?, "fresh"? }`.
 
