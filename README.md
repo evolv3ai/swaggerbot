@@ -2,7 +2,7 @@
 
 # swagger.bot
 
-swagger.bot turns the name of an API into a verified OpenAPI/Swagger Spec with its Provenance, or says honestly why it can't. It is a single TanStack Start app (HTTP API, MCP endpoint and web UI) with the Index in SQLite. See [`docs/PRD.md`](docs/PRD.md) for what it does and why, [`CONTEXT.md`](CONTEXT.md) for the glossary and [`docs/adr/`](docs/adr/) for the decisions behind it. To use it rather than run it, read the docs at [swaggerbot.dev/docs](https://swaggerbot.dev/docs): the HTTP API with a `curl` and its answer for each route, the MCP server, the key rules and how to request a key.
+swagger.bot turns the name of an API into a verified OpenAPI/Swagger Spec with its Provenance, or says honestly why it can't. It is a single TanStack Start app (HTTP API, MCP endpoint and web UI) with the Index in SQLite. See [`docs/PRD.md`](docs/PRD.md) for what it does and why, [`CONTEXT.md`](CONTEXT.md) for the glossary and [`docs/adr/`](docs/adr/) for the decisions behind it. To use it rather than run it, read the docs at [swaggerbot.dev/docs](https://swaggerbot.dev/docs): the HTTP API with a `curl` and its answer for each route, the MCP server, the key rules and how to get a key.
 
 ## Install
 
@@ -121,13 +121,32 @@ Every API route answers a method it doesn't take with 405 and an `Allow` header,
 
 ## API keys
 
-Discovery and `fresh` Lookups need an API key, each with a daily quota counted per UTC day. The operator issues keys by hand, in the Index at `DATABASE_PATH`:
+Discovery and `fresh` Lookups need an API key, each with a daily quota of credits, refilled at midnight UTC. Anyone gets one at [swaggerbot.dev/keys](https://swaggerbot.dev/keys) ([ADR 0006](docs/adr/0006-keys-in-unkey-accounts-in-workos.md)): they sign in with GitHub or by email (WorkOS AuthKit) and create a key, with no one approving it. The secret is shown once, when it is made. One key per person: a second can't be created while the first is live. The page shows the key's start, when it was made, today's credits left and when they reset, and has **Roll** (a new secret, today's credits kept) and **Revoke** (after which the person may create a new one). A new key's quota is `DAILY_QUOTA` (default 100); a larger one is asked for at hello@evolv3.ai.
+
+Keys live in [Unkey](https://unkey.com) and accounts in [WorkOS](https://workos.com); swagger.bot stores no users. A key's owner is its Unkey identity, whose `externalId` is the WorkOS user id. These env vars (in `.env.example`) turn it on:
+
+| Variable | Meaning |
+|---|---|
+| `UNKEY_ROOT_KEY` | A root key scoped to the swagger.bot API alone (`create_key`, `verify_key`, `read_key`, `update_key`, `delete_key` on it). |
+| `UNKEY_API_ID` | The API (`api_…`) keys are created in. |
+| `UNKEY_KEYSPACE_ID` | The API's keyspace (`ks_…`): verification accepts only its keys. |
+| `UNKEY_MIGRATION_ID` | Only for `keys.ts migrate`, from Unkey support. |
+| `WORKOS_API_KEY` / `WORKOS_CLIENT_ID` | The WorkOS environment, with GitHub and Magic Auth on. |
+| `WORKOS_COOKIE_PASSWORD` | Seals the session cookie; at least 32 characters. |
+| `WORKOS_REDIRECT_URI` | `https://<host>/auth/callback`. |
+
+With `UNKEY_ROOT_KEY` and `UNKEY_API_ID` set, keys are verified in Unkey (the start log says `keys: unkey`): an Index answer costs nothing, a Discovery or `fresh` Lookup one credit, and when Unkey doesn't answer within 2 s a keyed request gets a 503 with `Retry-After: 30` (keyless Index answers are unaffected). Without them, keys stay in the Index's SQLite table as before (`keys: local`), which is what tests and local development use. `/keys` needs both Unkey and WorkOS; without them it says keys are issued by hand and links the email. Without the WorkOS env, the top bar shows no "Sign in" and `/auth/*` is a 404.
+
+The operator can still issue keys by hand, on whichever store is configured (in Unkey, `create` makes the owner `operator:<owner>`):
 
 ```sh
 pnpm tsx scripts/keys.ts create "<owner>" [--quota N]   # prints the key's id and secret
 pnpm tsx scripts/keys.ts list                            # id, owner, quota, created, revoked, today's usage
 pnpm tsx scripts/keys.ts revoke <id>
+pnpm tsx scripts/keys.ts migrate                         # move the Index's live keys into Unkey
 ```
+
+`migrate` moves every live key in the Index at `DATABASE_PATH` into Unkey with its secret unchanged (the stored sha256 is re-encoded as Unkey expects), its owner as `operator:<owner>` and its quota as daily credits. It needs `UNKEY_ROOT_KEY`, `UNKEY_API_ID` and `UNKEY_MIGRATION_ID`, and prints how many keys moved and any it couldn't. Run it before the first deploy with Unkey, so no hand-issued key stops working.
 
 In production the image has no `scripts/` or `tsx`. `pnpm build` bundles the same CLI into `.output/cli/keys.mjs`, which the image carries, so run it in the container, against the Index on its volume:
 
@@ -135,9 +154,12 @@ In production the image has no `scripts/` or `tsx`. `pnpm build` bundles the sam
 docker exec <container> node .output/cli/keys.mjs create "<owner>" [--quota N]
 docker exec <container> node .output/cli/keys.mjs list
 docker exec <container> node .output/cli/keys.mjs revoke <id>
+docker exec <container> node .output/cli/keys.mjs migrate
 ```
 
-Only the secret's sha256 is stored, so `create` is the one time it is shown: hand it to its owner then. The id (`key_…`) is safe to show and is what `list` and `revoke` use. A key without `--quota` gets the default, 100 a day, or `DAILY_QUOTA` when that is set; a key's own quota wins over both. A revoked key stays in the list but is no longer accepted.
+A secret is shown only when it is made: neither store keeps it (the Index keeps its sha256). The id (`key_…`) is safe to show and is what `list` and `revoke` use. A key without `--quota` gets the default, 100 a day, or `DAILY_QUOTA` when that is set.
+
+To check keys on a deployment, run `KEYCHECK_KEY=<secret> pnpm tsx scripts/keycheck.ts https://swaggerbot.dev` (`--name "Val Town"` by default, a name already in the Index; `--json` for the whole report, `--help` for the rest). It checks that a keyless Index Lookup is 200; that the same with the key is 200 and doesn't change the key's credits; that a Discovery (`fresh: true`) with the key is 200 and spends one credit; and that a made-up `sb_` key is 401. With `UNKEY_ROOT_KEY` set it reads the key's credits before and after through Unkey's admin API (`keys.whoami`); without it the credit checks are skipped. It uses one of the key's credits, prints each Lookup with PASS/FAIL and exits 1 when a check fails.
 
 ## MCP
 

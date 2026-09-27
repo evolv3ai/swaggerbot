@@ -13,7 +13,7 @@ import {
   EXAMPLES,
   type Example,
   KEY_REQUEST_EMAIL,
-  KEY_REQUEST_HREF,
+  LARGER_QUOTA_HREF,
   MCP_ADD,
   MCP_ADD_WITH_KEY,
   MCP_TOOL_ROWS,
@@ -51,7 +51,7 @@ const SECTIONS = [
   { id: "http-api", label: "HTTP API" },
   { id: "mcp", label: "MCP" },
   { id: "access", label: "Keys and limits" },
-  { id: "keys", label: "Request a key" },
+  { id: "keys", label: "Get a key" },
 ] as const;
 
 /** What `get_spec_outline`, `get_operation` and `get_schema` keep results to. */
@@ -69,6 +69,13 @@ const KEY_RULES = [
   "Each such Lookup uses one unit of the key's daily quota, 100 unless the key was issued with its own, counted per UTC day. The answer carries `X-Quota-Limit` and `X-Quota-Remaining`; past the quota it is a 429, `Daily quota used.`, with `Retry-After` until midnight UTC.",
   "A key sent with an Index answer is still checked, so a wrong one is never ignored: an unknown or revoked key is a 401.",
   "Every request but `GET /api/health`, with a key or without, counts against a per-IP limit of 60 a minute, shared by `/api/`, `/mcp` and the site's own Lookup page. Past it the answer is a 429, `Rate limit exceeded.`, with `Retry-After` in seconds.",
+];
+
+/** What `/keys` gives, in the "Get a key" section. */
+const KEY_FACTS = [
+  "One key per person. Creating a second while the first is live is refused.",
+  "A daily quota of 100 Discovery Lookups, refilled at midnight UTC; the keys page shows what is left today.",
+  "Roll gives the key a new secret and keeps today's quota; Revoke ends it at once, and you can create a new one.",
 ];
 
 /** Inline code in running text: mono on a sunken chip. */
@@ -120,7 +127,7 @@ function Route({ route }: { route: string }) {
 
 /**
  * `/docs`: the HTTP API (the route table, then each route with a `curl` and
- * the answer it gave), MCP, the key rules, and how to ask for a key.
+ * the answer it gave), MCP, the key rules, and how to get a key.
  */
 export function DocsView() {
   return (
@@ -438,22 +445,37 @@ function Keys() {
     <section aria-labelledby="keys" className={SECTION}>
       <Card variant="outline" className="grid max-w-[38rem] gap-4 p-5 sm:p-6">
         <h2 id="keys" className={H2}>
-          Request a key
+          Get a key
         </h2>
         <p className="leading-relaxed text-sb-text">
-          Keys are issued by hand, each with its daily quota; there are no
-          accounts. Ask by email, and the key's secret is sent to you once, when
-          it is made.
+          Sign in on the keys page with GitHub or by email, and create your key
+          there: no one has to approve it. Its secret is shown once, when it is
+          made, so store it then.
         </p>
+        <ul className="grid gap-2 leading-relaxed text-sb-text">
+          {KEY_FACTS.map((item) => (
+            <li key={item} className="flex gap-3">
+              <span
+                aria-hidden="true"
+                className="mt-[0.6em] size-1.5 shrink-0 rounded-full bg-sb-accent"
+              />
+              <span>
+                <Inline text={item} />
+              </span>
+            </li>
+          ))}
+        </ul>
         <p>
-          <a href={KEY_REQUEST_HREF} className={buttonClass({ size: "lg" })}>
-            Request a key
+          <a href="/keys" className={buttonClass({ size: "lg" })}>
+            Get a key
           </a>
         </p>
         <p className="text-sm text-sb-text-muted">
-          Or write to{" "}
-          <span className="font-mono text-sb-text">{KEY_REQUEST_EMAIL}</span>{" "}
-          with the subject “swagger.bot API key request”.
+          Need more than 100 a day? Write to{" "}
+          <a href={LARGER_QUOTA_HREF} className="font-mono text-sb-accent-text">
+            {KEY_REQUEST_EMAIL}
+          </a>{" "}
+          to ask for a larger quota.
         </p>
       </Card>
     </section>

@@ -12,9 +12,14 @@ export const BASE_URL = "https://swaggerbot.dev";
 /** The day the example answers were recorded (UTC). */
 export const RECORDED_AT = "2026-09-26T00:00:00Z";
 
-/** "Request a key" (Slice 6 backlog, D9): keys are handed out by hand. */
+/**
+ * The operator's address. Keys come from `/keys` (Slice 7); the address is
+ * for a larger quota, and for a key by hand where `/keys` isn't configured
+ * (Slice 7 backlog, D9).
+ */
 export const KEY_REQUEST_EMAIL = "hello@evolv3.ai";
 export const KEY_REQUEST_HREF = `mailto:${KEY_REQUEST_EMAIL}?subject=swagger.bot%20API%20key%20request`;
+export const LARGER_QUOTA_HREF = `mailto:${KEY_REQUEST_EMAIL}?subject=swagger.bot%20larger%20quota`;
 
 export const MCP_URL = `${BASE_URL}/mcp`;
 export const MCP_ADD = `claude mcp add --transport http swaggerbot ${MCP_URL}`;
@@ -132,7 +137,7 @@ export const EXAMPLES: Example[] = [
     answer: `HTTP 401
 {
   "error": "Discovery needs an API key.",
-  "hint": "Send it as \`Authorization: Bearer <key>\`. Keys are issued by the operator of this service; ask them for one."
+  "hint": "Send it as \`Authorization: Bearer <key>\`. Get a key at https://swaggerbot.dev/keys."
 }`,
   },
   {

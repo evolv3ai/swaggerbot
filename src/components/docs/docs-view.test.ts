@@ -29,9 +29,48 @@ describe("DocsView", () => {
     expect(html.slice(0, html.indexOf("<h1"))).not.toMatch(/>Docs</);
   });
 
-  it("has the Keys section with the request-a-key mailto (D9)", () => {
+  it("has the Keys section leading to /keys, mailing only for a larger quota", () => {
     expect(html).toMatch(
-      /<section[^>]*aria-labelledby="keys"[^>]*>\s*<div[^>]*>\s*<h2 id="keys"[\s\S]*href="mailto:hello@evolv3\.ai\?subject=swagger\.bot%20API%20key%20request"/,
+      /<section[^>]*aria-labelledby="keys"[^>]*>\s*<div[^>]*>\s*<h2 id="keys"[^>]*>Get a key<\/h2>[\s\S]*href="\/keys"[^>]*>Get a key<\/a>/,
+    );
+    for (const words of [
+      "GitHub or by email",
+      "One key per person",
+      "daily quota of 100",
+      "Roll gives the key a new secret",
+      "Revoke ends it",
+    ])
+      expect(text).toContain(words);
+    const mailtos = html.match(/href="mailto:[^"]*"/g) ?? [];
+    expect(mailtos).toEqual([
+      'href="mailto:hello@evolv3.ai?subject=swagger.bot%20larger%20quota"',
+    ]);
+    expect(text).toMatch(
+      /Write to hello@evolv3\.ai to ask for a larger quota\./,
+    );
+  });
+
+  it("keeps the Authorization: Bearer examples", () => {
+    expect(text).toContain("Authorization: Bearer <key>");
+    expect(text).toContain('--header "Authorization: Bearer <key>"');
+  });
+
+  it("has the top bar's key button and Search's key link lead to /keys, not the mailto", () => {
+    for (const file of [
+      "src/components/shell/shell.tsx",
+      "src/routes/index.tsx",
+    ]) {
+      const source = readFileSync(file, "utf8");
+      expect(source, file).not.toContain("mailto:");
+      expect(source, file).not.toContain("KEY_REQUEST");
+      expect(source, file).not.toMatch(/hash="keys"/);
+      expect(source, file).toContain('to="/keys"');
+    }
+    expect(readFileSync("src/components/shell/shell.tsx", "utf8")).toMatch(
+      /to="\/keys"[^>]*>\s*<span[^>]*>Get an API key</,
+    );
+    expect(readFileSync("src/routes/index.tsx", "utf8")).toMatch(
+      /to="\/keys"[\s\S]{0,200}Get a key\s*<\/Link>/,
     );
   });
 
