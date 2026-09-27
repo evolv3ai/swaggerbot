@@ -6,13 +6,18 @@ import {
   type UnkeyClient,
 } from "./unkey-keys";
 
-/** Unkey's keyspace and root key from the environment, when both are set. */
+/**
+ * Unkey's API and root key from the environment, when both are set, and
+ * the API's keyspace (`UNKEY_KEYSPACE_ID`, `ks_…`) that verification is
+ * limited to, when that is set too.
+ */
 export function unkeyConfigOf(
   env: Record<string, string | undefined>,
-): { rootKey: string; apiId: string } | undefined {
+): { rootKey: string; apiId: string; keyspaceId?: string } | undefined {
   const rootKey = env.UNKEY_ROOT_KEY?.trim();
   const apiId = env.UNKEY_API_ID?.trim();
-  return rootKey && apiId ? { rootKey, apiId } : undefined;
+  const keyspaceId = env.UNKEY_KEYSPACE_ID?.trim() || undefined;
+  return rootKey && apiId ? { rootKey, apiId, keyspaceId } : undefined;
 }
 
 /**
@@ -40,6 +45,7 @@ export function createKeyStore(
   return createUnkeyKeys({
     client: unkeyClient(unkey.rootKey),
     apiId: unkey.apiId,
+    keyspaceId: unkey.keyspaceId,
     env,
   });
 }

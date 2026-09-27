@@ -82,8 +82,12 @@ export type KeyStore = {
   ): Promise<{ id: string; secret: string }>;
   /** The owner's live key, the newest when there are several. */
   liveKeyOf(ownerId: string): Promise<LiveKey | undefined>;
-  /** A new secret for a live key, keeping its id and quota; undefined when there is no such live key. */
-  roll(id: string): Promise<string | undefined>;
+  /**
+   * A new secret for a live key, keeping its quota and the day's usage;
+   * undefined when there is no such live key. The id may change (Unkey's
+   * reroll issues a new key), so use the one returned.
+   */
+  roll(id: string): Promise<{ id: string; secret: string } | undefined>;
   /** False when there is no such live key. */
   revoke(id: string): Promise<boolean>;
 };
@@ -355,14 +359,16 @@ export function createKeys(
       };
     },
 
-    async roll(id: string): Promise<string | undefined> {
+    async roll(
+      id: string,
+    ): Promise<{ id: string; secret: string } | undefined> {
       const secret = newSecret();
       const result = db
         .update(apiKeys)
         .set({ keyHash: keyHashOf(secret) })
         .where(and(eq(apiKeys.id, id), isNull(apiKeys.revokedAt)))
         .run();
-      return result.changes > 0 ? secret : undefined;
+      return result.changes > 0 ? { id, secret } : undefined;
     },
 
     async revoke(id: string): Promise<boolean> {

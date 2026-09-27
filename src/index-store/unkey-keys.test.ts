@@ -194,12 +194,12 @@ describe("createUnkeyKeys: managing keys", () => {
     expect(await keys.liveKeyOf("user_2")).toBeUndefined();
   });
 
-  it("rolls a key to a new secret, the old one no longer verifying", async () => {
-    const { keys, fake } = store(fakeUnkey([live()]));
+  it("rolls a key to a new key, with a new id, the old one no longer verifying", async () => {
+    const { keys, fake } = store(fakeUnkey([live(3)]));
 
-    const secret = await keys.roll("key_1");
+    const rolled = await keys.roll("key_1");
 
-    expect(secret).toMatch(/^sb_rolled/);
+    expect(rolled).toEqual({ id: "key_rolled1", secret: "sb_rolled1" });
     expect(fake.keys.rerollKey).toHaveBeenCalledWith({
       keyId: "key_1",
       expiration: 0,
@@ -207,10 +207,99 @@ describe("createUnkeyKeys: managing keys", () => {
     expect(await keys.verify("sb_live", { cost: 0 })).toMatchObject({
       reason: "unknown",
     });
-    expect(await keys.verify(secret as string, { cost: 0 })).toMatchObject({
+    expect(await keys.verify("sb_rolled1", { cost: 0 })).toMatchObject({
       ok: true,
+      key: { id: "key_rolled1", owner: "user_1", remaining: 3 },
     });
     expect(await keys.roll("key_nope")).toBeUndefined();
+  });
+
+  it("never gives a rolled-away key as the owner's live key", async () => {
+    // On the real clock: the fake expires the old key at the roll's Date.now().
+    const keys = createUnkeyKeys({
+      client: fakeUnkey([live()]).client,
+      apiId: "api_test",
+      env: {},
+    });
+
+    const rolled = await keys.roll("key_1");
+    expect((await keys.liveKeyOf("user_1"))?.id).toBe(rolled?.id);
+
+    await keys.revoke(rolled?.id as string);
+    expect(await keys.liveKeyOf("user_1")).toBeUndefined();
+  });
+
+  it("asks Unkey for a fresh list, not its cache", async () => {
+    const { keys, fake } = store(fakeUnkey([live()]));
+
+    await keys.liveKeyOf("user_1");
+
+    expect(fake.apis.listKeys.mock.calls[0]?.[0]).toMatchObject({
+      revalidateKeysCache: true,
+    });
+  });
+
+  it("refuses a key from another keyspace when the keyspace is set", async () => {
+    const unkey = fakeUnkey([
+      live(),
+      {
+        ...live(),
+        keyId: "key_other",
+        secret: "sb_other",
+        keyspaceId: "ks_notra",
+      },
+    ]);
+    const keys = createUnkeyKeys({
+      client: unkey.client,
+      apiId: "api_test",
+      keyspaceId: "ks_test",
+      env: {},
+    });
+
+    expect(await keys.verify("sb_other", { cost: 1 })).toEqual({
+      ok: false,
+      reason: "unknown",
+    });
+    expect(unkey.verifyKey.mock.calls[0]?.[0]).toMatchObject({
+      keyspaces: ["ks_test"],
+    });
+    expect(await keys.verify("sb_live", { cost: 0 })).toMatchObject({
+      ok: true,
+    });
+  });
+
+  it("refuses a secret without the sb_ prefix without asking Unkey", async () => {
+    const { keys, verifyKey } = store(fakeUnkey([live()]));
+
+    expect(await keys.verify("notra_live", { cost: 1 })).toEqual({
+      ok: false,
+      reason: "unknown",
+    });
+    expect(verifyKey).not.toHaveBeenCalled();
+  });
+
+  it("reports an outage by the error's name and status, never the key", async () => {
+    const unkey = fakeUnkey([live()]);
+    unkey.verifyKey.mockRejectedValueOnce(
+      Object.assign(new Error("boom sb_live"), {
+        name: "APIError",
+        statusCode: 502,
+      }),
+    );
+    const warn = vi.fn();
+    const keys = createUnkeyKeys({
+      client: unkey.client,
+      apiId: "api_test",
+      env: {},
+      warn,
+    });
+
+    expect(await keys.verify("sb_live", { cost: 1 })).toMatchObject({
+      reason: "unavailable",
+    });
+    expect(warn.mock.calls).toEqual([
+      ["keys: Unkey unavailable (APIError 502)"],
+    ]);
   });
 
   it("revokes by deleting the key", async () => {

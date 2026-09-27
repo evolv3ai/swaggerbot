@@ -40,30 +40,43 @@ export type UnkeyListedKey = LiveKey & { owner: string | undefined };
  * owner is its identity's `externalId`; its quota is credits refilled daily.
  * Revoking deletes the key (D6). Unkey's codes never leave this file: they
  * are mapped to a `Verification`.
+ *
+ * A root key allowed to verify in other keyspaces would accept their keys
+ * too, so verification is limited to `keyspaceId` (the API's `ks_…` id,
+ * not its `api_…` id) when it is given, and a secret without the `sb_`
+ * prefix is refused without asking Unkey.
  */
 export function createUnkeyKeys({
   client,
   apiId,
+  keyspaceId,
   env = process.env,
   timeoutMs = VERIFY_TIMEOUT_MS,
   now = () => new Date(),
+  warn = console.warn,
 }: {
   client: UnkeyClient;
   apiId: string;
+  keyspaceId?: string;
   env?: Record<string, string | undefined>;
   timeoutMs?: number;
   now?: () => Date;
+  /** Where an outage is reported: the error's name and status, never the request. */
+  warn?: (message: string) => void;
 }) {
   /** Every key in the keyspace, or only `externalId`'s, following Unkey's pages. */
   async function listKeys(externalId?: string) {
     const all = [];
     let cursor: string | undefined;
     do {
+      // Unkey serves the list from a cache unless asked: a key just created,
+      // rolled or revoked must show as it is now.
       const page = await client.apis.listKeys({
         apiId,
         externalId,
         cursor,
         limit: 100,
+        revalidateKeysCache: true,
       });
       all.push(...page.result.data);
       cursor = page.result.pagination?.hasMore
@@ -91,6 +104,8 @@ export function createUnkeyKeys({
 
   return {
     async verify(secret, { cost }): Promise<Verification> {
+      if (!secret.startsWith(`${KEY_PREFIX}_`))
+        return { ok: false, reason: "unknown" };
       const controller = new AbortController();
       let timer: ReturnType<typeof setTimeout> | undefined;
       const timedOut = new Promise<"timeout">((resolve) => {
@@ -102,12 +117,19 @@ export function createUnkeyKeys({
       try {
         const answer = await Promise.race([
           client.keys.verifyKey(
-            { key: secret, credits: { cost } },
+            {
+              key: secret,
+              credits: { cost },
+              ...(keyspaceId ? { keyspaces: [keyspaceId] } : {}),
+            },
             { timeoutMs, signal: controller.signal },
           ),
           timedOut,
         ]);
-        if (answer === "timeout") return { ok: false, reason: "unavailable" };
+        if (answer === "timeout") {
+          warn(`keys: Unkey didn't answer in ${timeoutMs} ms`);
+          return { ok: false, reason: "unavailable" };
+        }
         const { data } = answer;
         // A key whose credits are spent is still live: at cost 0 (a request
         // the Index answers) it passes, as it did before Unkey.
@@ -138,9 +160,11 @@ export function createUnkeyKeys({
               resetsAt: nextUtcMidnight(now()),
             };
           default:
+            warn(`keys: Unkey answered ${data.code}`);
             return { ok: false, reason: "unavailable" };
         }
-      } catch {
+      } catch (err) {
+        warn(`keys: Unkey unavailable (${describeError(err)})`);
         return { ok: false, reason: "unavailable" };
       } finally {
         clearTimeout(timer);
@@ -163,19 +187,26 @@ export function createUnkeyKeys({
     },
 
     async liveKeyOf(ownerId) {
-      const keys = (await listKeys(ownerId)).filter((k) => k.enabled);
+      // A rolled-away key is expired, not disabled, until Unkey deletes it.
+      const at = now().getTime();
+      const keys = (await listKeys(ownerId)).filter(
+        (k) => k.enabled && (k.expires === undefined || k.expires > at),
+      );
       const newest = keys.sort((a, b) => b.createdAt - a.createdAt)[0];
       return newest ? liveKey(newest) : undefined;
     },
 
-    /** Unkey's reroll: a new secret, the old one invalid at once; credits kept (D6). */
+    /**
+     * Unkey's reroll: a new key with a new id and secret, its credits and
+     * identity copied; the old one expires at once (D6).
+     */
     async roll(id) {
       try {
         const { data } = await client.keys.rerollKey({
           keyId: id,
           expiration: 0,
         });
-        return data.key;
+        return { id: data.keyId, secret: data.key };
       } catch (err) {
         if (isNotFound(err)) return undefined;
         throw err;
@@ -203,6 +234,18 @@ export function createUnkeyKeys({
 }
 
 export type UnkeyKeys = ReturnType<typeof createUnkeyKeys>;
+
+/** An SDK error as a log line: its name and HTTP status, nothing it carried. */
+function describeError(err: unknown): string {
+  if (typeof err !== "object" || err === null) return "unknown error";
+  const name =
+    "name" in err && typeof err.name === "string" ? err.name : "Error";
+  const status =
+    "statusCode" in err && typeof err.statusCode === "number"
+      ? ` ${err.statusCode}`
+      : "";
+  return `${name}${status}`;
+}
 
 /** Unkey's 404 for a key that doesn't exist (or was deleted). */
 function isNotFound(err: unknown): boolean {

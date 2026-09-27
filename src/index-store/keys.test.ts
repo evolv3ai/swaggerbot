@@ -226,12 +226,15 @@ describe("createKeys as a KeyStore", () => {
     expect(await keys.liveKeyOf("user_2")).toBeUndefined();
 
     const rolled = await keys.roll(id);
-    expect(rolled).toMatch(/^sb_/);
-    expect(rolled).not.toBe(secret);
+    expect(rolled?.id).toBe(id);
+    expect(rolled?.secret).toMatch(/^sb_/);
+    expect(rolled?.secret).not.toBe(secret);
     expect(await keys.verify(secret, { cost: 0 })).toMatchObject({
       reason: "unknown",
     });
-    expect(await keys.verify(rolled as string, { cost: 0 })).toMatchObject({
+    expect(
+      await keys.verify(rolled?.secret as string, { cost: 0 }),
+    ).toMatchObject({
       ok: true,
       key: { id },
     });

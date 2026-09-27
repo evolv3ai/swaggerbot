@@ -11,6 +11,10 @@ export type FakeUnkeyKey = {
   refill?: number;
   enabled: boolean;
   createdAt: number;
+  /** When the key stops verifying (ms); a rolled-away key's is its roll. */
+  expires?: number;
+  /** Its keyspace; `ks_test` when not given. */
+  keyspaceId?: string;
 };
 
 /**
@@ -22,13 +26,31 @@ export function fakeUnkey(keys: FakeUnkeyKey[] = []) {
   const state = { mode: "ok" as "ok" | "throw" | "hang", next: 1 };
 
   const verifyKey = vi.fn(
-    async ({ key, credits }: { key: string; credits?: { cost: number } }) => {
+    async ({
+      key,
+      credits,
+      keyspaces,
+    }: {
+      key: string;
+      credits?: { cost: number };
+      keyspaces?: string[];
+    }) => {
       if (state.mode === "throw") throw new Error("Unkey is down");
       if (state.mode === "hang") return new Promise<never>(() => {});
       const found = keys.find((k) => k.secret === key);
       const data = (() => {
-        if (!found) return { valid: false, code: "NOT_FOUND" as const };
+        if (
+          !found ||
+          (keyspaces && !keyspaces.includes(found.keyspaceId ?? "ks_test"))
+        )
+          return { valid: false, code: "NOT_FOUND" as const };
         if (!found.enabled) return { valid: false, code: "DISABLED" as const };
+        if (found.expires !== undefined && found.expires <= Date.now())
+          return {
+            valid: false,
+            code: "EXPIRED" as const,
+            keyId: found.keyId,
+          };
         const cost = credits?.cost ?? 1;
         if (found.credits !== undefined) {
           if (found.credits < cost)
@@ -74,14 +96,25 @@ export function fakeUnkey(keys: FakeUnkeyKey[] = []) {
           data: { keyId: key.keyId, key: key.secret },
         };
       }),
-      rerollKey: vi.fn(async ({ keyId }) => {
+      // As Unkey rerolls: a new key (new id and secret) with the old one's
+      // credits and identity; the old one expires `expiration` ms from now.
+      rerollKey: vi.fn(async ({ keyId, expiration }) => {
         const found = keys.find((k) => k.keyId === keyId);
         if (!found)
           throw Object.assign(new Error("not found"), { statusCode: 404 });
-        found.secret = `sb_rolled${state.next++}`;
+        const rolled: FakeUnkeyKey = {
+          ...found,
+          keyId: `key_rolled${state.next}`,
+          secret: `sb_rolled${state.next}`,
+          createdAt: found.createdAt + state.next,
+          expires: undefined,
+        };
+        state.next += 1;
+        found.expires = Date.now() + expiration;
+        keys.push(rolled);
         return {
           meta: { requestId: "req_fake" },
-          data: { keyId, key: found.secret },
+          data: { keyId: rolled.keyId, key: rolled.secret },
         };
       }),
       deleteKey: vi.fn(async ({ keyId }) => {
@@ -114,6 +147,7 @@ export function fakeUnkey(keys: FakeUnkeyKey[] = []) {
               start: k.secret.slice(0, 7),
               enabled: k.enabled,
               createdAt: k.createdAt,
+              expires: k.expires,
               credits:
                 k.credits === undefined
                   ? undefined
