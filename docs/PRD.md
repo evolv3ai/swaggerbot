@@ -104,7 +104,7 @@ All Spec content is untrusted: rendered with sanitisation, under a strict Conten
 
 One TanStack Start app (Router, Query, Table) running as a single instance on Coolify. SQLite through Drizzle in WAL mode, replicated to Backblaze B2 with Litestream (ADR 0002). Jev through the TypeSafe JS SDK, behind a narrow judgment interface. TypeScript throughout.
 
-Explicitly **not** in v1: LangGraph, TanStack AI, OpenRouter, Perplexity, Browserbase/Stagehand, MongoDB, Express, AI-written summaries, user accounts, billing.
+Explicitly **not** in v1: LangGraph, TanStack AI, OpenRouter, Perplexity, Browserbase/Stagehand, MongoDB, Express, AI-written summaries, user accounts (except sign-in to get an API key, Slice 7), billing.
 
 ## Delivery slices
 
@@ -148,6 +148,10 @@ Each slice is usable end to end and demonstrable. Later slices don't start until
 - **Accept when:** `/impeccable audit` is clean, and the UI is keyboard-navigable and meets WCAG AA.
 - Until then, `/` is a static landing page (#81, 2026-09-24: what the service does, a real Lookup, the HTTP API) in the UX spec's colours and type. Slice 6 replaces it.
 
+### Slice 7 — Self-service API keys
+- Brought forward from "Later" (Wes, 2026-09-27): anyone signs in at `/keys` (WorkOS AuthKit: GitHub or email) and gets one key, managed and verified in Unkey; the app still runs on Coolify ([ADR 0006](adr/0006-keys-in-unkey-accounts-in-workos.md), [backlog](slices/slice-7-backlog.md)).
+- **Accept when:** a newcomer gets a key on production without anyone approving it and uses it for a Discovery over HTTP and MCP; revoking it stops it; hand-issued keys still work; with Unkey unreachable, keyed requests fail closed and Index answers still work.
+
 ## Open questions (decide during the build)
 - Which web search provider: Brave, Exa or Tavily.
 - How long the freshness window is (7 days is the starting assumption).
@@ -156,7 +160,7 @@ Each slice is usable end to end and demonstrable. Later slices don't start until
 - When to add human curation of the Index, and a scheduled sweep for APIs nobody looks up.
 
 ## Later (not v1)
-- Self-service keys through GitHub sign-in, and paid tiers.
+- Paid tiers. (Self-service keys moved to Slice 7.)
 - Postman public network, SwaggerHub, and Browserbase as a fallback for Developer Portals that render in JavaScript.
 - Escalation to a reasoning model on the server (TanStack AI), if Callers can't handle unresolved results.
 - "Ask this Spec" chat, version comparison, a CLI.
