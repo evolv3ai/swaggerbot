@@ -1,6 +1,6 @@
 # API keys in Unkey, accounts in WorkOS
 
-**Status:** proposed (Wes chose Unkey, WorkOS, fail closed, auto-approval and one key per user on 2026-09-27; the rest awaits his approval of the [Slice 7 backlog](../slices/slice-7-backlog.md)).
+**Status:** accepted (Wes, 2026-09-27, with the [Slice 7 backlog](../slices/slice-7-backlog.md)).
 
 Anyone can get their own API key at `swaggerbot.dev/keys`. They sign in with **WorkOS AuthKit**; the page creates, shows and revokes their one key in **Unkey**, which then holds every key and its daily quota. swagger.bot keeps no users table and no key hashes: a key's owner is its Unkey identity (`externalId` = the WorkOS user id), and its quota is Unkey credits refilled daily at midnight UTC, the day the Index already counts in. The app still runs where it runs (ADR 0002): only key issuance and verification move out. This is the pattern Notra uses (a keys page behind its own WorkOS sign-in, Unkey behind it).
 
