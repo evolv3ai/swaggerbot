@@ -4,11 +4,12 @@ import { MCP_ADD } from "~/components/docs/reference";
 import { SearchForm } from "~/components/search/search-form";
 import { BENCHMARK } from "~/components/shell/benchmark";
 import { WithOnThisPage } from "~/components/shell/on-this-page";
+import { H2, LEAD, PAGE, PageTitle } from "~/components/shell/page";
 import { ANSWERS, AnswerBadge } from "~/components/ui/answer-badge";
-import { Badge } from "~/components/ui/badge";
 import { buttonClass } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
 import { CodeBlock, SpecDownloadCurl } from "~/components/ui/code-block";
+import { ProvenanceBadge } from "~/components/ui/provenance-badge";
 import { Tabs } from "~/components/ui/tabs";
 import { sizeOf } from "~/components/viewer/size";
 import type { OutcomeKind } from "~/domain/outcome";
@@ -19,9 +20,6 @@ import { lookupHref } from "~/server/lookup-search";
 export const Route = createFileRoute("/")({
   component: Search,
 });
-
-const H2 =
-  "mt-10 mb-3.5 scroll-mt-20 font-display text-xl font-bold tracking-[-0.01em] text-sb-text";
 
 /** What each answer means (CONTEXT.md's Outcomes, in the page's words). */
 const MEANING: Record<OutcomeKind, string> = {
@@ -45,17 +43,14 @@ function Search() {
   const example = facts?.recent[0];
   return (
     <WithOnThisPage first={{ id: "look-up", label: "Look up an API" }}>
-      <div className="max-w-[860px] px-4 pt-7 pb-16 sm:px-8 lg:px-14 lg:pt-11">
+      <div className={PAGE}>
         <p className="font-display text-xs font-bold uppercase tracking-[0.3em] text-sb-accent-text">
           Name it. Get the Spec.
         </p>
-        <h1
-          id="look-up"
-          className="mt-2 mb-2.5 scroll-mt-20 font-display text-[28px] leading-[1.1] font-extrabold tracking-[-0.01em] text-sb-text sm:text-[40px]"
-        >
+        <PageTitle id="look-up" className="mt-2">
           No fake Specs.
-        </h1>
-        <p className="max-w-[40em] text-[17px] text-sb-text-muted">
+        </PageTitle>
+        <p className={LEAD}>
           SwaggerBot hands you an API's OpenAPI Spec, where it came from and how
           sure it is, or tells you straight why there isn't one.
         </p>
@@ -159,7 +154,7 @@ function TryRow({ facts }: { facts: IndexStats | null }) {
               <li key={p.apiId}>
                 <a
                   href={lookupHref(p.lookupName)}
-                  className="inline-block rounded-full border border-sb-border px-2.5 py-[3px] text-sb-text no-underline transition-colors hover:border-sb-accent hover:text-sb-accent-text"
+                  className="inline-block rounded-full border border-sb-border px-2.5 py-[3px] pointer-coarse:px-3.5 pointer-coarse:py-[11px] text-sb-text no-underline transition-colors hover:border-sb-accent hover:text-sb-accent-text"
                 >
                   {chipName(p.apiName)}
                 </a>
@@ -218,12 +213,7 @@ function ResolvedExample({ api }: { api: RecentApi }) {
         {
           id: "mcp",
           label: "MCP",
-          content: (
-            <CodeBlock code={MCP_ADD}>
-              <span className="text-[#8fbaff]">claude</span>
-              {MCP_ADD.slice("claude".length)}
-            </CodeBlock>
-          ),
+          content: <CodeBlock code={MCP_ADD} />,
         },
         {
           id: "json",
@@ -250,10 +240,7 @@ function ResolvedExample({ api }: { api: RecentApi }) {
         </h3>
         <AnswerBadge outcome="Resolved" />
         {api.provenance ? (
-          <Badge tone="neutral">
-            <span className="sr-only">Provenance: </span>
-            {api.provenance}
-          </Badge>
+          <ProvenanceBadge provenance={api.provenance} />
         ) : null}
         <span className="text-[13px] text-sb-text-muted sm:ml-auto">
           answered in {api.ms.toFixed(1)} ms

@@ -7,8 +7,12 @@ import {
   useRouterState,
 } from "@tanstack/react-router";
 import type { ReactNode } from "react";
+import {
+  NOT_FOUND_TITLE,
+  NotFoundPage,
+} from "~/components/shell/fallback-pages";
 import { Shell } from "~/components/shell/shell";
-import { THEME_SCRIPT } from "~/components/shell/theme";
+import { THEME_COLOR, THEME_SCRIPT } from "~/components/shell/theme";
 import { getShellFacts } from "~/server/shell-facts";
 import appCss from "~/styles/app.css?url";
 import fontsCss from "~/styles/fonts.css?url";
@@ -18,14 +22,16 @@ const DESCRIPTION =
   "Send the name of an API and get back its OpenAPI or Swagger Spec, with where it came from and how sure we are, or an honest answer about why there isn't one.";
 
 export const Route = createRootRoute({
-  head: () => ({
+  // A global 404 marks the root match `_notFound`; it has no route of its
+  // own to name the tab.
+  head: ({ match }) => ({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: TITLE },
+      { title: match._notFound ? `${NOT_FOUND_TITLE} · SwaggerBot` : TITLE },
       { name: "description", content: DESCRIPTION },
       // One value: the router's head keeps one meta per name.
-      { name: "theme-color", content: "#111827" },
+      { name: "theme-color", content: THEME_COLOR.dark },
       { property: "og:type", content: "website" },
       { property: "og:site_name", content: "SwaggerBot" },
       { property: "og:title", content: TITLE },
@@ -57,6 +63,8 @@ export const Route = createRootRoute({
   }),
   loader: () => getShellFacts(),
   component: RootComponent,
+  // Rendered in the shell, in place of the page.
+  notFoundComponent: NotFoundPage,
 });
 
 function RootComponent() {

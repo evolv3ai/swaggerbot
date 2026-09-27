@@ -11,7 +11,8 @@ export function HealthStatus({ className }: { className?: string }) {
   const [ok, setOk] = useState<boolean>();
   useEffect(() => {
     let live = true;
-    fetch("/api/health")
+    // A check that hangs is a service that isn't answering.
+    fetch("/api/health", { signal: AbortSignal.timeout(10_000) })
       .then((r) => r.ok)
       .catch(() => false)
       .then((up) => live && setOk(up));

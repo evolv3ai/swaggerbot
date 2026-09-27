@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useId } from "react";
+import { H2, LEAD, PAGE, PageTitle } from "~/components/shell/page";
 import { buttonClass } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
 import { Input, Label } from "~/components/ui/input";
@@ -7,7 +8,6 @@ import { cn } from "~/lib/utils";
 import { vendorHref } from "~/lib/vendor-hrefs";
 import { distinctDomain } from "~/lib/vendor-name";
 import type { VendorsPage } from "~/server/index-browsing";
-import { H2, LEAD, PAGE, PageTitle } from "./page";
 
 /**
  * `/vendors`, a docs page of the Index: the title and a lead with the live

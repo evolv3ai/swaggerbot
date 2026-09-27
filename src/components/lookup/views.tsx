@@ -2,6 +2,7 @@ import { Download, FileCode } from "lucide-react";
 import type { ReactNode } from "react";
 import { SearchForm } from "~/components/search/search-form";
 import { WithOnThisPage } from "~/components/shell/on-this-page";
+import { LEAD, PAGE, PageTitle } from "~/components/shell/page";
 import { AnswerBadge } from "~/components/ui/answer-badge";
 import { buttonClass } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
@@ -120,14 +121,9 @@ function Page({
     : [];
   return (
     <WithOnThisPage first={{ id: "outcome", label: heading }}>
-      <div className="max-w-[860px] px-4 pt-7 pb-16 sm:px-8 lg:px-14 lg:pt-11">
-        <h1
-          id="outcome"
-          className="mb-2.5 scroll-mt-20 font-display text-[28px] leading-[1.1] font-extrabold tracking-[-0.01em] text-sb-text sm:text-[40px]"
-        >
-          {heading}
-        </h1>
-        <p className="max-w-[40em] text-[17px] text-sb-text-muted">{lead}</p>
+      <div className={PAGE}>
+        <PageTitle id="outcome">{heading}</PageTitle>
+        <p className={LEAD}>{lead}</p>
         {asked.length ? (
           <p className="mt-2 text-[13px] text-sb-text-muted [overflow-wrap:anywhere]">
             {asked.join(" · ")}
@@ -508,10 +504,7 @@ function AnswerCard({
         <>
           <CodeBlock
             code={`claude mcp add --transport http swaggerbot ${page.baseUrl}/mcp`}
-          >
-            <span className="text-[#8fbaff]">claude</span> mcp add --transport
-            http swaggerbot {page.baseUrl}/mcp
-          </CodeBlock>
+          />
           <p className="border-t border-sb-border px-4 py-2.5 text-[13px] text-sb-text-muted">
             Then call the tool; an Index answer needs no key:
           </p>
@@ -660,7 +653,7 @@ function ValidityIssues({
   if (count === 0) return <span>None</span>;
   return (
     <details className="group">
-      <summary className="w-fit cursor-pointer rounded-sm">
+      <summary className="w-fit cursor-pointer rounded-sm pointer-coarse:py-3">
         {count} {count === 1 ? "finding" : "findings"}; none stops the Spec
         being used
       </summary>
