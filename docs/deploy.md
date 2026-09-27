@@ -195,6 +195,15 @@ The deploys of 2026-09-23:
 - `mcpcheck`: the first run after the deploy FAILED on one timing (Cloudflare `lookup_api` 2.2 s, bound 2.0 s, the first Lookup on a cold server); three reruns PASS, slowest call 308–342 ms, largest result 28.4 kB.
 - `formscheck` PASS: outline p90 170 ms, operation p90 352 ms, 0 non-2xx.
 
+### `c0571ea` (2026-09-27): the Impeccable pass
+
+**Deployed at ~17:07 CDT** (deployment `i018fefgp82gkujxbjiybkcx`). #108, Wes's Impeccable session on top of the rebrand: High Contrast markers, the tagline NAME IT. GET THE SPEC. and new logo lockups, and the 2026-09-26 critique's fixes (the Spec frame switches theme by `postMessage` instead of reloading, and shows a loading line; 404 and error pages in the shell; 44px touch targets; field-edge contrast; metric-matched font fallbacks; the `/lookup` query read without zod, client JS 624 → 483 kB). No new env vars.
+
+**Live checks:**
+- `uicheck` PASS on `/`, `/lookup?name=stripe`, `/lookup?name=frobnicator-xyz`, `/vendors`, `/vendors/stripe.com`, the Stripe Spec viewer and `/docs` at 390 and 1280, light and dark (28 runs): axe 0, CSP 0, links 0, keyboard complete. `/nope` answers 404 with the title "No page here · SwaggerBot"; pass it to uicheck as `/nope#404`, or it reports the 404 as a failure.
+- `mcpcheck` PASS: slowest call 400 ms, largest result 28.4 kB.
+- `formscheck` PASS: outline p90 182 ms, operation p90 349 ms, 0 non-2xx.
+
 ## Gotchas
 
 - Coolify's application health check runs `curl`/`wget` **inside** the container. An image without them is rolled back as unhealthy, even when its own Docker `HEALTHCHECK` passes.

@@ -35,7 +35,7 @@ Keys since Slice 3 (`src/index-store/keys.ts`): SQLite `api_keys` (id, owner, sh
 
 ## Operator steps (not factory issues)
 
-- **O0. Accounts (Wes).** In Unkey: keyspace `swaggerbot`, and a root key with `api.*.create_key`, `api.*.verify_key`, `api.*.read_key`, `api.*.update_key`, `api.*.delete_key` for it. In WorkOS: a production environment for swagger.bot with GitHub and Magic Auth on (D5), redirect URI `https://swaggerbot.dev/auth/callback`. Values go into Coolify's env, never the repo.
+- **O0. Accounts (Wes).** In Unkey: keyspace `swaggerbot`, and a root key scoped to that API alone (`api.<swaggerbot api id>.create_key`, `.verify_key`, `.read_key`, `.update_key`, `.delete_key`; not `api.*`, which would verify keys from any keyspace, such as `notra-local`), and the API's keyspace id (`ks_…`) as `UNKEY_KEYSPACE_ID`, which the store also limits verification to. In WorkOS: a production environment for swagger.bot with GitHub and Magic Auth on (D5), redirect URI `https://swaggerbot.dev/auth/callback`. Values go into Coolify's env, never the repo.
 - **O1. Deploy** after waves 1, 2 and 3, keeping `docs/deploy.md` current. After wave 1 the start log says `keys: unkey`, and `mcpcheck`/`formscheck` still pass with a migrated key.
 - **O2. Migrate the hand-issued keys** (D8) before wave 1 is deployed, so no existing key stops working.
 - **O3. The acceptance run**, recorded in `docs/slices/slice-7-result.md`.
@@ -53,7 +53,7 @@ Keys are issued by hand into SQLite, and there is no way for a Caller to get one
 - Unkey: `keys.verifyKey({ key, credits: { cost } })` with a 2 s timeout; `valid` → ok; `NOT_FOUND`/`DISABLED`/`EXPIRED` → unknown; `USAGE_EXCEEDED` → quota (`resetsAt` next UTC midnight); anything else, an error or a timeout → unavailable. Never pass Unkey's codes through to a Caller.
 - The same seam also exposes what #3 needs: `create(ownerId, quota)` → `{ id, secret }` (prefix `sb`, `externalId` = ownerId, credits per D7), `liveKeyOf(ownerId)` → the key's id, start, created, remaining, limit, resetsAt, or none; `roll(id)` → new secret; `revoke(id)`. SQLite implements them too (owner = ownerId), so #3 is testable without Unkey.
 - `scripts/keys.ts` (`create <owner> [--quota N] | list | revoke <id>`) works against whichever store is configured; with Unkey, `create` uses `externalId: "operator:<owner>"`. Add `migrate`: reads the live SQLite keys and calls `keys.migrateKeys` with `UNKEY_MIGRATION_ID`, the hash as base64 of the sha256 bytes (D8); prints how many moved and any it couldn't.
-- Env: `UNKEY_ROOT_KEY`, `UNKEY_API_ID`, `UNKEY_MIGRATION_ID` (only for `migrate`); already in `.env.example`.
+- Env: `UNKEY_ROOT_KEY`, `UNKEY_API_ID`, `UNKEY_KEYSPACE_ID` (verification is limited to it when set), `UNKEY_MIGRATION_ID` (only for `migrate`); already in `.env.example`.
 
 ## Tests
 - A fake Unkey client (no network) covering: valid at cost 0 spends nothing; cost 1 spends one; `USAGE_EXCEEDED` → 429 with `resetsAt`; unknown → 401; a thrown error and a 2 s timeout → 503 with `retry-after`; a request with no key never calls the client, over `/api/lookup` and `/mcp`.

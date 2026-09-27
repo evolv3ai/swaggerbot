@@ -3,13 +3,17 @@ import { parseArgs } from "node:util";
 export const KEYS_USAGE = `usage: pnpm tsx scripts/keys.ts <command>   (built: node .output/cli/keys.mjs <command>)
   create <owner> [--quota N]   issue a key; prints its id and secret once
   list                         every key, with today's (UTC) usage
-  revoke <id>                  revoke a key`;
+  revoke <id>                  revoke a key
+  migrate                      move the live keys in the Index into Unkey, secrets unchanged
+                               (needs UNKEY_ROOT_KEY, UNKEY_API_ID and UNKEY_MIGRATION_ID)
+With UNKEY_ROOT_KEY and UNKEY_API_ID set, create, list and revoke act on Unkey; else on the Index.`;
 
 /** A `scripts/keys.ts` command, once validated. */
 export type KeysCommand =
   | { command: "create"; owner: string; quota?: number }
   | { command: "list" }
-  | { command: "revoke"; id: string };
+  | { command: "revoke"; id: string }
+  | { command: "migrate" };
 
 export type ParsedKeysArgs =
   | { ok: true; options: KeysCommand }
@@ -54,6 +58,7 @@ export function parseKeysArgs(args: string[]): ParsedKeysArgs {
       return { ok: true, options: { command, owner: owner.trim(), quota } };
     }
     case "list":
+    case "migrate":
       if (rest.length > 0) return fail(`unexpected argument: ${rest[0]}`);
       return { ok: true, options: { command } };
     case "revoke": {
