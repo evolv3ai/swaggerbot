@@ -106,7 +106,7 @@ function FormSwitch({ view }: { view: SpecView }) {
                 className={cn(
                   "flex h-8 items-center rounded-full px-3.5 text-[13px] font-semibold no-underline transition-colors duration-150",
                   active
-                    ? "bg-sb-accent text-sb-text-on-accent"
+                    ? "hc-current bg-sb-accent text-sb-text-on-accent"
                     : "text-sb-text-muted hover:bg-sb-accent-soft hover:text-sb-text",
                 )}
               >

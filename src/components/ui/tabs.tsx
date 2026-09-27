@@ -69,7 +69,7 @@ export function Tabs({
             tabIndex={i === selected ? 0 : -1}
             onClick={() => setSelected(i)}
             onKeyDown={onKeyDown}
-            className="relative py-2.5 text-[13px] font-medium text-sb-text-muted transition-colors hover:text-sb-text aria-selected:text-sb-text aria-selected:shadow-[inset_0_-2px_var(--sb-accent)] focus-visible:outline-offset-[-2px]"
+            className="relative py-2.5 text-[13px] font-medium text-sb-text-muted transition-colors hover:text-sb-text aria-selected:text-sb-text aria-selected:shadow-[inset_0_-2px_var(--sb-accent)] forced-colors:aria-selected:underline forced-colors:aria-selected:decoration-[3px] forced-colors:aria-selected:underline-offset-4 focus-visible:outline-offset-[-2px]"
           >
             {tab.label}
           </button>

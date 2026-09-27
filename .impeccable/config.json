@@ -1,0 +1,14 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "montserrat",
+        "createdAt": "2026-09-27T18:58:46.155Z",
+        "reason": "User confirmed: Montserrat is the display face pinned by the binding SwaggerBot design system v2 (PRODUCT.md, DESIGN.md)"
+      }
+    ]
+  }
+}

@@ -60,7 +60,7 @@ export function Sidebar({
                     className={cn(
                       "-ml-2.5 flex items-center rounded-md px-2.5 py-[5px] no-underline transition-colors",
                       on
-                        ? "bg-sb-accent-soft font-medium text-sb-accent-text"
+                        ? "hc-current bg-sb-accent-soft font-medium text-sb-accent-text"
                         : "text-sb-text-muted hover:bg-sb-accent-soft/50 hover:text-sb-text",
                     )}
                   >

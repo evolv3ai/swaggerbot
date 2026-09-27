@@ -259,3 +259,22 @@
     font-family: var(--font-sans);
   }
 }
+
+/* High Contrast (forced colours) drops backgrounds and box shadows, which
+   is how the sidebar's current item, the Form switch and the "On this
+   page" rail mark where the visitor is. This puts the marker back in the
+   system's own selection colours, for the item and everything inside it,
+   `!important` because the item's own colour utilities sort after it. */
+@utility hc-current {
+  @media (forced-colors: active) {
+    forced-color-adjust: none !important;
+    background-color: Highlight !important;
+    border-color: Highlight !important;
+    color: HighlightText !important;
+    & * {
+      background-color: transparent !important;
+      border-color: HighlightText !important;
+      color: HighlightText !important;
+    }
+  }
+}
