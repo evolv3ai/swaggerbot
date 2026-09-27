@@ -27,7 +27,7 @@ export type KeyView = LiveKey & {
 /** What `/keys` shows, and the status it is served with. */
 export type KeysPage =
   /** Unkey or WorkOS isn't configured: keys are issued by hand (D9). */
-  | { state: "by-hand"; status: 200 }
+  | { state: "by-hand"; status: 200; quota: number }
   | { state: "signed-out"; status: 200; quota: number }
   | { state: "no-key"; status: 200; quota: number; baseUrl: string }
   | {
@@ -170,7 +170,7 @@ export function createKeyPage({
   return {
     /** The page for `user` (null: signed out). */
     async page(user: SignedInUser | null, baseUrl: string): Promise<KeysPage> {
-      if (!configured) return { state: "by-hand", status: 200 };
+      if (!configured) return { state: "by-hand", status: 200, quota };
       if (!user) return { state: "signed-out", status: 200, quota };
       try {
         const key = await keys.liveKeyOf(user.id);

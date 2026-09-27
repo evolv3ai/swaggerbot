@@ -210,6 +210,7 @@ describe("the key page's server functions, over the SQLite store", () => {
     expect(await keyPage.page(ADA, BASE)).toEqual({
       state: "by-hand",
       status: 200,
+      quota: 100,
     });
     expect(await keyPage.create(ADA, request())).toMatchObject({
       status: 404,

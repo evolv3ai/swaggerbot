@@ -75,8 +75,9 @@ describe("KeysView", () => {
   });
 
   it("without Unkey or WorkOS: issued by hand, with the email", () => {
-    const html = view({ state: "by-hand", status: 200 });
+    const html = view({ state: "by-hand", status: 200, quota: 100 });
     expect(html).toContain("issued by hand");
+    expect(html).toContain("100 a day");
     expect(html).toContain('href="mailto:hello@evolv3.ai?subject=');
     expect(html).not.toContain("Sign in");
   });

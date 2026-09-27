@@ -20,7 +20,7 @@ const held = globalThis as { [KEY_PAGE]?: KeyPage };
 
 async function server() {
   const [
-    { getRequest, setResponseStatus },
+    { getRequest, setResponseStatus, setResponseHeader },
     { currentUser, signInConfigured },
     { gate, getApp },
     { unkeyConfigOf },
@@ -45,6 +45,9 @@ async function server() {
     }),
     gate,
   });
+  // Every answer here is one person's, and create and roll carry a secret:
+  // no cache may keep any of them.
+  setResponseHeader("cache-control", "private, no-store");
   return {
     keyPage: held[KEY_PAGE],
     user: currentUser(),

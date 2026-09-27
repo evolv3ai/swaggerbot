@@ -92,7 +92,7 @@ export function KeysView({
   } | null>(null);
   const [busy, setBusy] = useState(false);
 
-  if (page.state === "by-hand") return <ByHand />;
+  if (page.state === "by-hand") return <ByHand quota={page.quota} />;
   if (page.state === "signed-out") return <SignedOut quota={page.quota} />;
   if (page.state === "unavailable") return <Unavailable />;
   const { baseUrl, quota } = page;
@@ -179,7 +179,7 @@ export function KeysView({
 }
 
 /** Without Unkey or WorkOS: keys are handed out by hand (D9). */
-export function ByHand() {
+export function ByHand({ quota }: { quota?: number }) {
   return (
     <div className={cn(PAGE, "grid gap-6")}>
       <header>
@@ -197,7 +197,7 @@ export function ByHand() {
           Email {KEY_REQUEST_EMAIL}
         </a>
       </p>
-      <KeyRules />
+      <KeyRules quota={quota} />
     </div>
   );
 }
