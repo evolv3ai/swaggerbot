@@ -1,6 +1,6 @@
 # SwaggerBot design system
 
-SwaggerBot's brand, distilled from its logo package. Tagline: **NAME IT. GET THE SPEC.** (it replaced BETTER THAN SPECS on 27 Sept 2026; the logo lockups in `assets/` still carry the old line until they're re-exported).
+SwaggerBot's brand, distilled from its logo package. Tagline: **NAME IT. GET THE SPEC.** (it replaced BETTER THAN SPECS on 27 Sept 2026; the logo lockups in `assets/` carry it).
 
 **Product:** SwaggerBot — "the verified OpenAPI Spec for any API, by name." Send the name of an API; get back its OpenAPI/Swagger Spec, its provenance and a confidence answer — or an honest reason there isn't one. Web lookup at swaggerbot.dev, plus MCP and HTTP API for agents. Pipeline: Index (verified, instant, no key) → Discovery with a key (APIs.guru → developer portal → vendor domain → GitHub → judged).
 
@@ -34,7 +34,7 @@ SwaggerBot's brand, distilled from its logo package. Tagline: **NAME IT. GET THE
 ## Iconography
 - No icon set was supplied. Substitute: **Lucide** (CDN `https://unpkg.com/lucide@0.460.0`) at 2–2.5px stroke with round caps/joins — the closest match to the mark's heavy rounded strokes. Flagged substitution.
 - No emoji, no unicode glyph icons (except × for dismiss).
-- Logo assets in `assets/`: `logo-primary.png` (navy wordmark, transparent), `logo-reversed.png` (white wordmark, transparent — for dark grounds; recoloured from the master), `mark.png` (robot head only), `wordmark.png` / `wordmark-reversed.png` (wordmark + tagline). Never redraw or recolour the mark; it's always SwaggerBot Blue.
+- Logo assets in `assets/`: `logo-primary.png` (navy wordmark, transparent), `logo-reversed.png` (white wordmark, transparent — for dark grounds; recoloured from the master), `mark.png` (robot head only), `mark-white.png` (robot head in white, for one-colour use on dark or blue grounds), `wordmark.png` / `wordmark-reversed.png` (wordmark + tagline). Never redraw or recolour the mark; it's always SwaggerBot Blue.
 
 ## Answer → colour mapping
 Resolved = success green · Unconfirmed = warning amber · Ambiguous = accent blue · No Spec = neutral · Unknown = outline. Use the `AnswerBadge` component; never invent other states.
@@ -55,14 +55,13 @@ No source component inventory existed, so this is a standard set sized to the br
 - `styles.css` — entry point (imports only) → `tokens/fonts.css`, `colors.css`, `typography.css`, `spacing.css`, `base.css`, `components.css`
 - `guidelines/` — foundation specimen cards (brand, colors, type, spacing)
 - `components/<group>/` — `.jsx` + `.d.ts` + `.prompt.md` + one card per group
-- `assets/` — logos
+- `assets/` — logos (`assets/source/` holds the logo package's original renders)
 - `ui_kits/website/` — swaggerbot.dev rebuilt in the new brand (Search, Lookup result, Vendors, Docs)
 - `thumbnail.html` — project tile
 - `SKILL.md` — agent-skill entry
 
 ## Caveats
 - Fonts load from Google Fonts here; Montserrat is inferred from the wordmark, Plex Sans/JetBrains Mono are chosen companions. swaggerbot.dev self-hosts them (its CSP allows fonts from itself only).
-- The logo lockups in `assets/` still show BETTER THAN SPECS until they're re-exported with the new tagline.
 
 ## Adopted from the build (27 Sept 2026)
 These came back from swaggerbot.dev (github.com/evolv3ai/swaggerbot, `DESIGN.md` → "Adaptations from the kit"), where each one was measured or decided: navy on-accent text and lighter hover/press; the 2px focus outline; input edge tokens; docs-site type scale; always-underlined links; 12px content cards and the lifted outline card; badge tracking 0.06em, full-text neutral and the outline tone; the code-block Tabs and the pill segmented control; code and method-tag tokens; metric-matched font fallbacks; High Contrast markers; ProvenanceBadge and MethodBadge; the new tagline.
