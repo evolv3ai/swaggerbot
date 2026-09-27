@@ -268,7 +268,8 @@ describe("the other views", () => {
     expect(markup).toMatch(/<h1[^>]*>Not in the Index yet<\/h1>/);
     expect(text(markup)).toContain(`curl -X POST ${base}/api/lookup`);
     expect(text(markup)).toContain(`${base}/mcp --header`);
-    expect(markup).toContain('href="/docs#keys"');
+    expect(markup).toContain('href="/keys"');
+    expect(markup).not.toContain('href="/docs#keys"');
     expect(markup).toContain('action="/lookup"');
   });
 

@@ -409,8 +409,8 @@ function NotInIndex({
           </div>
           <p>
             No key yet?{" "}
-            <a href="/docs#keys" className="text-sb-accent-text">
-              How to get an API key
+            <a href="/keys" className="text-sb-accent-text">
+              Get an API key
             </a>
           </p>
         </Card>
