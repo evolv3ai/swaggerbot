@@ -14,7 +14,7 @@ const muted={color:'var(--text-muted)'};
 
 function Header({page,go,theme,setTheme}){
   const links=[['search','Search'],['vendors','Vendors'],['docs','Docs']];
-  return <header style={{borderBottom:'1px solid var(--border)',background:'var(--bg)',position:'sticky',top:0,zIndex:10}}>
+  return <header style={{borderBottom:'1px solid var(--border)',background:'color-mix(in srgb,var(--bg) 85%,transparent)',backdropFilter:'blur(8px)',WebkitBackdropFilter:'blur(8px)',position:'sticky',top:0,zIndex:10}}>
     <div style={{...wrap,display:'flex',alignItems:'center',gap:32,height:68}}>
       <a href="#" onClick={e=>{e.preventDefault();go('search');}} style={{display:'flex',alignItems:'center',gap:10,textDecoration:'none',color:'var(--text)'}}>
         <img src="../../assets/mark.png" alt="" style={{height:34}}/>
@@ -36,7 +36,7 @@ function SearchBox({onLookup,initial=''}){
     <div style={{display:'flex',gap:10,padding:8,background:'var(--surface)',border:'2px solid var(--accent)',borderRadius:16,boxShadow:'var(--shadow-md)'}}>
       <span style={{display:'grid',placeItems:'center',paddingLeft:10,color:'var(--accent)'}}><ISearch/></span>
       <input aria-label="The name of an API" value={q} onChange={e=>setQ(e.target.value)} placeholder="The name of an API" style={{flex:1,border:0,outline:0,background:'transparent',font:'500 18px var(--font-body)',color:'var(--text)',minWidth:0}}/>
-      <Button size="lg" type="submit">Develop</Button>
+      <Button size="lg" type="submit">Look up</Button>
     </div>
     <div style={{display:'flex',gap:20,alignItems:'center',flexWrap:'wrap'}}>
       <span className="sb-eyebrow" style={{color:'var(--text-faint)'}}>Options</span>
@@ -67,7 +67,7 @@ function SearchScreen({onLookup}){
   return <main>
     <section style={{...wrap,paddingTop:80,paddingBottom:64,display:'grid',gridTemplateColumns:'minmax(0,1.6fr) minmax(0,1fr)',gap:56,alignItems:'start'}}>
       <div>
-        <div className="sb-tagline" style={{fontSize:13,marginBottom:20}}>Better than specs</div>
+        <div className="sb-tagline" style={{marginBottom:20}}>Name it. Get the Spec.</div>
         <h1 style={{fontSize:72,marginBottom:20}}>No fake Specs.</h1>
         <p style={{fontSize:19,...muted,maxWidth:560,marginBottom:36}}>Name an API. SwaggerBot hands you its OpenAPI Spec, where it came from and how sure it is, or tells you straight why there isn't one.</p>
         <SearchBox onLookup={onLookup}/>
@@ -172,7 +172,7 @@ function VendorsScreen({onLookup}){
         <thead><tr style={{background:'var(--bg-subtle)'}}>{['API','Vendor','Provenance','Answer','Verified','Spec'].map(h=><th key={h} className="sb-eyebrow" style={{textAlign:'left',padding:'12px 16px',color:'var(--text-muted)',fontSize:10}}>{h}</th>)}</tr></thead>
         <tbody>{rows.map(a=><tr key={a.key} onClick={()=>onLookup(a.key)} style={{borderTop:'1px solid var(--border)',cursor:'pointer'}} onMouseEnter={e=>e.currentTarget.style.background='var(--accent-soft)'} onMouseLeave={e=>e.currentTarget.style.background=''}>
           <td style={{padding:'14px 16px',fontWeight:600}}>{a.name}</td><td style={{padding:'14px 16px',...muted}}>{a.vendor}</td>
-          <td style={{padding:'14px 16px'}}><Badge tone={a.provenance==='Official'?'accent':'neutral'}>{a.provenance}</Badge></td>
+          <td style={{padding:'14px 16px'}}>{NS.ProvenanceBadge?<NS.ProvenanceBadge provenance={a.provenance}/>:<Badge tone={a.provenance==='Official'?'accent':'outline'} dot={a.provenance==='Official'}>{a.provenance}</Badge>}</td>
           <td style={{padding:'14px 16px'}}><AnswerBadge answer={a.answer}/></td><td style={{padding:'14px 16px',...muted}}>{a.verified}</td><td style={{padding:'14px 16px',...mono}}>{a.spec}</td></tr>)}</tbody>
       </table>
     </div>
@@ -203,7 +203,7 @@ function Footer(){
   return <footer style={{borderTop:'1px solid var(--border)'}}>
     <div style={{...wrap,display:'flex',alignItems:'center',gap:16,height:88,fontSize:13,...muted}}>
       <img src="../../assets/mark.png" alt="" style={{height:24}}/><span>SwaggerBot · swaggerbot.dev</span>
-      <span className="sb-tagline" style={{fontSize:10,marginLeft:'auto'}}>Better than specs</span>
+      <span className="sb-tagline" style={{fontSize:10,marginLeft:'auto'}}>Name it. Get the Spec.</span>
       <a href="#" style={{marginLeft:24}}>Source on GitHub</a>
     </div>
   </footer>;
@@ -211,7 +211,7 @@ function Footer(){
 
 function App(){
   const [s,setS]=React.useState(()=>{try{return JSON.parse(localStorage.getItem('sb-kit'))||{page:'search',q:''};}catch(e){return {page:'search',q:''};}});
-  const [theme,setTheme]=React.useState(()=>localStorage.getItem('sb-kit-theme')||'light');
+  const [theme,setTheme]=React.useState(()=>localStorage.getItem('sb-kit-theme')||'dark');
   React.useEffect(()=>{localStorage.setItem('sb-kit',JSON.stringify(s));window.scrollTo(0,0);},[s]);
   React.useEffect(()=>{document.documentElement.dataset.theme=theme;localStorage.setItem('sb-kit-theme',theme);},[theme]);
   const go=p=>setS({page:p,q:s.q});

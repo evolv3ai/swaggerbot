@@ -22,13 +22,13 @@
 .sb-btn--icon{padding:0;aspect-ratio:1}
 .sb-btn svg{width:1.15em;height:1.15em;flex:none}
 .sb-field{display:flex;flex-direction:column;gap:6px}
-.sb-label{font-family:var(--font-display);font-weight:var(--weight-semibold);font-size:13px;color:var(--text)}
+.sb-label{font-family:var(--font-display);font-weight:var(--weight-bold);font-size:13px;color:var(--text)}
 .sb-hint{font-size:var(--text-xs);color:var(--text-muted)}
 .sb-hint--error{color:var(--danger-text)}
-.sb-input{width:100%;height:40px;padding:0 var(--space-3);font:inherit;font-size:var(--text-sm);color:var(--text);background:var(--surface);border:var(--stroke-2) solid var(--border);border-radius:var(--radius-md);transition:border-color var(--dur-fast)}
+.sb-input{width:100%;height:40px;padding:0 var(--space-3);font:inherit;font-size:var(--text-sm);color:var(--text);background:var(--bg);border:var(--stroke-2) solid var(--border-input);border-radius:var(--radius-md);transition:border-color var(--dur-fast)}
 .sb-input::placeholder{color:var(--text-faint)}
-.sb-input:hover:not(:disabled){border-color:var(--border-strong)}
-.sb-input:focus{outline:none;border-color:var(--accent);box-shadow:var(--focus-ring)}
+.sb-input:hover:not(:disabled){border-color:var(--border-input-hover)}
+.sb-input:focus-visible{border-color:var(--accent)}
 .sb-input:disabled{background:var(--surface-sunken);color:var(--text-faint);cursor:not-allowed}
 .sb-input--error{border-color:var(--danger)}
 .sb-input--mono{font-family:var(--font-mono);font-size:13px}
@@ -40,7 +40,7 @@ textarea.sb-input{height:auto;min-height:96px;padding:var(--space-2) var(--space
 .sb-check__box::after{content:"";width:10px;height:6px;border-left:2.5px solid #fff;border-bottom:2.5px solid #fff;transform:rotate(-45deg) translate(1px,-1px);opacity:0}
 .sb-check input:checked+.sb-check__box{background:var(--accent);border-color:var(--accent)}
 .sb-check input:checked+.sb-check__box::after{opacity:1}
-.sb-check input:focus-visible+.sb-check__box{box-shadow:var(--focus-ring)}
+.sb-check input:focus-visible+.sb-check__box{outline:2px solid var(--sb-blue);outline-offset:2px}
 .sb-check:hover .sb-check__box{border-color:var(--accent)}
 .sb-check--radio .sb-check__box{border-radius:50%}
 .sb-check--radio .sb-check__box::after{width:8px;height:8px;border:0;border-radius:50%;background:#fff;transform:none}
@@ -51,19 +51,28 @@ textarea.sb-input{height:auto;min-height:96px;padding:var(--space-2) var(--space
 .sb-switch__track::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:var(--shadow-sm);transition:transform var(--dur-base) var(--ease-bounce)}
 .sb-switch input:checked+.sb-switch__track{background:var(--accent)}
 .sb-switch input:checked+.sb-switch__track::after{transform:translateX(16px)}
-.sb-switch input:focus-visible+.sb-switch__track{box-shadow:var(--focus-ring)}
+.sb-switch input:focus-visible+.sb-switch__track{outline:2px solid var(--sb-blue);outline-offset:2px}
 .sb-switch input:disabled~*{opacity:.45;cursor:not-allowed}
 .sb-card{background:var(--surface);border:var(--stroke-1) solid var(--border);border-radius:var(--radius-lg);padding:var(--space-6);display:flex;flex-direction:column;gap:var(--space-3);color:var(--text)}
 .sb-card--raised{border-color:transparent;box-shadow:var(--shadow-md)}
-.sb-card--outline{border:var(--stroke-2) solid var(--accent)}
+.sb-card--outline{border:var(--stroke-2) solid var(--accent);box-shadow:var(--shadow-box)}
+.sb-card--content{border-radius:var(--radius-content);padding:var(--space-4)}
 .sb-card--interactive{cursor:pointer;transition:border-color var(--dur-fast),box-shadow var(--dur-fast),transform var(--dur-fast)}
 .sb-card--interactive:hover{border-color:var(--accent);box-shadow:var(--shadow-md);transform:translateY(-2px)}
 .sb-card__title{font-family:var(--font-display);font-weight:var(--weight-bold);font-size:var(--text-lg);line-height:var(--leading-snug);margin:0}
 .sb-card__body{font-size:var(--text-sm);color:var(--text-muted);margin:0}
-.sb-badge{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 var(--space-2);border-radius:var(--radius-pill);font-family:var(--font-display);font-weight:var(--weight-bold);font-size:11px;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap}
+.sb-badge{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 var(--space-2);border-radius:var(--radius-pill);font-family:var(--font-display);font-weight:var(--weight-bold);font-size:11px;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
 .sb-badge--dot::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
 .sb-badge--accent{background:var(--accent-soft);color:var(--accent-soft-text)}
-.sb-badge--neutral{background:var(--surface-sunken);color:var(--text-muted)}
+.sb-badge--neutral{background:var(--surface-sunken);color:var(--text)}
+[data-theme="dark"] .sb-badge--neutral{background:var(--border)}
+.sb-badge--outline{background:transparent;border:1.5px solid var(--border-strong);color:var(--text-muted)}
+.sb-badge--dashed{border-style:dashed}
+/* HTTP method tag, in mono: GET on the blue tint, POST on the periwinkle one */
+.sb-method{display:inline-block;flex:none;border-radius:5px;padding:1px 5px;font-family:var(--font-mono);font-weight:var(--weight-medium);font-size:10.5px;line-height:16px}
+.sb-method--md{padding:2px 6px;font-size:12px;line-height:18px}
+.sb-method--get{background:var(--accent-soft);color:var(--accent-soft-text)}
+.sb-method--post{background:var(--method-post-soft);color:var(--method-post-text)}
 .sb-badge--success{background:var(--success-soft);color:var(--success-text)}
 .sb-badge--warning{background:var(--warning-soft);color:var(--warning-text)}
 .sb-badge--danger{background:var(--danger-soft);color:var(--danger-text)}
@@ -72,15 +81,17 @@ textarea.sb-input{height:auto;min-height:96px;padding:var(--space-2) var(--space
 .sb-tag--selected{border-color:var(--accent);background:var(--accent-soft);color:var(--accent-soft-text)}
 .sb-tag__x{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size:15px;line-height:1;opacity:.6}
 .sb-tag__x:hover{opacity:1}
-.sb-tabs{display:flex;gap:var(--space-1);border-bottom:var(--stroke-2) solid var(--border)}
-.sb-tab{position:relative;background:none;border:0;padding:var(--space-3) var(--space-4);font-family:var(--font-display);font-weight:var(--weight-semibold);font-size:var(--text-sm);color:var(--text-muted);cursor:pointer;border-radius:var(--radius-sm) var(--radius-sm) 0 0}
+.sb-tabs{display:flex;gap:var(--space-5)}
+/* The code-block tabs: Plex 13px medium, no track; the selected one in full text over a 2px blue underline */
+.sb-tab{position:relative;background:none;border:0;padding:10px 0;font-family:var(--font-body);font-weight:var(--weight-medium);font-size:13px;color:var(--text-muted);cursor:pointer;transition:color var(--dur-fast)}
 .sb-tab:hover{color:var(--text)}
-.sb-tab[aria-selected="true"]{color:var(--accent-text)}
-.sb-tab[aria-selected="true"]::after{content:"";position:absolute;left:var(--space-2);right:var(--space-2);bottom:-2px;height:3px;border-radius:var(--radius-pill);background:var(--accent)}
-.sb-tabs--pill{border:0;background:var(--surface-sunken);padding:4px;border-radius:var(--radius-md);display:inline-flex}
-.sb-tabs--pill .sb-tab{padding:var(--space-2) var(--space-4);border-radius:var(--radius-sm)}
-.sb-tabs--pill .sb-tab[aria-selected="true"]{background:var(--surface);color:var(--text);box-shadow:var(--shadow-sm)}
-.sb-tabs--pill .sb-tab[aria-selected="true"]::after{display:none}
+.sb-tab:focus-visible{outline-offset:-2px}
+.sb-tab[aria-selected="true"]{color:var(--text);box-shadow:inset 0 -2px var(--accent)}
+/* The segmented control (Published / Normalized Form): a pill track, the chosen one filled blue */
+.sb-tabs--pill{gap:0;background:var(--bg-subtle);border:var(--stroke-1) solid var(--border);padding:4px;border-radius:var(--radius-pill);display:inline-flex;width:fit-content}
+.sb-tabs--pill .sb-tab{height:32px;padding:0 14px;border-radius:var(--radius-pill);font-family:var(--font-display);font-weight:var(--weight-bold)}
+.sb-tabs--pill .sb-tab:hover{background:var(--accent-soft)}
+.sb-tabs--pill .sb-tab[aria-selected="true"]{background:var(--accent);color:var(--text-on-accent);box-shadow:none}
 .sb-dialog-backdrop{position:fixed;inset:0;background:var(--overlay);display:grid;place-items:center;padding:var(--space-6);z-index:50}
 .sb-dialog-backdrop--inline{position:absolute}
 .sb-dialog{width:min(480px,100%);background:var(--surface);color:var(--text);border-radius:var(--radius-xl);box-shadow:var(--shadow-lg);padding:var(--space-8);display:flex;flex-direction:column;gap:var(--space-4)}
@@ -103,3 +114,9 @@ textarea.sb-input{height:auto;min-height:96px;padding:var(--space-2) var(--space
 [data-theme="dark"] .sb-tooltip{background:#fff;color:var(--sb-navy)}
 [data-theme="dark"] .sb-tooltip::after{border-top-color:#fff}
 .sb-tooltip-wrap:hover .sb-tooltip,.sb-tooltip-wrap:focus-within .sb-tooltip,.sb-tooltip--open{opacity:1;transform:translateX(-50%) translateY(0)}
+/* High Contrast (forced colours) drops backgrounds and box shadows, which is how the selected tab, the chosen segment and the current nav item are marked. Put the marker back: a thick underline on a tab; the system's own selection colours on a filled one. Apply .sb-current to any "you are here" item (sidebar, "On this page"). */
+@media (forced-colors:active){
+.sb-tab[aria-selected="true"]{text-decoration:underline 3px;text-underline-offset:4px}
+.sb-tabs--pill .sb-tab[aria-selected="true"],.sb-current{forced-color-adjust:none;background:Highlight;border-color:Highlight;color:HighlightText;text-decoration:none}
+.sb-current *{background:transparent;border-color:HighlightText;color:HighlightText}
+}

@@ -5,7 +5,7 @@ export interface TabsProps{
   value?:string;
   defaultValue?:string;
   onChange?:(value:string)=>void;
-  /** line = underline with 3px pill indicator; pill = segmented control */
+  /** line = code-block tabs, the selected one over a 2px blue underline; pill = segmented control, the chosen one filled blue */
   variant?:'line'|'pill';
   className?:string;
 }
