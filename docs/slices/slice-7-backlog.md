@@ -26,12 +26,12 @@ Keys since Slice 3 (`src/index-store/keys.ts`): SQLite `api_keys` (id, owner, sh
 
 | # | Linear | Issue | Depends on | Wave |
 |---|---|---|---|---|
-| 1 | — | Keys through Unkey: the async seam, verification costs, fail closed, the admin script | — | 1 |
-| 2 | — | Sign-in with WorkOS AuthKit | — | 1 |
-| 3 | — | `/keys`: get, see, roll and revoke your key | 1, 2 | 2 |
-| 4 | — | Docs, Search and the top bar lead to `/keys`; `keycheck` | 3 | 3 |
+| 1 | WTR-148 | Keys through Unkey: the async seam, verification costs, fail closed, the admin script | — | 1 |
+| 2 | WTR-149 | Sign-in with WorkOS AuthKit | — | 1 |
+| 3 | WTR-150 | `/keys`: get, see, roll and revoke your key | 1, 2 | 2 |
+| 4 | WTR-151 | Docs, Search and the top bar lead to `/keys`; `keycheck` | 3 | 3 |
 
-#1 and #2 touch different files and build in parallel.
+#1 and #2 touch different files and build in parallel. Wave 1 (WTR-148, WTR-149) was queued on filing; WTR-150 is queued when both merge, WTR-151 when it has.
 
 ## Operator steps (not factory issues)
 
