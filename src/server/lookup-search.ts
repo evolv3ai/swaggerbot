@@ -1,4 +1,3 @@
-import { z } from "zod";
 import type { LookupRequest } from "~/lookup/lookup";
 
 /**
@@ -7,22 +6,46 @@ import type { LookupRequest } from "~/lookup/lookup";
  * number 1). The values are kept as parsed, so the router writes the same
  * URL back, and read as text by `lookupRequestOf`. Anything else is dropped.
  */
-const value = z
-  .union([z.string(), z.number(), z.boolean()])
-  .optional()
-  .catch(undefined);
+type Value = string | number | boolean | undefined;
+
+function scalarOf(v: unknown): Value {
+  return typeof v === "string" ||
+    typeof v === "number" ||
+    typeof v === "boolean"
+    ? v
+    : undefined;
+}
 
 /**
  * The query of `/lookup?name=…[&apiVersion=…][&allowCommunity=1]`, as sent
  * by the Search form. Loose on purpose: a page answers any query, and a
  * missing or blank `name` has its own view.
  */
-export const LookupSearch = z.object({
-  name: value,
-  apiVersion: value,
-  allowCommunity: value,
-});
-export type LookupSearch = z.infer<typeof LookupSearch>;
+export type LookupSearch = {
+  name?: Value;
+  apiVersion?: Value;
+  allowCommunity?: Value;
+};
+
+/**
+ * Reads a `/lookup` query; it never throws. Hand-written rather than a zod
+ * schema: the `/lookup` route validates its search in the browser too, and
+ * zod would be most of the client's JavaScript.
+ */
+export const LookupSearch = {
+  parse(search: unknown): LookupSearch {
+    const q =
+      typeof search === "object" && search !== null
+        ? (search as Record<string, unknown>)
+        : {};
+    const out: LookupSearch = {};
+    for (const key of ["name", "apiVersion", "allowCommunity"] as const) {
+      const v = scalarOf(q[key]);
+      if (v !== undefined) out[key] = v;
+    }
+    return out;
+  },
+};
 
 /** A query value as the text that was sent. */
 function textOf(v: LookupSearch[keyof LookupSearch]): string {
