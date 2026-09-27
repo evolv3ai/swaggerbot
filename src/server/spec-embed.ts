@@ -30,13 +30,16 @@ const MEMORY_STORAGE_PATH = "/embed/memory-storage.js";
  */
 const FRAME_VIEWPORT_PATH = "/embed/frame-viewport.js";
 
-/** Which of a Spec's forms a viewer shows. */
-export type SpecForm = "published" | "normalized";
+/**
+ * Switches the frame's theme when the site's changes, without reloading
+ * it (`public/embed/frame-theme.js`): the frame asks its parent for the
+ * theme, and the parent tells it of each switch, by `postMessage`.
+ */
+const FRAME_THEME_PATH = "/embed/frame-theme.js";
 
-/** `?form=` as the viewer reads it: `normalized`, or else the Published Form. */
-export function specFormOf(value: unknown): SpecForm {
-  return value === "normalized" ? "normalized" : "published";
-}
+import { specFormOf } from "./spec-form";
+
+export { type SpecForm, specFormOf } from "./spec-form";
 
 /**
  * The site's theme, as the frame is asked for it (`?theme=`): its opaque
@@ -60,11 +63,28 @@ export const SCALAR_CSS = `.light-mode{--scalar-background-1:#ffffff;--scalar-ba
 .dark-mode{--scalar-background-1:#111827;--scalar-background-2:#1f2737;--scalar-background-3:#343d4f;--scalar-background-card:#1f2737;--scalar-color-1:#ffffff;--scalar-color-2:#c1cad7;--scalar-color-3:#96a1b2;--scalar-color-accent:#5cbfeb;--scalar-background-accent:rgba(0,153,221,.18);--scalar-border-color:#343d4f;--scalar-button-1:#0099dd;--scalar-button-1-hover:#26aae4;--scalar-button-1-color:#021c41}
 .light-mode,.dark-mode{--scalar-font:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;--scalar-font-code:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;--scalar-radius:6px;--scalar-radius-lg:10px;--scalar-radius-xl:16px}`;
 
-/** The frame's page ground, per theme, so it never flashes the other one. */
-const GROUND: Record<FrameTheme, { background: string; color: string }> = {
-  dark: { background: "#111827", color: "#ffffff" },
-  light: { background: "#ffffff", color: "#021c41" },
+/**
+ * The frame's page ground, per theme, so it never flashes the other one.
+ * Keyed on Scalar's own mode classes, so a switch (`frame-theme.js`) moves
+ * the ground, the loading line and Scalar together.
+ */
+const GROUND: Record<
+  FrameTheme,
+  { background: string; color: string; muted: string }
+> = {
+  dark: { background: "#111827", color: "#ffffff", muted: "#c1cad7" },
+  light: { background: "#ffffff", color: "#021c41", muted: "#4b5568" },
 };
+
+/**
+ * The frame's loading line, until Scalar mounts: Scalar inserts its app
+ * as a `div` after it, which hides it (`:has(~ div)`); CSS only, since the
+ * frame runs no script of ours. If Scalar is slow or never comes, a second
+ * line appears after 12 seconds, pointing to the downloads, which don't
+ * need the viewer.
+ */
+const LOADING_CSS = `.sb-loading{margin:0;padding:1.25rem 1rem;font:15px/1.6 "IBM Plex Sans",system-ui,sans-serif}.sb-loading:has(~div){display:none}.sb-loading span{display:block;visibility:hidden;animation:sb-late 0s 12s forwards}@keyframes sb-late{to{visibility:visible}}`;
+const LOADING_HTML = `<p class="sb-loading" role="status">Loading the API reference…<span>Still loading. A large Spec can take a while; the downloads above work either way.</span></p>`;
 
 /**
  * The largest form the viewer renders inline, in bytes (decimal MB, as the
@@ -144,19 +164,26 @@ export function embedHtml({
   theme?: FrameTheme;
 }): string {
   const configuration = JSON.stringify(scalarConfiguration(url, theme));
-  const ground = GROUND[theme];
+  const grounds = (["dark", "light"] as const)
+    .map((t) => {
+      const g = GROUND[t];
+      return `body.${t}-mode{background:${g.background};color:${g.color}}body.${t}-mode .sb-loading{color:${g.muted}}`;
+    })
+    .join("");
   return `<!doctype html>
-<html lang="en">
+<html lang="en" class="${theme}-mode">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="${theme}">
 <title>${escapeHtml(title)}</title>
-<style>body{margin:0;background:${ground.background};color:${ground.color}}</style>
+<style>body{margin:0}${grounds}${LOADING_CSS}</style>
 </head>
-<body>
+<body class="${theme}-mode">
+${LOADING_HTML}
 <script id="api-reference" type="application/json" data-configuration="${escapeHtml(configuration)}"></script>
+<script src="${FRAME_THEME_PATH}"></script>
 <script src="${MEMORY_STORAGE_PATH}"></script>
 <script src="${FRAME_VIEWPORT_PATH}"></script>
 <script src="${SCALAR_SCRIPT_PATH}"></script>

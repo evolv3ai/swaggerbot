@@ -103,6 +103,7 @@ describe("GET /embed/specs/{specId}", () => {
     const scripts = [...html.matchAll(/<script([^>]*)>([^<]*)<\/script>/g)];
     expect(scripts.map((s) => s[1]?.match(/src="([^"]+)"/)?.[1])).toEqual([
       undefined,
+      "/embed/frame-theme.js",
       "/embed/memory-storage.js",
       "/embed/frame-viewport.js",
       "/embed/scalar-api-reference.js",
