@@ -47,7 +47,7 @@ function Search() {
     <WithOnThisPage first={{ id: "look-up", label: "Look up an API" }}>
       <div className="max-w-[860px] px-4 pt-7 pb-16 sm:px-8 lg:px-14 lg:pt-11">
         <p className="font-display text-xs font-bold uppercase tracking-[0.3em] text-sb-accent-text">
-          Better than Specs
+          Name it. Get the Spec.
         </p>
         <h1
           id="look-up"
@@ -56,8 +56,8 @@ function Search() {
           No fake Specs.
         </h1>
         <p className="max-w-[40em] text-[17px] text-sb-text-muted">
-          Name an API. SwaggerBot hands you its OpenAPI Spec, where it came from
-          and how sure it is, or tells you straight why there isn't one.
+          SwaggerBot hands you an API's OpenAPI Spec, where it came from and how
+          sure it is, or tells you straight why there isn't one.
         </p>
         <SearchForm className="mt-[26px]">
           <TryRow facts={facts} />

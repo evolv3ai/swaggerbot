@@ -3,16 +3,15 @@ import type { ReactNode } from "react";
 import { SearchForm } from "~/components/search/search-form";
 import { WithOnThisPage } from "~/components/shell/on-this-page";
 import { AnswerBadge } from "~/components/ui/answer-badge";
-import { Badge } from "~/components/ui/badge";
 import { buttonClass } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
 import { CodeBlock, SpecDownloadCurl } from "~/components/ui/code-block";
 import { Path } from "~/components/ui/path";
+import { ProvenanceBadge } from "~/components/ui/provenance-badge";
 import { Tabs } from "~/components/ui/tabs";
 import { sizeOf } from "~/components/viewer/size";
 import type { Source } from "~/domain/catalog";
 import type { Outcome, OutcomeKind, SpecAnswer } from "~/domain/outcome";
-import type { Provenance } from "~/domain/provenance";
 import { dayOf } from "~/lib/dates";
 import { cn } from "~/lib/utils";
 import { vendorHref } from "~/lib/vendor-hrefs";
@@ -795,16 +794,6 @@ export function Sources({
         </ul>
       </Card>
     </section>
-  );
-}
-
-/** A Provenance tier as a badge: Official the plainest, Community outlined. */
-function ProvenanceBadge({ provenance }: { provenance: Provenance }) {
-  return (
-    <Badge tone={provenance === "Community" ? "outline" : "neutral"}>
-      <span className="sr-only">Provenance: </span>
-      {provenance}
-    </Badge>
   );
 }
 

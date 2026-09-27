@@ -260,11 +260,11 @@ One brand blue on a cool, navy-tinted neutral ramp, three status hues, and an in
 - **Body** (Plex 400, 15px, 1.6): running text, at most 40em in prose blocks; secondary copy in cards is 13–13.5px muted.
 - **Label** (Montserrat 700, 13px): form labels. Buttons use Montserrat 700 at 13/14/16px by size.
 - **Badge** (Montserrat 700, 11px, uppercase, 0.06em): badges only. Table column heads use the same face at 11px, uppercase, 0.12em, muted.
-- **Tagline** (Montserrat 700, 12px, uppercase, 0.3em, `--sb-accent-text`): BETTER THAN SPECS, the brand's tagline, above Search's title and nowhere else.
+- **Tagline** (Montserrat 700, 12px, uppercase, 0.3em, `--sb-accent-text`): NAME IT. GET THE SPEC., the brand's tagline, above Search's title and nowhere else.
 - **Code** (JetBrains Mono, 12.5px on 1.7 in code blocks; 13px in mono inputs; 12px for domains under a Vendor name): code, URLs, ids, paths, HTTP methods.
 
 ### Named Rules
-**The One Tagline Rule.** BETTER THAN SPECS above Search's title is the only line above any page title. No page carries a category kicker or eyebrow: the sidebar and the title already say where the visitor is. A Lookup names what was looked up in plain text under its lead.
+**The One Tagline Rule.** NAME IT. GET THE SPEC. above Search's title is the only line above any page title. No page carries a category kicker or eyebrow: the sidebar and the title already say where the visitor is. A Lookup names what was looked up in plain text under its lead.
 
 **The Underlined Link Rule.** Every link is underlined (WCAG 1.4.1). Only nav items, the home mark, the skip link, links shaped as buttons or chips, and the Vendors table's names opt out, with `no-underline`. A Vendor's name is the bold link of its row (the whole row is the target, and highlights), underlined on hover and focus.
 
@@ -369,7 +369,7 @@ An 8px round dot for the service status in the top bar: an empty `--sb-border-st
 ### Don't:
 - **Don't** put white text on the blue fill.
 - **Don't** fill passive surfaces with blue, or outline more than one box per view.
-- **Don't** put a kicker or eyebrow above a page title; BETTER THAN SPECS on Search is the only line there.
+- **Don't** put a kicker or eyebrow above a page title; NAME IT. GET THE SPEC. on Search is the only line there.
 - **Don't** use raw `swaggerbot-blue` for body-size text; use `--sb-accent-text`.
 - **Don't** invent answer states or colours beyond the five.
 - **Don't** add gradients, textures, glassmorphism or a second blur; the top bar's is the only one.

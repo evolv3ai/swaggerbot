@@ -145,7 +145,10 @@ export function DocsView() {
             <ul className="flex flex-wrap gap-x-5 gap-y-1.5 text-sm">
               {SECTIONS.map((s) => (
                 <li key={s.id}>
-                  <a href={`#${s.id}`} className="text-sb-accent-text">
+                  <a
+                    href={`#${s.id}`}
+                    className="text-sb-accent-text pointer-coarse:inline-block pointer-coarse:py-3"
+                  >
                     {s.label}
                   </a>
                 </li>
