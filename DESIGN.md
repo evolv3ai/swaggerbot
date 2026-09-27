@@ -365,6 +365,11 @@ URLs and paths shown as text (outside code blocks: the Sources lists, the docs r
 ### Answer card (signature)
 An answer is a content card: a header row (the API name as a title link, its AnswerBadge, its Provenance, the time it took in 13px muted, pushed right from `sm`), then tabs (curl, MCP, JSON) over code blocks. A Lookup states its answer once: the page heading names it and the card carries the badge.
 
+### Key page (`/keys`)
+- **A secret shown once** is the view's one outlined box (2px blue, the box lift, 12px): a headline, "Store it now: it won't be shown again." in semibold, the secret in a `CodeBlock`, then the `curl` and `claude mcp add` lines with it filled in. Focus moves to its heading when it appears; "I've stored it: hide the key" (secondary, `sm`) removes it.
+- **A key's facts** are a content card: a definition list (Key in mono as its start and an ellipsis, Created, Today's credits with the reset in muted 14px) over a ruled footer holding the actions.
+- **Confirming** a Roll or Revoke happens inline in that footer, not in a dialog: the question in 14px (focused), the action as a secondary button and Cancel as ghost. There is no danger button yet, so Revoke is secondary.
+
 ### Pages that stand in
 - **No page here** (`NotFoundPage`, any unknown address, served 404): the page title, the address asked for in mono, the Lookup box, and links to the Vendors and the docs.
 - **This page didn't load** (`ErrorPage`, the router's default error page, served 500): says the fault is ours, never shows the error itself, and offers Try again (reloads the route's data) and Go to Search.

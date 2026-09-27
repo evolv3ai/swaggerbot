@@ -93,3 +93,46 @@ export function clientIpHeader(
 export function clientIpOf(request: Request, header: string): string {
   return request.headers.get(header)?.split(",")[0]?.trim() || "unknown";
 }
+
+/**
+ * At most `limit` takes per key (a user) in any `windowMs`: each take is
+ * remembered until it is `windowMs` old. For limits too slow for a
+ * per-minute bucket, such as 5 an hour; keys whose takes have all aged out
+ * are dropped.
+ */
+export function createWindowLimiter({
+  limit,
+  windowMs,
+  now = () => Date.now(),
+}: {
+  limit: number;
+  windowMs: number;
+  now?: () => number;
+}): RateLimiter {
+  const takes = new Map<string, number[]>();
+
+  return {
+    take(key) {
+      const at = now();
+      for (const [k, times] of takes) {
+        const recent = times.filter((t) => at - t < windowMs);
+        if (recent.length) takes.set(k, recent);
+        else takes.delete(k);
+      }
+      const recent = takes.get(key) ?? [];
+      if (recent.length < limit) {
+        takes.set(key, [...recent, at]);
+        return { allowed: true };
+      }
+      const oldest = recent[0] ?? at;
+      return {
+        allowed: false,
+        retryAfterSeconds: Math.max(
+          1,
+          Math.ceil((oldest + windowMs - at) / 1000),
+        ),
+      };
+    },
+    size: () => takes.size,
+  };
+}
