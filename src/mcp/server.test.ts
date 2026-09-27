@@ -225,6 +225,7 @@ describe("/mcp", () => {
     const text = result.content[0]?.text;
     expect(text).toMatch(/^Discovery needs an API key\./);
     expect(text).toContain("Authorization: Bearer <key>");
+    expect(text).toMatch(/Get a key at https:\/\/swaggerbot\.dev\/keys\.$/);
     expect(fake.run).not.toHaveBeenCalled();
   });
 

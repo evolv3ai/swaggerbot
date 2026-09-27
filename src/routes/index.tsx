@@ -107,11 +107,10 @@ function Search() {
                 Read the docs
               </Link>
               <Link
-                to="/docs"
-                hash="keys"
+                to="/keys"
                 className={buttonClass({ variant: "ghost", size: "md" })}
               >
-                Request a key
+                Get a key
               </Link>
             </p>
           </Card>

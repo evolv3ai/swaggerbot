@@ -5,6 +5,7 @@ import { bestProvenance } from "~/domain/provenance";
 import {
   answerLookup,
   KEYS_RETRY_AFTER_SECONDS,
+  KEYS_URL,
   type LookupAnswer,
   LookupBody,
   secondsToUtcMidnight,
@@ -25,8 +26,7 @@ Names already in the Index answer without an API key. Any other name needs Disco
 Next: get_spec_outline(apiId) to find the operation you need in the Spec, rather than downloading all of it.`;
 
 /** How an agent adds its key to this server, for the refusals that need one. */
-const MCP_KEY_HINT =
-  "Add the key as a header of this MCP server's connection, e.g. `claude mcp add --transport http swaggerbot <this server's /mcp URL> --header \"Authorization: Bearer <key>\"`. Keys are issued by the operator of this service; ask them for one.";
+const MCP_KEY_HINT = `Add the key as a header of this MCP server's connection, e.g. \`claude mcp add --transport http swaggerbot <this server's /mcp URL> --header "Authorization: Bearer <key>"\`. Get a key at ${KEYS_URL}.`;
 
 /** `lookup_api`'s answer: the Outcome, after `summary` and `next`. */
 export const LookupApiOutput = z.intersection(Guidance, Outcome);

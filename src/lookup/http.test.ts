@@ -97,7 +97,7 @@ describe("handleLookupRequest", () => {
     expect(response.status).toBe(401);
     expect(await response.json()).toMatchObject({
       error: "Discovery needs an API key.",
-      hint: expect.stringContaining("Authorization: Bearer"),
+      hint: "Send it as `Authorization: Bearer <key>`. Get a key at https://swaggerbot.dev/keys.",
     });
     expect(fake.run).not.toHaveBeenCalled();
   });

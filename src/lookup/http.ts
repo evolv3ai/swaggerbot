@@ -28,9 +28,11 @@ export type Gate = {
   now?: () => Date;
 };
 
-/** How a Caller sends its API key, for the answers that need one. */
-export const KEY_HINT =
-  "Send it as `Authorization: Bearer <key>`. Keys are issued by the operator of this service; ask them for one.";
+/** Where a Caller gets an API key: the `/keys` page (Slice 7). */
+export const KEYS_URL = "https://swaggerbot.dev/keys";
+
+/** How a Caller sends its API key, and where it gets one, for the answers that need one. */
+export const KEY_HINT = `Send it as \`Authorization: Bearer <key>\`. Get a key at ${KEYS_URL}.`;
 
 /** The body of every 401 for a key that is sent but names no live key. */
 export const UNKNOWN_KEY = { error: "Unknown or revoked API key." };

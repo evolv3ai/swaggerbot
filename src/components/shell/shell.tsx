@@ -129,8 +129,7 @@ export function Shell({
               className="hidden sm:block"
             />
             <Link
-              to="/docs"
-              hash="keys"
+              to="/keys"
               className={buttonClass({
                 size: "sm",
                 className: "h-9 px-3 pointer-coarse:h-11",
