@@ -1,4 +1,5 @@
 import { WithOnThisPage } from "~/components/shell/on-this-page";
+import { PAGE, PageTitle } from "~/components/shell/page";
 import { buttonClass } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
 import { CodeBlock } from "~/components/ui/code-block";
@@ -21,9 +22,12 @@ import {
   ROUTES,
 } from "./reference";
 
-/** A section heading: Montserrat, sentence case, with a rule above. */
+/**
+ * A section heading: Montserrat, sentence case, with a rule above; the
+ * headline size every page's sections use (20px).
+ */
 const H2 =
-  "scroll-mt-20 font-display text-[22px] leading-tight font-bold tracking-[-0.01em] text-sb-text sm:text-2xl";
+  "scroll-mt-20 font-display text-xl leading-tight font-bold tracking-[-0.01em] text-sb-text";
 /** A heading inside a section. */
 const H3 =
   "scroll-mt-20 font-display text-base font-bold tracking-[-0.005em] text-sb-text";
@@ -121,11 +125,9 @@ function Route({ route }: { route: string }) {
 export function DocsView() {
   return (
     <WithOnThisPage>
-      <div className="grid max-w-[860px] gap-10 px-4 pt-7 pb-16 sm:px-8 lg:px-14 lg:pt-11">
+      <div className={cn(PAGE, "grid gap-10")}>
         <header className="grid gap-4">
-          <h1 className="font-display text-[28px] leading-[1.1] font-extrabold tracking-[-0.01em] text-sb-text sm:text-[40px]">
-            HTTP API and MCP
-          </h1>
+          <PageTitle className="mb-0">HTTP API and MCP</PageTitle>
           <p className="max-w-[34rem] text-[17px] leading-relaxed text-sb-text-muted">
             Everything this site shows, programs get over HTTP and agents over
             MCP, in the same words. Answers from the Index are open to anyone;
@@ -145,7 +147,10 @@ export function DocsView() {
             <ul className="flex flex-wrap gap-x-5 gap-y-1.5 text-sm">
               {SECTIONS.map((s) => (
                 <li key={s.id}>
-                  <a href={`#${s.id}`} className="text-sb-accent-text">
+                  <a
+                    href={`#${s.id}`}
+                    className="text-sb-accent-text pointer-coarse:inline-block pointer-coarse:py-3"
+                  >
                     {s.label}
                   </a>
                 </li>
@@ -317,20 +322,14 @@ function Mcp() {
         <CodeBlock
           code={MCP_ADD}
           className="overflow-hidden rounded-[12px] border border-sb-border"
-        >
-          <span className="text-[#8fbaff]">claude</span>
-          {MCP_ADD.slice("claude".length)}
-        </CodeBlock>
+        />
         <p className={NOTE}>
           With a key, for Discovery and <Code>fresh</Code>:
         </p>
         <CodeBlock
           code={MCP_ADD_WITH_KEY}
           className="overflow-hidden rounded-[12px] border border-sb-border"
-        >
-          <span className="text-[#8fbaff]">claude</span>
-          {MCP_ADD_WITH_KEY.slice("claude".length)}
-        </CodeBlock>
+        />
       </div>
       <div className="grid gap-3">
         <h3 id="tools" className={H3}>

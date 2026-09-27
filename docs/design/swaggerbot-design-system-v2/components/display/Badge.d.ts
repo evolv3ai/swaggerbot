@@ -1,6 +1,6 @@
 import * as React from 'react';
 export interface BadgeProps{
-  tone?:'accent'|'neutral'|'success'|'warning'|'danger'|'solid';
+  tone?:'accent'|'neutral'|'success'|'warning'|'danger'|'solid'|'outline';
   dot?:boolean;
   className?:string;
   children:React.ReactNode;

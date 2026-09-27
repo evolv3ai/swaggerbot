@@ -49,7 +49,7 @@ export function SearchForm({
               autoComplete="off"
               spellCheck={false}
               placeholder="Stripe, Jira Cloud, Val Town…"
-              className="h-12 px-3.5 text-base sm:flex-1"
+              className="h-12 px-3.5 text-base pointer-coarse:h-12 sm:flex-1"
             />
             <button
               type="submit"
@@ -58,9 +58,9 @@ export function SearchForm({
               Look up
             </button>
           </div>
-          <div className="flex flex-wrap items-start gap-x-5 gap-y-2 text-[13px] text-sb-text-muted">
+          <div className="flex flex-wrap items-start gap-x-5 gap-y-2 text-[13px] text-sb-text-muted pointer-coarse:gap-y-0">
             <details className="group">
-              <summary className="flex w-fit cursor-pointer list-none items-center gap-1 rounded-sm hover:text-sb-text [&::-webkit-details-marker]:hidden">
+              <summary className="flex w-fit cursor-pointer list-none items-center gap-1 rounded-sm hover:text-sb-text pointer-coarse:py-3 [&::-webkit-details-marker]:hidden">
                 <ChevronRight
                   aria-hidden="true"
                   className="size-3.5 transition-transform duration-150 group-open:rotate-90"
@@ -81,7 +81,7 @@ export function SearchForm({
                 />
               </div>
             </details>
-            <label className="flex cursor-pointer items-center gap-2 hover:text-sb-text">
+            <label className="flex cursor-pointer items-center gap-2 hover:text-sb-text pointer-coarse:py-3">
               <input
                 type="checkbox"
                 name="allowCommunity"

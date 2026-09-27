@@ -1,5 +1,6 @@
 import { ArrowRight, ChevronRight, Download } from "lucide-react";
 import type { ReactNode } from "react";
+import { PageTitle } from "~/components/shell/page";
 import { Badge } from "~/components/ui/badge";
 import { buttonClass } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
@@ -18,12 +19,9 @@ import { sizeOf } from "./size";
 export function SpecHeader({ view }: { view: SpecView }) {
   return (
     <header className="grid gap-2">
-      <h1
-        id="spec"
-        className="scroll-mt-20 font-display text-[28px] leading-[1.1] font-extrabold tracking-[-0.01em] text-sb-text [overflow-wrap:anywhere] sm:text-[40px]"
-      >
+      <PageTitle id="spec" className="mb-0 [overflow-wrap:anywhere]">
         {view.api.name}
-      </h1>
+      </PageTitle>
       <p className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-2 text-[15px] text-sb-text-muted">
         <span>
           {specFormat(view.spec.specVersion)} · API Version{" "}
@@ -204,7 +202,7 @@ function ValidityIssues({ view }: { view: SpecView }) {
   const groups = view.validityIssues.length;
   return (
     <details className="group text-sm">
-      <summary className="flex w-fit cursor-pointer list-none items-center gap-2 rounded-sm [&::-webkit-details-marker]:hidden">
+      <summary className="flex w-fit cursor-pointer list-none items-center gap-2 rounded-sm pointer-coarse:py-3 [&::-webkit-details-marker]:hidden">
         <ChevronRight
           aria-hidden="true"
           className="size-4 text-sb-text-muted transition-transform duration-150 group-open:rotate-90"

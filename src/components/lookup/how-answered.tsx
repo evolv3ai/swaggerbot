@@ -57,7 +57,7 @@ export function HowAnswered({ answered }: { answered: Answered }) {
             step was needed.
           </p>
           <details className="group mt-3">
-            <summary className="flex w-fit cursor-pointer list-none items-center gap-1 rounded-sm text-sm font-medium text-sb-text-muted hover:text-sb-text [&::-webkit-details-marker]:hidden">
+            <summary className="flex w-fit cursor-pointer list-none items-center gap-1 rounded-sm text-sm font-medium pointer-coarse:py-3 text-sb-text-muted hover:text-sb-text [&::-webkit-details-marker]:hidden">
               <ChevronRight
                 aria-hidden="true"
                 className="size-4 transition-transform duration-150 group-open:rotate-90"

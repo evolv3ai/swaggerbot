@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { type SpecForm, specFormOf } from "./spec-embed";
+import { type SpecForm, specFormOf } from "./spec-form";
 import type { SpecView } from "./spec-view";
 
 /**

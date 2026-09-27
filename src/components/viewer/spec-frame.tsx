@@ -1,6 +1,5 @@
-import { useEffect, useState } from "react";
-import { currentTheme, type Theme } from "~/components/shell/theme";
-import type { SpecForm } from "~/server/spec-embed";
+import { SPEC_FRAME_ATTR, type Theme } from "~/components/shell/theme";
+import type { SpecForm } from "~/server/spec-form";
 
 /**
  * The frame Scalar runs in (`/embed/specs/{specId}`). `sandbox` allows
@@ -15,26 +14,6 @@ export function frameSrc(specId: string, form: SpecForm, theme: Theme): string {
   return `/embed/specs/${specId}?form=${form}&theme=${theme}`;
 }
 
-/**
- * The site's theme, followed as it changes. The server renders dark (the
- * default; it can't read the visitor's choice); once hydrated it reads the
- * `data-theme` the head script set, and watches the toggle.
- */
-function useSiteTheme(): Theme {
-  const [theme, setTheme] = useState<Theme>("dark");
-  useEffect(() => {
-    const read = () => setTheme(currentTheme());
-    read();
-    const observer = new MutationObserver(read);
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["data-theme"],
-    });
-    return () => observer.disconnect();
-  }, []);
-  return theme;
-}
-
 export function SpecFrame({
   specId,
   form,
@@ -44,12 +23,16 @@ export function SpecFrame({
   form: SpecForm;
   apiName: string;
 }) {
-  const theme = useSiteTheme();
+  // The frame's address never changes with the theme: a new address would
+  // load Scalar and the Spec again. It starts dark (the default; the server
+  // can't know the visitor's theme) and is told the site's theme by message
+  // (`THEME_SCRIPT`, `setTheme`), so it switches in place.
   return (
     <iframe
       sandbox={FRAME_SANDBOX}
+      {...{ [SPEC_FRAME_ATTR]: "" }}
       title={`API reference for ${apiName}`}
-      src={frameSrc(specId, form, theme)}
+      src={frameSrc(specId, form, "dark")}
       referrerPolicy="no-referrer"
       className="block h-[80dvh] min-h-[32rem] w-full bg-sb-bg"
     />

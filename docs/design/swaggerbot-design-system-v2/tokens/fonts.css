@@ -1,2 +1,27 @@
 /* Montserrat matches the SwaggerBot wordmark (Montserrat Bold/ExtraBold). IBM Plex Sans + JetBrains Mono are chosen companions (Google Fonts). */
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap');
+/* Metric-matched local fallbacks, named after each face in the font stacks (typography.css): the page doesn't shift when the webfont arrives. */
+@font-face {
+  font-family: "IBM Plex Sans Fallback";
+  font-style: normal;
+  font-weight: 400 600;
+  src:
+    local("Arial"), local("ArialMT"), local("Liberation Sans"),
+    local("LiberationSans"), local("Arimo");
+  size-adjust: 100.2%;
+  ascent-override: 102.29%;
+  descent-override: 27.44%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "Montserrat Fallback";
+  font-style: normal;
+  font-weight: 700 800;
+  src:
+    local("Arial Bold"), local("Arial-BoldMT"), local("Liberation Sans Bold"),
+    local("LiberationSans-Bold"), local("Arimo Bold");
+  size-adjust: 111.86%;
+  ascent-override: 86.54%;
+  descent-override: 22.44%;
+  line-gap-override: 0%;
+}

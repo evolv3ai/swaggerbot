@@ -1,12 +1,13 @@
-import { Badge } from "~/components/ui/badge";
+import { H2, LEAD, PAGE, PageTitle } from "~/components/shell/page";
 import { buttonClass } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
+import { ProvenanceBadge } from "~/components/ui/provenance-badge";
 import { dayOf } from "~/lib/dates";
 import { vendorHref } from "~/lib/vendor-hrefs";
 import { distinctDomain } from "~/lib/vendor-name";
 import type { VendorPage, VendorPageApi } from "~/server/index-browsing";
 import { lookupHref } from "~/server/lookup-search";
-import { BackToVendors, H2, LEAD, PAGE, PageTitle } from "./page";
+import { BackToVendors } from "./page";
 
 /**
  * `/vendors/{vendorId}`, a docs page of the Index: the Vendor and its APIs,
@@ -36,7 +37,7 @@ function Vendor({ page }: { page: Extract<VendorPage, { status: 200 }> }) {
       : null;
   return (
     <>
-      <PageTitle>{vendor.name}</PageTitle>
+      <PageTitle className="[overflow-wrap:anywhere]">{vendor.name}</PageTitle>
       <dl className="flex flex-wrap gap-x-8 gap-y-2 text-sm">
         {domain ? (
           <div className="flex items-baseline gap-2">
@@ -92,10 +93,7 @@ function ApiCard({ api }: { api: VendorPageApi }) {
       <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
         <h3 className="font-semibold [overflow-wrap:anywhere]">{api.name}</h3>
         {spec?.provenance ? (
-          <Badge tone={spec.provenance === "Official" ? "accent" : "neutral"}>
-            <span className="sr-only">Provenance: </span>
-            {spec.provenance}
-          </Badge>
+          <ProvenanceBadge provenance={spec.provenance} />
         ) : null}
       </div>
       {spec ? (

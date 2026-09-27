@@ -5,7 +5,8 @@ import { cn } from "~/lib/utils";
 /**
  * The design system's Button (components/actions/Button): `primary` (blue,
  * the one key action per view), `secondary` (outlined, blue edge on hover),
- * `ghost`. Sizes 32 / 40 / 48. `buttonClass` styles a link as a button; it
+ * `ghost`. Sizes 32 / 40 / 48; on a touch screen (coarse pointer) `sm` and
+ * `md` grow to 44, the touch target. `buttonClass` styles a link as a button; it
  * carries `no-underline`, the link rule's opt-out.
  */
 export const buttonClass = cva(
@@ -21,8 +22,8 @@ export const buttonClass = cva(
           "border-transparent bg-transparent text-sb-accent-text hover:bg-sb-accent-soft",
       },
       size: {
-        sm: "h-8 rounded-sm px-3 text-[13px]",
-        md: "h-10 px-4 text-sm",
+        sm: "h-8 rounded-sm px-3 text-[13px] pointer-coarse:h-11",
+        md: "h-10 px-4 text-sm pointer-coarse:h-11",
         lg: "h-12 px-6 text-base",
       },
     },

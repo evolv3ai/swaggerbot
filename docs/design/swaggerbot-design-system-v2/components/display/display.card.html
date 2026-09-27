@@ -1,4 +1,4 @@
-<!-- @dsCard group="Components" viewport="700x340" name="Cards, badges & tags" -->
+<!-- @dsCard group="Components" viewport="700x420" name="Cards, badges & tags" -->
 <!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../../styles.css">
 <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
@@ -8,15 +8,17 @@
 </head><body><div id="root"></div>
 <script type="text/babel">
 const NS=window.Nocturne_noctur||{};
-const {Card,Badge,Tag,AnswerBadge}=NS;
+const {Card,Badge,Tag,AnswerBadge,ProvenanceBadge,MethodBadge}=NS;
 ReactDOM.createRoot(document.getElementById('root')).render(<div className="col">
 <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12}}>
 <Card eyebrow="Official" title="The Plaid API">plaid.com · verified 24 Sept 2026</Card>
 <Card variant="raised" eyebrow="Official" title="Jira Cloud platform REST API" interactive>atlassian.com · 6ecc461bb85e</Card>
-<Card variant="outline" eyebrow="Benchmark" title="0 wrong of 20">Resolved answers, 2 runs, 40-name set.</Card>
+<Card variant="outline" title="0 wrong of 20">Resolved answers, 2 runs, 40-name set.</Card>
 </div>
-<div className="row"><Badge dot>Draft</Badge><Badge tone="success" dot>Valid</Badge><Badge tone="warning">3 warnings</Badge><Badge tone="danger">Breaking</Badge><Badge tone="neutral">v2.1</Badge><Badge tone="solid">New</Badge></div>
+<div className="row"><Badge dot>Draft</Badge><Badge tone="success" dot>Valid</Badge><Badge tone="warning">3 warnings</Badge><Badge tone="danger">Breaking</Badge><Badge tone="neutral">v2.1</Badge><Badge tone="outline">Not here</Badge><Badge tone="solid">New</Badge></div>
 <div className="row"><AnswerBadge answer="resolved"/><AnswerBadge answer="unconfirmed"/><AnswerBadge answer="ambiguous"/><AnswerBadge answer="no-spec"/><AnswerBadge answer="unknown"/></div>
+{ProvenanceBadge&&<div className="row"><ProvenanceBadge provenance="Official"/><ProvenanceBadge provenance="Endorsed"/><ProvenanceBadge provenance="Mirror"/><ProvenanceBadge provenance="Community"/></div>}
+{MethodBadge&&<div className="row"><span><MethodBadge method="POST"/> <code>/api/lookup</code></span><span><MethodBadge method="GET"/> <code>/api/vendors</code></span></div>}
 <div className="row"><Tag>openapi 3.1</Tag><Tag selected onRemove={()=>{}}>payments</Tag><Tag>yaml</Tag></div>
 </div>);
 </script></body></html>

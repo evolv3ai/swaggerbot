@@ -20,9 +20,13 @@
 );
 
 @theme inline {
-  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Montserrat", ui-sans-serif, system-ui, sans-serif;
-  --font-heading: "Montserrat", ui-sans-serif, system-ui, sans-serif;
+  --font-sans:
+    "IBM Plex Sans", "IBM Plex Sans Fallback", ui-sans-serif, system-ui,
+    sans-serif;
+  --font-display:
+    "Montserrat", "Montserrat Fallback", ui-sans-serif, system-ui, sans-serif;
+  --font-heading:
+    "Montserrat", "Montserrat Fallback", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 
   /* The design system's own tokens, as utilities (bg-sb-surface, …). */
@@ -39,6 +43,8 @@
   --color-sb-text-on-accent: var(--sb-text-on-accent);
   --color-sb-border: var(--sb-border);
   --color-sb-border-strong: var(--sb-border-strong);
+  --color-sb-border-input: var(--sb-border-input);
+  --color-sb-border-input-hover: var(--sb-border-input-hover);
   --color-sb-accent: var(--sb-accent);
   --color-sb-accent-hover: var(--sb-accent-hover);
   --color-sb-accent-soft: var(--sb-accent-soft);
@@ -55,6 +61,10 @@
   --color-sb-danger-text: var(--sb-danger-text);
   --color-sb-code-bg: var(--sb-code-bg);
   --color-sb-code-text: var(--sb-code-text);
+  --color-sb-code-keyword: var(--sb-code-keyword);
+  --color-sb-code-accent: var(--sb-code-accent);
+  --color-sb-method-post-soft: var(--sb-method-post-soft);
+  --color-sb-method-post-text: var(--sb-method-post-text);
 
   /* shadcn's names. */
   --color-ring: var(--ring);
@@ -138,6 +148,10 @@
   --sb-text-on-accent: var(--sb-navy);
   --sb-border: var(--gray-700);
   --sb-border-strong: var(--gray-600);
+  /* A text field's edge: 3:1 against every ground a field sits on (the
+     page, a card, the top bar), for WCAG 1.4.11. The card edges stay soft. */
+  --sb-border-input: var(--gray-500);
+  --sb-border-input-hover: var(--gray-400);
   --sb-accent: var(--sb-blue);
   --sb-accent-hover: var(--blue-400);
   --sb-accent-press: var(--blue-300);
@@ -157,13 +171,17 @@
   --sb-code-bg: #07090b;
   --sb-code-text: #cfd5de;
   --sb-code-accent: var(--blue-300);
+  /* The command word in a code block (curl, claude). */
+  --sb-code-keyword: #8fbaff;
+  /* The POST method tag: a periwinkle tint, beside GET's blue one. */
+  --sb-method-post-soft: color-mix(in srgb, #6ea8ff 16%, transparent);
+  --sb-method-post-text: var(--sb-code-keyword);
   --sb-overlay: color-mix(in srgb, #000 65%, transparent);
   --sb-shadow-md: 0 0 0 1px var(--gray-700), 0 8px 20px rgb(0 0 0 / 0.4);
   --sb-shadow-lg: 0 0 0 1px var(--gray-600), 0 20px 44px rgb(0 0 0 / 0.55);
   --sb-shadow-box:
     0 1px 0 rgb(255 255 255 / 0.03) inset, 0 20px 40px -24px rgb(0 0 0 / 0.6);
   --sb-ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
-  --sb-ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
 
   /* shadcn's names, onto the design system. */
   --background: var(--sb-bg);
@@ -182,7 +200,7 @@
   --accent-foreground: var(--sb-accent-soft-text);
   --destructive: var(--sb-danger-text);
   --border: var(--sb-border);
-  --input: var(--sb-border);
+  --input: var(--sb-border-input);
   --ring: var(--sb-blue);
   --radius: 10px;
 
@@ -200,6 +218,8 @@
   --sb-text-faint: var(--gray-500);
   --sb-border: var(--gray-200);
   --sb-border-strong: var(--gray-300);
+  --sb-border-input: var(--gray-500);
+  --sb-border-input-hover: var(--gray-600);
   /* Lighter on hover in both themes: navy text keeps its contrast. */
   --sb-accent-hover: var(--blue-400);
   --sb-accent-press: var(--blue-300);
@@ -213,6 +233,7 @@
   --sb-danger-soft: var(--red-100);
   --sb-danger-text: #b42a20;
   --sb-code-bg: var(--gray-900);
+  --sb-method-post-text: #1d4ed8;
   --sb-overlay: color-mix(in srgb, var(--sb-ink) 60%, transparent);
   --sb-shadow-md: 0 2px 4px rgb(2 28 65 / 0.06), 0 6px 16px rgb(2 28 65 / 0.08);
   --sb-shadow-lg:
@@ -257,5 +278,24 @@
   }
   kbd {
     font-family: var(--font-sans);
+  }
+}
+
+/* High Contrast (forced colours) drops backgrounds and box shadows, which
+   is how the sidebar's current item, the Form switch and the "On this
+   page" rail mark where the visitor is. This puts the marker back in the
+   system's own selection colours, for the item and everything inside it,
+   `!important` because the item's own colour utilities sort after it. */
+@utility hc-current {
+  @media (forced-colors: active) {
+    forced-color-adjust: none !important;
+    background-color: Highlight !important;
+    border-color: Highlight !important;
+    color: HighlightText !important;
+    & * {
+      background-color: transparent !important;
+      border-color: HighlightText !important;
+      color: HighlightText !important;
+    }
   }
 }

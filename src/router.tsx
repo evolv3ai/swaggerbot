@@ -3,6 +3,7 @@ import {
   createIsomorphicFn,
   getGlobalStartContext,
 } from "@tanstack/react-start";
+import { ErrorPage } from "~/components/shell/fallback-pages";
 import { routeTree } from "./routeTree.gen";
 
 /**
@@ -23,6 +24,8 @@ export function getRouter() {
   return createRouter({
     routeTree,
     scrollRestoration: true,
+    // A page that fails to build says so inside the shell.
+    defaultErrorComponent: ErrorPage,
     ssr: { nonce: cspNonce() },
   });
 }

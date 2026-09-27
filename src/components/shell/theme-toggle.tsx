@@ -13,7 +13,7 @@ export function ThemeToggle({ className }: { className?: string }) {
       type="button"
       onClick={() => setTheme(currentTheme() === "dark" ? "light" : "dark")}
       className={cn(
-        "inline-grid size-9 place-items-center rounded-md text-sb-text-muted transition-colors hover:bg-sb-accent-soft hover:text-sb-text [&_svg]:size-[18px]",
+        "inline-grid size-9 place-items-center rounded-md text-sb-text-muted transition-colors hover:bg-sb-accent-soft hover:text-sb-text pointer-coarse:size-11 [&_svg]:size-[18px]",
         className,
       )}
     >

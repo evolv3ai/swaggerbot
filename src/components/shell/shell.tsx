@@ -20,14 +20,24 @@ import { ThemeToggle } from "./theme-toggle";
 const TOP_LINK =
   "rounded-sm text-sm font-medium text-sb-text-muted no-underline transition-colors hover:text-sb-text";
 
-/** The mark (as supplied, never redrawn) and the wordmark in Montserrat 800. */
-function Home({ className }: { className?: string }) {
+/**
+ * The mark (as supplied, never redrawn) and the wordmark in Montserrat 800.
+ * `wordmarkClassName` lets the top bar drop the wordmark on the narrowest
+ * phones; the link's name stays "SwaggerBot home".
+ */
+function Home({
+  className,
+  wordmarkClassName,
+}: {
+  className?: string;
+  wordmarkClassName?: string;
+}) {
   return (
     <Link
       to="/"
       aria-label="SwaggerBot home"
       className={cn(
-        "flex shrink-0 items-center gap-2.5 rounded-sm font-display text-lg font-extrabold text-sb-text no-underline",
+        "flex shrink-0 items-center gap-2.5 rounded-sm font-display text-lg font-extrabold text-sb-text no-underline pointer-coarse:min-h-11",
         className,
       )}
     >
@@ -38,7 +48,7 @@ function Home({ className }: { className?: string }) {
         height={30}
         className="block size-[30px]"
       />
-      SwaggerBot
+      <span className={wordmarkClassName}>SwaggerBot</span>
     </Link>
   );
 }
@@ -83,10 +93,16 @@ export function Shell({
         Skip to content
       </a>
       <header className="sticky top-0 z-40 border-b border-sb-border bg-[color-mix(in_srgb,var(--sb-bg)_85%,transparent)] backdrop-blur-[8px]">
-        <div className="flex h-[60px] items-center gap-4 px-4 lg:gap-6 lg:px-6">
-          <Home className="lg:min-w-[232px]" />
+        {/* On phones the bar holds the mark, "Get an API key" and the menu:
+            the wordmark goes below 360px and the key button says "Get a key"
+            below 390px, so the bar never scrolls sideways (320px and up). */}
+        <div className="flex h-[60px] items-center gap-3 px-4 sm:gap-4 lg:gap-6 lg:px-6">
+          <Home
+            className="lg:min-w-[232px]"
+            wordmarkClassName="max-[359px]:hidden"
+          />
           <QuickLookup className="hidden max-w-[520px] flex-1 md:block" />
-          <div className="ml-auto flex items-center gap-3 lg:gap-[22px]">
+          <div className="ml-auto flex items-center gap-2 sm:gap-3 lg:gap-[22px]">
             <Link
               to="/vendors"
               search={{ query: undefined, cursor: undefined }}
@@ -102,9 +118,13 @@ export function Shell({
             <Link
               to="/docs"
               hash="keys"
-              className={buttonClass({ size: "sm", className: "h-9 px-3" })}
+              className={buttonClass({
+                size: "sm",
+                className: "h-9 px-3 pointer-coarse:h-11",
+              })}
             >
-              Get an API key
+              <span className="max-[389px]:hidden">Get an API key</span>
+              <span className="min-[390px]:hidden">Get a key</span>
             </Link>
             <button
               ref={menuButton}
@@ -112,7 +132,7 @@ export function Shell({
               aria-expanded={menu}
               aria-controls="shell-menu"
               onClick={() => setMenu(true)}
-              className="inline-grid size-9 place-items-center rounded-md text-sb-text hover:bg-sb-accent-soft lg:hidden"
+              className="inline-grid size-9 place-items-center rounded-md text-sb-text hover:bg-sb-accent-soft pointer-coarse:size-11 lg:hidden"
             >
               <Menu aria-hidden="true" className="size-5" />
               <span className="sr-only">Menu</span>
@@ -145,7 +165,7 @@ export function Shell({
 function Footer() {
   return (
     <footer className="border-t border-sb-border px-4 py-6 text-[13px] text-sb-text-muted sm:px-8 lg:px-14">
-      <p className="flex flex-wrap gap-x-6 gap-y-1">
+      <p className="flex flex-wrap items-center gap-x-6 gap-y-1 pointer-coarse:gap-y-0 [&_a]:pointer-coarse:inline-block [&_a]:pointer-coarse:py-3">
         <span>
           <span className="font-semibold text-sb-text">SwaggerBot</span> ·
           swaggerbot.dev
@@ -229,7 +249,7 @@ function Drawer({
           <button
             type="button"
             onClick={onClose}
-            className="inline-grid size-9 place-items-center rounded-md text-sb-text hover:bg-sb-accent-soft"
+            className="inline-grid size-9 place-items-center rounded-md text-sb-text hover:bg-sb-accent-soft pointer-coarse:size-11"
           >
             <X aria-hidden="true" className="size-5" />
             <span className="sr-only">Close the menu</span>
@@ -238,7 +258,7 @@ function Drawer({
         <QuickLookup />
         <Sidebar vendors={vendors} />
         <div className="grid gap-3 border-t border-sb-border pt-5">
-          <a href={REPO} className={cn(TOP_LINK, "w-fit")}>
+          <a href={REPO} className={cn(TOP_LINK, "w-fit pointer-coarse:py-3")}>
             GitHub
           </a>
           <HealthStatus />

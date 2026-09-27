@@ -4,6 +4,8 @@ import { cn } from "~/lib/utils";
 /**
  * The design system's Input (components/forms/Input): 2px edge, 10px
  * radius, the edge turns blue on focus. `mono` for URLs, ids and paths.
+ * On a touch screen it is 44px tall with 16px text: iOS zooms the page into
+ * a field set smaller.
  */
 export function Input({
   className,
@@ -13,7 +15,7 @@ export function Input({
   return (
     <input
       className={cn(
-        "h-10 w-full min-w-0 rounded-md border-2 border-sb-border bg-sb-bg px-3 text-sm text-sb-text transition-colors duration-150 placeholder:text-sb-text-faint hover:border-sb-border-strong focus-visible:border-sb-accent disabled:cursor-not-allowed disabled:bg-sb-surface-sunken disabled:text-sb-text-faint",
+        "h-10 w-full min-w-0 rounded-md border-2 pointer-coarse:h-11 pointer-coarse:text-base border-sb-border-input bg-sb-bg px-3 text-sm text-sb-text transition-colors duration-150 placeholder:text-sb-text-faint hover:border-sb-border-input-hover focus-visible:border-sb-accent disabled:cursor-not-allowed disabled:bg-sb-surface-sunken disabled:text-sb-text-faint",
         mono && "font-mono text-[13px]",
         className,
       )}

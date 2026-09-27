@@ -588,7 +588,7 @@
       },
       "tagline": {
         "displayName": "Tagline",
-        "purpose": "BETTER THAN SPECS above Search's title, and nowhere else."
+        "purpose": "NAME IT. GET THE SPEC. above Search's title, and nowhere else."
       },
       "lead": {
         "displayName": "Lead",
@@ -789,7 +789,7 @@
       },
       {
         "name": "The One Tagline Rule",
-        "body": "BETTER THAN SPECS above Search's title is the only line above any page title. No page carries a category kicker or eyebrow: the sidebar and the title already say where the visitor is. A Lookup names what was looked up in plain text under its lead.",
+        "body": "NAME IT. GET THE SPEC. above Search's title is the only line above any page title. No page carries a category kicker or eyebrow: the sidebar and the title already say where the visitor is. A Lookup names what was looked up in plain text under its lead.",
         "section": "typography"
       },
       {
@@ -825,7 +825,7 @@
     "donts": [
       "**Don't** put white text on the blue fill.",
       "**Don't** fill passive surfaces with blue, or outline more than one box per view.",
-      "**Don't** put a kicker or eyebrow above a page title; BETTER THAN SPECS on Search is the only line there.",
+      "**Don't** put a kicker or eyebrow above a page title; NAME IT. GET THE SPEC. on Search is the only line there.",
       "**Don't** use raw `swaggerbot-blue` for body-size text; use `--sb-accent-text`.",
       "**Don't** invent answer states or colours beyond the five.",
       "**Don't** add gradients, textures, glassmorphism or a second blur; the top bar's is the only one.",

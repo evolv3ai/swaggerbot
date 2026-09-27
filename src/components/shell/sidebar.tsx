@@ -1,23 +1,8 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useId } from "react";
+import { MethodBadge } from "~/components/ui/method-badge";
 import { cn } from "~/lib/utils";
-import { activeLink, NAV, type NavLink } from "./nav";
-
-/** A method tag on an HTTP API link: POST and GET in their own tints. */
-function Method({ method }: { method: NonNullable<NavLink["method"]> }) {
-  return (
-    <span
-      className={cn(
-        "mr-1.5 inline-block rounded-[5px] px-[5px] py-px font-mono text-[10.5px] font-medium leading-4",
-        method === "POST"
-          ? "bg-[color-mix(in_srgb,#6ea8ff_16%,transparent)] text-[#1d4ed8] dark:text-[#8fbaff]"
-          : "bg-sb-accent-soft text-sb-accent-soft-text",
-      )}
-    >
-      {method}
-    </span>
-  );
-}
+import { activeLink, NAV } from "./nav";
 
 /**
  * The docs sidebar: Get started, The Index, HTTP API, MCP. The link for
@@ -58,13 +43,15 @@ export function Sidebar({
                     activeProps={{}}
                     aria-current={on ? "page" : undefined}
                     className={cn(
-                      "-ml-2.5 flex items-center rounded-md px-2.5 py-[5px] no-underline transition-colors",
+                      "-ml-2.5 flex items-center rounded-md px-2.5 py-[5px] no-underline transition-colors pointer-coarse:py-[11px]",
                       on
-                        ? "bg-sb-accent-soft font-medium text-sb-accent-text"
+                        ? "hc-current bg-sb-accent-soft font-medium text-sb-accent-text"
                         : "text-sb-text-muted hover:bg-sb-accent-soft/50 hover:text-sb-text",
                     )}
                   >
-                    {link.method ? <Method method={link.method} /> : null}
+                    {link.method ? (
+                      <MethodBadge method={link.method} className="mr-1.5" />
+                    ) : null}
                     <span>{link.label}</span>
                     {link.count === "vendors" && vendors !== null ? (
                       <span className="ml-auto pl-2 text-xs tabular-nums">

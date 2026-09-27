@@ -45,6 +45,7 @@ const STATIC: Record<string, string> = {
     "embed",
     "memory-storage.js",
   ),
+  "/embed/frame-theme.js": join(ROOT, "public", "embed", "frame-theme.js"),
   "/embed/frame-viewport.js": join(
     ROOT,
     "public",

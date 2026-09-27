@@ -1,12 +1,15 @@
 *,*::before,*::after{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-body);font-size:var(--text-md);line-height:var(--leading-body);-webkit-font-smoothing:antialiased}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-body);font-size:var(--text-body);line-height:var(--leading-body);-webkit-font-smoothing:antialiased}
 h1,h2,h3,h4,h5{font-family:var(--font-display);font-weight:var(--weight-bold);line-height:var(--leading-tight);letter-spacing:var(--tracking-display);margin:0 0 var(--space-3);color:var(--text);text-wrap:balance}
-h1{font-size:var(--text-4xl);font-weight:var(--weight-black)}h2{font-size:var(--text-3xl)}h3{font-size:var(--text-2xl)}h4{font-size:var(--text-xl)}h5{font-size:var(--text-lg)}
+/* Docs-page scale: page titles 40px (28px on phones), section headings 20px */
+h1{font-size:40px;font-weight:var(--weight-black)}@media (max-width:639px){h1{font-size:var(--text-2xl)}}h2{font-size:20px}h3{font-size:var(--text-lg)}h4{font-size:var(--text-xl)}h5{font-size:var(--text-lg)}
 p{margin:0 0 var(--space-4);text-wrap:pretty}
-a{color:var(--accent-text);text-underline-offset:3px;text-decoration-thickness:2px}
-a:hover{color:var(--accent-hover)}
+/* Every link is underlined (WCAG 1.4.1: colour is never the only signal); nav items and links shaped as buttons or chips opt out */
+a{color:var(--accent-text);text-decoration-line:underline;text-underline-offset:.2em;text-decoration-thickness:1px}
+a:hover{text-decoration-thickness:2px}
 code,kbd,pre{font-family:var(--font-mono);font-size:.9em}
-:focus-visible{outline:none;box-shadow:var(--focus-ring)}
+:focus-visible{outline:2px solid var(--sb-blue);outline-offset:2px}
 ::selection{background:color-mix(in srgb,var(--sb-blue) 28%,transparent)}
 .sb-eyebrow{font-family:var(--font-display);font-weight:var(--weight-bold);font-size:var(--text-xs);letter-spacing:var(--tracking-eyebrow);text-transform:uppercase;color:var(--accent)}
-.sb-tagline{font-family:var(--font-display);font-weight:var(--weight-bold);letter-spacing:var(--tracking-tagline);text-transform:uppercase;color:var(--sb-blue)}
+/* The tagline, above the Search title and nowhere else in UI; --accent-text is the blue that passes AA as text in both themes */
+.sb-tagline{font-family:var(--font-display);font-weight:var(--weight-bold);font-size:var(--text-xs);letter-spacing:var(--tracking-tagline);text-transform:uppercase;color:var(--accent-text)}

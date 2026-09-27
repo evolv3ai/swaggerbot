@@ -83,7 +83,7 @@ export function WithOnThisPage({
                   <a
                     href={`#${e.id}`}
                     aria-current={e.id === current ? "location" : undefined}
-                    className="block border-l border-sb-border py-1 pl-3 text-sb-text-muted no-underline transition-colors hover:text-sb-text aria-[current]:border-sb-accent aria-[current]:text-sb-accent-text"
+                    className="block border-l border-sb-border py-1 pl-3 text-sb-text-muted no-underline transition-colors hover:text-sb-text aria-[current]:border-sb-accent aria-[current]:text-sb-accent-text aria-[current]:hc-current"
                   >
                     {e.label}
                   </a>

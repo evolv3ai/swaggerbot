@@ -23,19 +23,24 @@
 --text:var(--sb-navy);
 --text-muted:var(--gray-600);
 --text-faint:var(--gray-500);
---text-on-accent:#FFFFFF;
+--text-on-accent:var(--sb-navy); /* navy, not white, on the blue fill: white on #0099DD is 3.2:1 (under WCAG AA), navy 5.3:1 */
 --border:var(--gray-200);
 --border-strong:var(--gray-300);
+--border-input:var(--gray-500); /* a text field's edge: 3:1 against its ground (WCAG 1.4.11); card edges stay soft */
+--border-input-hover:var(--gray-600);
 --accent:var(--sb-blue);
---accent-hover:var(--blue-600);
---accent-press:var(--blue-700);
+--accent-hover:var(--blue-400); /* lighter in both themes: navy text keeps its contrast only on the lighter blues */
+--accent-press:var(--blue-300);
 --accent-soft:var(--blue-50);
 --accent-soft-text:var(--blue-700);
 --accent-text:var(--blue-700); /* body-size blue text — #0099DD alone is under 4.5:1 on white */
 --success:var(--green-500);--success-soft:var(--green-100);--success-text:#0B7A4D;
 --warning:var(--amber-500);--warning-soft:var(--amber-100);--warning-text:#8A5A00;
 --danger:var(--red-500);--danger-soft:var(--red-100);--danger-text:#B42A20;
---focus-ring:0 0 0 3px color-mix(in srgb,var(--sb-blue) 40%,transparent);
+/* Code blocks: ink in both themes; the command word (curl, claude) in periwinkle */
+--code-bg:var(--gray-900);--code-text:#CFD5DE;--code-keyword:#8FBAFF;--code-accent:var(--blue-300);
+/* HTTP method tags: GET on the blue tint, POST on a periwinkle one */
+--method-post-soft:color-mix(in srgb,#6EA8FF 16%,transparent);--method-post-text:#1D4ED8;
 --overlay:color-mix(in srgb,var(--sb-ink) 60%,transparent);
 }
 [data-theme="dark"]{
@@ -49,13 +54,14 @@
 --text-faint:var(--gray-400);
 --border:var(--gray-700);
 --border-strong:var(--gray-600);
---accent-hover:var(--blue-400);
---accent-press:var(--blue-300);
+--border-input-hover:var(--gray-400);
 --accent-soft:color-mix(in srgb,var(--sb-blue) 18%,transparent);
 --accent-soft-text:var(--blue-200);
 --accent-text:var(--blue-300);
 --success-soft:color-mix(in srgb,var(--green-500) 20%,transparent);--success-text:#5FD3A2;
 --warning-soft:color-mix(in srgb,var(--amber-500) 20%,transparent);--warning-text:#F5C766;
 --danger-soft:color-mix(in srgb,var(--red-500) 20%,transparent);--danger-text:#F48A82;
+--code-bg:#07090B;
+--method-post-text:var(--code-keyword);
 --overlay:color-mix(in srgb,#000 65%,transparent);
 }

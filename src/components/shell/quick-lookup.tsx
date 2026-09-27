@@ -32,7 +32,7 @@ export function QuickLookup({ className }: { className?: string }) {
           data-quick-lookup
           aria-keyshortcuts="Meta+K Control+K /"
           placeholder="Look up an API by name"
-          className="h-[38px] w-full rounded-md border border-sb-border bg-sb-bg-subtle pr-14 pl-9 text-sm text-sb-text placeholder:text-sb-text-muted hover:border-sb-border-strong focus-visible:border-sb-accent"
+          className="h-[38px] w-full rounded-md border border-sb-border-input bg-sb-bg-subtle pr-14 pl-9 text-sm text-sb-text pointer-coarse:h-11 pointer-coarse:text-base placeholder:text-sb-text-muted hover:border-sb-border-input-hover focus-visible:border-sb-accent"
         />
         <span
           aria-hidden="true"

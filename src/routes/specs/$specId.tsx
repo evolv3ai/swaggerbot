@@ -2,6 +2,7 @@ import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { CircleAlert, Hourglass, Scale } from "lucide-react";
 import type { ReactNode } from "react";
 import { WithOnThisPage } from "~/components/shell/on-this-page";
+import { LEAD, PAGE, PageTitle } from "~/components/shell/page";
 import { Badge } from "~/components/ui/badge";
 import { Card } from "~/components/ui/card";
 import { sizeOf } from "~/components/viewer/size";
@@ -13,7 +14,7 @@ import {
   specFormat,
 } from "~/components/viewer/spec-label";
 import { cn } from "~/lib/utils";
-import { type SpecForm, specFormOf } from "~/server/spec-embed";
+import { type SpecForm, specFormOf } from "~/server/spec-form";
 import { getSpecView } from "~/server/spec-page";
 import type { SpecView } from "~/server/spec-view";
 
@@ -59,7 +60,7 @@ function SpecViewer() {
   const view = Route.useLoaderData();
   return (
     <WithOnThisPage first={{ id: "spec", label: "About this Spec" }}>
-      <div className="max-w-[860px] px-4 pt-7 pb-16 sm:px-8 lg:px-14 lg:pt-11">
+      <div className={PAGE}>
         <SpecHeader view={view} />
         <div className="mt-7">
           <SpecSummary view={view} />
@@ -104,9 +105,9 @@ function FormSwitch({ view }: { view: SpecView }) {
                 search={form === "normalized" ? { form } : {}}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "flex h-8 items-center rounded-full px-3.5 text-[13px] font-semibold no-underline transition-colors duration-150",
+                  "flex h-8 items-center rounded-full px-3.5 text-[13px] font-semibold no-underline transition-colors duration-150 pointer-coarse:h-11",
                   active
-                    ? "bg-sb-accent text-sb-text-on-accent"
+                    ? "hc-current bg-sb-accent text-sb-text-on-accent"
                     : "text-sb-text-muted hover:bg-sb-accent-soft hover:text-sb-text",
                 )}
               >
@@ -269,11 +270,9 @@ function Alternates({ view }: { view: SpecView }) {
 
 function NoSuchSpec() {
   return (
-    <div className="grid max-w-[860px] gap-3 px-4 pt-7 pb-16 sm:px-8 lg:px-14 lg:pt-11">
-      <h1 className="font-display text-[28px] leading-[1.1] font-extrabold tracking-[-0.01em] text-sb-text sm:text-[40px]">
-        No such Spec
-      </h1>
-      <p className="max-w-[40em] text-[17px] text-sb-text-muted">
+    <div className={PAGE}>
+      <PageTitle>No such Spec</PageTitle>
+      <p className={LEAD}>
         The Index holds no Spec with that id. Find an API by name with{" "}
         <Link to="/" className="text-sb-text">
           Search
