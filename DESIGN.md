@@ -37,44 +37,52 @@ colors:
   code-text: "#cfd5de"
   code-keyword: "#8fbaff"
   method-post-light: "#1d4ed8"
+  method-post-tint: "#6ea8ff"
+  scrim: "#000000"
 typography:
   display:
-    fontFamily: "Montserrat, ui-sans-serif, system-ui, sans-serif"
+    fontFamily: "Montserrat, Montserrat Fallback, ui-sans-serif, system-ui, sans-serif"
     fontSize: "40px"
     fontWeight: 800
     lineHeight: 1.1
     letterSpacing: "-0.01em"
+  display-phone:
+    fontFamily: "Montserrat, Montserrat Fallback, ui-sans-serif, system-ui, sans-serif"
+    fontSize: "28px"
+    fontWeight: 800
+    lineHeight: 1.1
+    letterSpacing: "-0.01em"
   headline:
-    fontFamily: "Montserrat, ui-sans-serif, system-ui, sans-serif"
+    fontFamily: "Montserrat, Montserrat Fallback, ui-sans-serif, system-ui, sans-serif"
     fontSize: "20px"
     fontWeight: 700
     letterSpacing: "-0.01em"
   title:
-    fontFamily: "IBM Plex Sans, ui-sans-serif, system-ui, sans-serif"
+    fontFamily: "IBM Plex Sans, IBM Plex Sans Fallback, ui-sans-serif, system-ui, sans-serif"
     fontSize: "15px"
     fontWeight: 600
     lineHeight: 1.6
   tagline:
-    fontFamily: "Montserrat, ui-sans-serif, system-ui, sans-serif"
+    fontFamily: "Montserrat, Montserrat Fallback, ui-sans-serif, system-ui, sans-serif"
     fontSize: "12px"
     fontWeight: 700
     letterSpacing: "0.3em"
   lead:
-    fontFamily: "IBM Plex Sans, ui-sans-serif, system-ui, sans-serif"
+    fontFamily: "IBM Plex Sans, IBM Plex Sans Fallback, ui-sans-serif, system-ui, sans-serif"
     fontSize: "17px"
     fontWeight: 400
     lineHeight: 1.6
   body:
-    fontFamily: "IBM Plex Sans, ui-sans-serif, system-ui, sans-serif"
+    fontFamily: "IBM Plex Sans, IBM Plex Sans Fallback, ui-sans-serif, system-ui, sans-serif"
     fontSize: "15px"
     fontWeight: 400
     lineHeight: 1.6
   label:
-    fontFamily: "Montserrat, ui-sans-serif, system-ui, sans-serif"
+    fontFamily: "Montserrat, Montserrat Fallback, ui-sans-serif, system-ui, sans-serif"
     fontSize: "13px"
     fontWeight: 700
   badge:
-    fontFamily: "Montserrat, ui-sans-serif, system-ui, sans-serif"
+    fontFamily: "Montserrat, Montserrat Fallback, ui-sans-serif, system-ui, sans-serif"
     fontSize: "11px"
     fontWeight: 700
     lineHeight: 1
@@ -200,16 +208,19 @@ Where the build departs from the design system's files, this table records how, 
 | Cards 16px radius | The kit's 16px for `Card` and the Lookup box; content cards (answers, tables, commands) set 12px | The approved mock's `.c` and `.res` cards are 12px; only its `.box` is 16px. |
 | `outline` card has no shadow | The outline card carries `--sb-shadow-box` | The mock's Lookup box lifts; it is the one highlight per view. |
 | Input fill is `--surface` | `--sb-bg` | Reason not recorded (`a2fe4e8`); the Lookup box's field sits on the page ground inside the card. |
+| Input edge is `--border` | `--sb-border-input` (`gray-500` in both themes; hover `gray-400` dark, `gray-600` light) | `--sb-border` is 1.3:1 (light) and 1.6:1 (dark) against a field's grounds; a text field's edge needs 3:1 (WCAG 1.4.11). Card and table edges stay soft. |
 | Tabs: Montserrat 600, accent text, 3px pill underline, 2px track | Plex 13px medium, selected text white/navy with a 2px inset blue underline, no track | The mock's code tabs; Montserrat 600 is not self-hosted. |
 | Form label Montserrat 600 | Montserrat 700 | Only 700 and 800 are self-hosted. |
 | Badge letter-spacing 0.04em; `neutral` in muted text | 0.06em; `neutral` in full text on `--sb-border` (dark) or `--sb-surface-sunken` (light); an extra `outline` tone | The kit's answer mapping names an outline for Unknown, which its Badge lacks; the tracking and the neutral text are as built (`a2fe4e8`), reason not recorded. |
 | No glassmorphism; blur only for the modal scrim | The top bar is `--sb-bg` at 85% with an 8px backdrop blur | The approved mock's top bar. The only blur in the system. |
 | Fonts from Google Fonts | Self-hosted in `src/styles/fonts.css` (Montserrat 700/800, Plex Sans 400/500/600, JetBrains Mono) | The CSP allows `font-src 'self'` only. |
+| Stacks fall back to `system-ui` | Each face is followed by a metric-matched local Arial (`IBM Plex Sans Fallback`, `Montserrat Fallback`: `size-adjust` and ascent/descent overrides in `fonts.css`) | The swap to the webfont no longer moves the page (cold `/docs` CLS 0.039 → 0.003). |
 | No code tokens | `--sb-code-bg`/`--sb-code-text`: ink in both themes; `code-keyword` `#8fbaff` for the command word | The mock's code blocks. |
 | Radius xs 4px, xl 24px (dialogs) | Not used; no dialog is built (the drawer is square-edged) | Nothing yet needs them. |
 | Select, Checkbox, Radio, Switch, Tag, Dialog, Toast, Tooltip, IconButton; `navy` and `danger` buttons | Not built | No screen needs them yet. Build them from the kit when one does. |
 | The website UI kit's primary action says "Develop" | "Look up" | The kit's own content rule (buttons are verbs, "Look up"); Wes was told and didn't object. |
 | Scalar (the Spec viewer) in the site's fonts | Scalar's colours map to the tokens (`SCALAR_CSS` in `src/server/spec-embed.ts`), but its fonts fall back to the system's | The sandboxed frame has an opaque origin and can't load the site's fonts. |
+| — | The Spec frame follows the site's theme by `postMessage`, never by a new URL (`public/embed/frame-theme.js`; `THEME_SCRIPT` answers its "ready", `setTheme` announces each switch) | A new URL reloaded Scalar and the Spec (up to 10 MB): twice on a light-theme visit, and on every switch. |
 
 ## Colors
 
@@ -231,11 +242,12 @@ One brand blue on a cool, navy-tinted neutral ramp, three status hues, and an in
 | `--sb-surface` / `-raised` / `-sunken` | gray-800 / gray-700 / gray-950 | white / white / gray-100 |
 | `--sb-text` / `-muted` / `-faint` | white / gray-300 / gray-400 | navy / gray-600 / gray-500 |
 | `--sb-border` / `-strong` | gray-700 / gray-600 | gray-200 / gray-300 |
+| `--sb-border-input` / `-hover` | gray-500 / gray-400 | gray-500 / gray-600 |
 | `--sb-code-bg` / `--sb-code-text` | `code-ground` / `code-text` | ink / `code-text` |
 
 ### Status
 - **Green, amber, red** (`green-500`, `amber-500`, `red-500`), each with a soft ground (20% of the hue in dark; `-100` in light) and a text colour (`*-text-dark`, `*-text-light`). They mean Resolved, Unconfirmed and failure, nothing else. Green is also the service-status "eye".
-- **Code keyword** (`code-keyword`): the command word in a code block (`curl`, `claude`) and the POST method tag's text in dark; `method-post-light` is POST's text in light.
+- **Code keyword** (`code-keyword`, `--sb-code-keyword`): the command word in a code block (`curl`, `claude`, picked out by `CodeBlock` itself) and the POST method tag's text in dark; `method-post-light` is POST's text in light (`--sb-method-post-text`), on a 16% `method-post-tint` (`--sb-method-post-soft`).
 
 ### Named Rules
 **The One Blue Rule.** The blue fill marks the one primary action and the mark; the blue outline marks the one highlighted box. Passive surfaces are never filled blue.
@@ -246,14 +258,14 @@ One brand blue on a cool, navy-tinted neutral ramp, three status hues, and an in
 
 ## Typography
 
-**Display Font:** Montserrat 700/800 (with ui-sans-serif, system-ui)
-**Body Font:** IBM Plex Sans 400/500/600 (with ui-sans-serif, system-ui)
+**Display Font:** Montserrat 700/800 (with a metric-matched Arial Bold, then ui-sans-serif, system-ui)
+**Body Font:** IBM Plex Sans 400/500/600 (with a metric-matched Arial, then ui-sans-serif, system-ui)
 **Label/Mono Font:** JetBrains Mono (with ui-monospace)
 
 **Character:** Montserrat is the wordmark's face, heavy and geometric, used for headings, labels, buttons and badges; Plex is a plain technical reader's face for everything else; JetBrains Mono marks what can be copied.
 
 ### Hierarchy
-- **Display** (Montserrat 800, 40px from `sm` and 28px below it, 1.1, −0.01em): the page title, one per page, sentence case.
+- **Display** (Montserrat 800, 40px from `sm` and 28px below it (`display-phone`), 1.1, −0.01em): the page title, one per page, sentence case. Every page sets it with `PageTitle` (`src/components/shell/page.tsx`, with the column `PAGE`, the lead `LEAD` and the section heading `H2`); a title that is a name from outside (a Vendor's, an API's) may break anywhere as a last resort.
 - **Headline** (Montserrat 700, 20px, −0.01em): a section heading (`h2`), 40px above, 14px below. Only `h2`s with an `id` feed the "On this page" rail.
 - **Title** (Plex 600, 15px): a card's heading, the API name in an answer card.
 - **Lead** (Plex 400, 17px, `--sb-text-muted`, at most 40em): the sentence under a page title.
@@ -279,7 +291,8 @@ The docs shell (`src/components/shell/`), after the approved mock:
 - **"On this page" rail** (220px, from `xl`): built from the page's `h2`s that carry an `id`, 13px, a 1px left rule per item that turns blue for the section in view.
 - **The column.** Every route's main column is at most 860px (the Spec viewer's included), padded 28px top from phones and 44px from `lg`, with side gutters of 16px, 32px from `sm`, 56px from `lg`. The whole shell is at most 1440px wide, centred.
 - **Rhythm.** A 4px grid; sections 40px apart; cards 16–20px inside; the Lookup box 18px (16px on phones). Anchors land below the top bar (`scroll-padding-top: 5rem`).
-- **Phones.** No rails; the top bar keeps the mark, "Get an API key" and the menu. Answer cards stack; the five answers go 1, 2, then 3 across (`sm`, `lg`).
+- **Phones.** No rails; the top bar keeps the mark, "Get an API key" and the menu. It never scrolls sideways (320px up): below 390px the button says "Get a key", below 360px the wordmark goes and the mark stays. Answer cards stack; the five answers go 1, 2, then 3 across (`sm`, `lg`).
+- **Touch.** On a coarse pointer (`pointer-coarse:`), every control is a 44px target: buttons (`sm`, `md`), the top bar's icon buttons, fields (with 16px text, so iOS doesn't zoom into them), tabs, the Copy button, the Try chips, the Form switch, disclosure summaries, the Community checkbox's row, sidebar items and footer links. A mouse keeps the docs-site density. Inline links in running text keep their size (WCAG 2.5.8 exempts them).
 
 ### Named Rules
 **The One Column Rule.** Every page's content sits in one column of at most 860px. No page widens it.
@@ -330,10 +343,10 @@ Compact and confident: Montserrat bold, one flat fill.
 - **Internal Padding:** 16–20px; tables and tabbed cards run edge to edge with 16px cell padding and a `--sb-bg-subtle` header row.
 
 ### Inputs / Fields
-- **Style:** 40px (48px in the Lookup box, 16px text), 2px `--sb-border` edge, 10px radius, the page ground (`--sb-bg`) inside, faint placeholder. `mono` for URLs and ids.
+- **Style:** 40px (48px in the Lookup box, 16px text), 2px `--sb-border-input` edge (3:1 against every ground a field sits on), 10px radius, the page ground (`--sb-bg`) inside, faint placeholder. `mono` for URLs and ids.
 - **Focus:** the edge turns blue, plus the 2px focus outline. Hover strengthens the edge.
 - **Disabled:** sunken ground, faint text.
-- The Quick Lookup in the top bar is a 38px field on `--sb-bg-subtle` with a 1px edge, a search icon and a ⌘K key hint.
+- The Quick Lookup in the top bar is a 38px field on `--sb-bg-subtle` with a 1px `--sb-border-input` edge, a search icon and a ⌘K key hint.
 - Checkboxes are native, 16px, with the blue accent (the kit's Checkbox is not built).
 
 ### Navigation
@@ -343,7 +356,7 @@ Compact and confident: Montserrat bold, one flat fill.
 - **Tabs:** the WAI-ARIA tabs pattern (arrow keys, Home, End). Plex 13px medium, muted; the selected tab in full text with a 2px inset blue underline. Without script the first panel shows.
 
 ### Code Block (signature)
-The artefact is always one step away. Code on the ink ground in both themes (`--sb-code-bg`, `--sb-code-text`), JetBrains Mono 12.5px on 1.7, wrapping unless told to scroll, with a labelled Copy button (28px, 1px translucent white edge, Lucide copy/check icon) and a polite live region that says when it copied. The command word is picked out in `code-keyword`.
+The artefact is always one step away. Code on the ink ground in both themes (`--sb-code-bg`, `--sb-code-text`), JetBrains Mono 12.5px on 1.7, wrapping unless told to scroll (a URL in it wraps only between its parts, `pathBreakable` in `path.tsx`, never inside a word), with a labelled Copy button (28px, 1px translucent white edge, Lucide copy/check icon) and a polite live region that says when it copied. When the browser refuses the clipboard, the button reads "Copy it yourself" (alert icon), the code is selected (the whole command, in an elided block), and the live region says so. The command word is picked out in `code-keyword`.
 - **SpecDownloadCurl** shows a Spec's download command elided (`CodeBlock`'s `elided`): `curl -o openapi.yaml …/specs/1fdc1047…78a9/published`, the origin elided and the Spec id shortened and picked out in `blue-300`. From `sm` up it stays on one line; on a phone it wraps at the normal 12.5px, with the same labelled Copy button. Copy copies, and screen readers read, the whole real command.
 
 ### Path
@@ -351,6 +364,12 @@ URLs and paths shown as text (outside code blocks: the Sources lists, the docs r
 
 ### Answer card (signature)
 An answer is a content card: a header row (the API name as a title link, its AnswerBadge, its Provenance, the time it took in 13px muted, pushed right from `sm`), then tabs (curl, MCP, JSON) over code blocks. A Lookup states its answer once: the page heading names it and the card carries the badge.
+
+### Pages that stand in
+- **No page here** (`NotFoundPage`, any unknown address, served 404): the page title, the address asked for in mono, the Lookup box, and links to the Vendors and the docs.
+- **This page didn't load** (`ErrorPage`, the router's default error page, served 500): says the fault is ours, never shows the error itself, and offers Try again (reloads the route's data) and Go to Search.
+- **The Spec frame, loading:** "Loading the API reference…" in the frame until Scalar mounts; after 12 seconds a second line points to the downloads. CSS only (the frame runs no script of ours).
+- **Status eye timeout:** a health check that hasn't answered in 10 seconds shows "Not answering".
 
 ### Status eye
 An 8px round dot for the service status in the top bar: an empty `--sb-border-strong` ring while checking, green when the service answers, red when it doesn't. The state is always written beside it ("Operational", "Not answering"). A status badge's `dot` is the same eye in the badge's own colour.
