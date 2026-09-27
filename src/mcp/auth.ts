@@ -1,18 +1,18 @@
 import type { AuthInfo } from "@modelcontextprotocol/server";
-import type { ApiKey } from "~/index-store/keys";
+import type { VerifiedKey } from "~/index-store/keys";
 import type { LookupKey } from "~/lookup/http";
 
 /**
  * The `authInfo` a request to `/mcp` is served with when its bearer names a
- * live key: the key's id as `clientId`, and its own daily quota. Built per
- * request and handed to `handler.fetch`, never kept.
+ * live key: the secret as `token` (a Discovery verifies it again, at cost
+ * 1) and the key's id as `clientId`. Built per request and handed to
+ * `handler.fetch`, never kept.
  */
-export function authInfoOf(key: ApiKey, secret: string): AuthInfo {
+export function authInfoOf(key: VerifiedKey, secret: string): AuthInfo {
   return {
     token: secret,
     clientId: key.id,
     scopes: [],
-    extra: { dailyQuota: key.dailyQuota },
   };
 }
 
@@ -21,9 +21,5 @@ export function lookupKeyOf(
   authInfo: AuthInfo | undefined,
 ): LookupKey | undefined {
   if (!authInfo) return undefined;
-  const dailyQuota = authInfo.extra?.dailyQuota;
-  return {
-    id: authInfo.clientId,
-    dailyQuota: typeof dailyQuota === "number" ? dailyQuota : null,
-  };
+  return { secret: authInfo.token };
 }

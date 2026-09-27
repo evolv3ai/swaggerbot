@@ -29,6 +29,9 @@ importers:
       '@typesafe-ai/sdk':
         specifier: ^0.6.0
         version: 0.6.0
+      '@unkey/api':
+        specifier: ^2.5.2
+        version: 2.5.2
       better-sqlite3:
         specifier: ^13.0.3
         version: 13.0.3
@@ -2230,6 +2233,9 @@ packages:
     resolution: {integrity: sha512-pnC8x9HLV3qQXdvWfylUEU25uhfCAy3ly9nmpQz84j9py818DRfU8jOsQ5wjdWtxyU1vX/fW2udfm4jtxUK8Bg==}
     peerDependencies:
       vue: '>=3.5.18'
+
+  '@unkey/api@2.5.2':
+    resolution: {integrity: sha512-4PPmWF5q4scdJ8EzYZmEXvWRIRiLVkn3atizZLIBhVJ8sKijqXZ3qeuVFXjWeF13neCobUN3jZbEIaocN/iQMw==}
 
   '@vercel/oidc@3.1.0':
     resolution: {integrity: sha512-Fw28YZpRnA3cAHHDlkt7xQHiJ0fcL+NRcIqsocZQUSmbzeIKRpwttJjik5ZGanXP+vlA4SbTg+AbA3bP363l+w==}
@@ -7077,6 +7083,10 @@ snapshots:
       hookable: 6.1.2
       unhead: 2.1.17
       vue: 3.5.43(typescript@5.9.3)
+
+  '@unkey/api@2.5.2':
+    dependencies:
+      zod: 4.6.5
 
   '@vercel/oidc@3.1.0': {}
 
