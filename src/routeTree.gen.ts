@@ -16,6 +16,9 @@ import { Route as McpRouteImport } from './routes/mcp'
 import { Route as ApiSplatRouteImport } from './routes/api/$'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as ApiLookupRouteImport } from './routes/api/lookup'
+import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
+import { Route as AuthSignInRouteImport } from './routes/auth/sign-in'
+import { Route as AuthSignOutRouteImport } from './routes/auth/sign-out'
 import { Route as SpecsSpecIdRouteImport } from './routes/specs/$specId'
 import { Route as VendorsIndexRouteImport } from './routes/vendors/index'
 import { Route as VendorsVendorIdRouteImport } from './routes/vendors/$vendorId'
@@ -59,6 +62,21 @@ const ApiHealthRoute = ApiHealthRouteImport.update({
 const ApiLookupRoute = ApiLookupRouteImport.update({
   id: '/api/lookup',
   path: '/api/lookup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthCallbackRoute = AuthCallbackRouteImport.update({
+  id: '/auth/callback',
+  path: '/auth/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthSignInRoute = AuthSignInRouteImport.update({
+  id: '/auth/sign-in',
+  path: '/auth/sign-in',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthSignOutRoute = AuthSignOutRouteImport.update({
+  id: '/auth/sign-out',
+  path: '/auth/sign-out',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SpecsSpecIdRoute = SpecsSpecIdRouteImport.update({
@@ -116,6 +134,9 @@ export interface FileRoutesByFullPath {
   '/api/$': typeof ApiSplatRoute
   '/api/health': typeof ApiHealthRoute
   '/api/lookup': typeof ApiLookupRoute
+  '/auth/callback': typeof AuthCallbackRoute
+  '/auth/sign-in': typeof AuthSignInRoute
+  '/auth/sign-out': typeof AuthSignOutRoute
   '/specs/$specId': typeof SpecsSpecIdRoute
   '/vendors/$vendorId': typeof VendorsVendorIdRoute
   '/vendors/': typeof VendorsIndexRoute
@@ -134,6 +155,9 @@ export interface FileRoutesByTo {
   '/api/$': typeof ApiSplatRoute
   '/api/health': typeof ApiHealthRoute
   '/api/lookup': typeof ApiLookupRoute
+  '/auth/callback': typeof AuthCallbackRoute
+  '/auth/sign-in': typeof AuthSignInRoute
+  '/auth/sign-out': typeof AuthSignOutRoute
   '/specs/$specId': typeof SpecsSpecIdRoute
   '/vendors/$vendorId': typeof VendorsVendorIdRoute
   '/vendors': typeof VendorsIndexRoute
@@ -153,6 +177,9 @@ export interface FileRoutesById {
   '/api/$': typeof ApiSplatRoute
   '/api/health': typeof ApiHealthRoute
   '/api/lookup': typeof ApiLookupRoute
+  '/auth/callback': typeof AuthCallbackRoute
+  '/auth/sign-in': typeof AuthSignInRoute
+  '/auth/sign-out': typeof AuthSignOutRoute
   '/specs/$specId': typeof SpecsSpecIdRoute
   '/vendors/$vendorId': typeof VendorsVendorIdRoute
   '/vendors/': typeof VendorsIndexRoute
@@ -173,6 +200,9 @@ export interface FileRouteTypes {
     | '/api/$'
     | '/api/health'
     | '/api/lookup'
+    | '/auth/callback'
+    | '/auth/sign-in'
+    | '/auth/sign-out'
     | '/specs/$specId'
     | '/vendors/$vendorId'
     | '/vendors/'
@@ -191,6 +221,9 @@ export interface FileRouteTypes {
     | '/api/$'
     | '/api/health'
     | '/api/lookup'
+    | '/auth/callback'
+    | '/auth/sign-in'
+    | '/auth/sign-out'
     | '/specs/$specId'
     | '/vendors/$vendorId'
     | '/vendors'
@@ -209,6 +242,9 @@ export interface FileRouteTypes {
     | '/api/$'
     | '/api/health'
     | '/api/lookup'
+    | '/auth/callback'
+    | '/auth/sign-in'
+    | '/auth/sign-out'
     | '/specs/$specId'
     | '/vendors/$vendorId'
     | '/vendors/'
@@ -228,6 +264,9 @@ export interface RootRouteChildren {
   ApiSplatRoute: typeof ApiSplatRoute
   ApiHealthRoute: typeof ApiHealthRoute
   ApiLookupRoute: typeof ApiLookupRoute
+  AuthCallbackRoute: typeof AuthCallbackRoute
+  AuthSignInRoute: typeof AuthSignInRoute
+  AuthSignOutRoute: typeof AuthSignOutRoute
   SpecsSpecIdRoute: typeof SpecsSpecIdRoute
   VendorsVendorIdRoute: typeof VendorsVendorIdRoute
   VendorsIndexRoute: typeof VendorsIndexRoute
@@ -288,6 +327,27 @@ declare module '@tanstack/react-router' {
       path: '/api/lookup'
       fullPath: '/api/lookup'
       preLoaderRoute: typeof ApiLookupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/callback': {
+      id: '/auth/callback'
+      path: '/auth/callback'
+      fullPath: '/auth/callback'
+      preLoaderRoute: typeof AuthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/sign-in': {
+      id: '/auth/sign-in'
+      path: '/auth/sign-in'
+      fullPath: '/auth/sign-in'
+      preLoaderRoute: typeof AuthSignInRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/sign-out': {
+      id: '/auth/sign-out'
+      path: '/auth/sign-out'
+      fullPath: '/auth/sign-out'
+      preLoaderRoute: typeof AuthSignOutRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/specs/$specId': {
@@ -364,6 +424,9 @@ const rootRouteChildren: RootRouteChildren = {
   ApiSplatRoute: ApiSplatRoute,
   ApiHealthRoute: ApiHealthRoute,
   ApiLookupRoute: ApiLookupRoute,
+  AuthCallbackRoute: AuthCallbackRoute,
+  AuthSignInRoute: AuthSignInRoute,
+  AuthSignOutRoute: AuthSignOutRoute,
   SpecsSpecIdRoute: SpecsSpecIdRoute,
   VendorsVendorIdRoute: VendorsVendorIdRoute,
   VendorsIndexRoute: VendorsIndexRoute,

@@ -10,15 +10,15 @@ import {
 } from "react";
 import { buttonClass } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
+import type { ShellAccount } from "~/server/account";
 import type { IndexStats } from "~/server/index-stats";
+import { AccountLinks, AccountMenu } from "./account";
 import { REPO } from "./benchmark";
 import { HealthStatus } from "./health-status";
+import { TOP_LINK } from "./nav";
 import { QuickLookup, useQuickLookupKeys } from "./quick-lookup";
 import { Sidebar } from "./sidebar";
 import { ThemeToggle } from "./theme-toggle";
-
-const TOP_LINK =
-  "rounded-sm text-sm font-medium text-sb-text-muted no-underline transition-colors hover:text-sb-text";
 
 /**
  * The mark (as supplied, never redrawn) and the wordmark in Montserrat 800.
@@ -57,14 +57,18 @@ function Home({
  * The frame around every page but `/embed/…`, a docs shell: the sticky top
  * bar (home, the Quick Lookup, Vendors, GitHub, the service's status, the
  * theme, "Get an API key"), the sidebar on wide screens (a drawer behind
- * the menu button on narrow ones), the page, and the footer. Pages opt into
+ * the menu button on narrow ones), the page, and the footer. With sign-in
+ * on, the top bar also offers "Sign in" or the signed-in person's menu
+ * (from `sm`; in the drawer below it). Pages opt into
  * the "On this page" rail themselves (`WithOnThisPage`).
  */
 export function Shell({
   facts,
+  account,
   children,
 }: {
   facts: IndexStats | null;
+  account: ShellAccount;
   children: ReactNode;
 }) {
   const [menu, setMenu] = useState(false);
@@ -82,6 +86,10 @@ export function Shell({
   });
   // biome-ignore lint/correctness/useExhaustiveDependencies: runs on a change of location
   useEffect(() => setMenu(false), [where]);
+  // Where "Sign in" comes back to: this page.
+  const returnTo = useRouterState({
+    select: (s) => `${s.location.pathname}${s.location.searchStr}`,
+  });
 
   const vendors = facts?.vendors ?? null;
   return (
@@ -115,6 +123,11 @@ export function Shell({
             </a>
             <HealthStatus className="hidden lg:flex" />
             <ThemeToggle className="hidden sm:inline-grid" />
+            <AccountMenu
+              account={account}
+              returnTo={returnTo}
+              className="hidden sm:block"
+            />
             <Link
               to="/docs"
               hash="keys"
@@ -140,7 +153,14 @@ export function Shell({
           </div>
         </div>
       </header>
-      {menu ? <Drawer vendors={vendors} onClose={closeMenu} /> : null}
+      {menu ? (
+        <Drawer
+          vendors={vendors}
+          account={account}
+          returnTo={returnTo}
+          onClose={closeMenu}
+        />
+      ) : null}
       <div className="mx-auto w-full max-w-[1440px] flex-1 lg:grid lg:grid-cols-[256px_minmax(0,1fr)]">
         <aside className="hidden border-r border-sb-border lg:block">
           <div className="sticky top-[60px] max-h-[calc(100dvh-60px)] overflow-y-auto px-5 py-[26px]">
@@ -187,15 +207,19 @@ const FOCUSABLE =
 
 /**
  * The sidebar as a modal drawer, below `lg`: with the Quick Lookup, the
- * top bar's links, the status and the theme. Focus moves into it and stays
+ * top bar's links (sign-in's too, below `sm`), the status and the theme. Focus moves into it and stays
  * there; Escape, the close button or the scrim close it, and focus goes
  * back to the menu button.
  */
 function Drawer({
   vendors,
+  account,
+  returnTo,
   onClose,
 }: {
   vendors: number | null;
+  account: ShellAccount;
+  returnTo: string;
   onClose: () => void;
 }) {
   const panel = useRef<HTMLDivElement>(null);
@@ -258,6 +282,11 @@ function Drawer({
         <QuickLookup />
         <Sidebar vendors={vendors} />
         <div className="grid gap-3 border-t border-sb-border pt-5">
+          <AccountLinks
+            account={account}
+            returnTo={returnTo}
+            className="sm:hidden"
+          />
           <a href={REPO} className={cn(TOP_LINK, "w-fit pointer-coarse:py-3")}>
             GitHub
           </a>

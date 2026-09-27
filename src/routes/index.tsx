@@ -39,7 +39,7 @@ const MEANING: Record<OutcomeKind, string> = {
  * and programs. Every figure is live from the Index or the dated Benchmark.
  */
 function Search() {
-  const facts = useLoaderData({ from: "__root__" });
+  const { facts } = useLoaderData({ from: "__root__" });
   const example = facts?.recent[0];
   return (
     <WithOnThisPage first={{ id: "look-up", label: "Look up an API" }}>

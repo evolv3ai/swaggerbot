@@ -75,3 +75,7 @@ export function activeLink(
     onPath.find((l) => !l.hash)
   );
 }
+
+/** A top bar link (Vendors, GitHub, Sign in): 14px medium, muted, no underline. */
+export const TOP_LINK =
+  "rounded-sm text-sm font-medium text-sb-text-muted no-underline transition-colors hover:text-sb-text";

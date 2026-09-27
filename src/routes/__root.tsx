@@ -13,6 +13,7 @@ import {
 } from "~/components/shell/fallback-pages";
 import { Shell } from "~/components/shell/shell";
 import { THEME_COLOR, THEME_SCRIPT } from "~/components/shell/theme";
+import { getShellAccount } from "~/server/account";
 import { getShellFacts } from "~/server/shell-facts";
 import appCss from "~/styles/app.css?url";
 import fontsCss from "~/styles/fonts.css?url";
@@ -61,14 +62,20 @@ export const Route = createRootRoute({
       { rel: "stylesheet", href: appCss },
     ],
   }),
-  loader: () => getShellFacts(),
+  loader: async () => {
+    const [facts, account] = await Promise.all([
+      getShellFacts(),
+      getShellAccount(),
+    ]);
+    return { facts, account };
+  },
   component: RootComponent,
   // Rendered in the shell, in place of the page.
   notFoundComponent: NotFoundPage,
 });
 
 function RootComponent() {
-  const facts = Route.useLoaderData();
+  const { facts, account } = Route.useLoaderData();
   const bare = useRouterState({
     select: (s) => s.location.pathname.startsWith("/embed/"),
   });
@@ -77,7 +84,7 @@ function RootComponent() {
       {bare ? (
         <Outlet />
       ) : (
-        <Shell facts={facts}>
+        <Shell facts={facts} account={account}>
           <Outlet />
         </Shell>
       )}
