@@ -1,6 +1,6 @@
 # Slice 7 backlog: self-service API keys
 
-**Status: draft, 2026-09-27.** Wes chose Unkey for keys, WorkOS for sign-in, fail closed, auto-approval and one key per user (2026-09-27); D2, D5 and D7–D9 below are recommendations awaiting his approval. Nothing is filed on Linear yet.
+**Status: approved by Wes, 2026-09-27** (Unkey, WorkOS, fail closed, auto-approval and one key per user his choices; D2, D5 and D7–D9 as recommended; ADR 0006 accepted). Filed on Linear as in the Order table.
 
 The issues for self-service keys (the PRD's "Later" line, brought forward), written so the weawr factory can build them: each numbered body is filed as-is on Linear (team WTR, labels `ai` + `swaggerbot`). Capitalised terms are from [`CONTEXT.md`](../../CONTEXT.md). Conventions shared by every issue live in `.weawr/instructions.md`. The decision is [ADR 0006](../adr/0006-keys-in-unkey-accounts-in-workos.md).
 
@@ -9,14 +9,14 @@ The issues for self-service keys (the PRD's "Later" line, brought forward), writ
 ## Decisions
 
 - **D1. Unkey's API management, not Unkey Deploy.** *Taken (Wes).* The free tier (1,000 keys, 150K valid verifications a month); a keyspace `swaggerbot` in Wes's `evolv3ai` workspace, beside `notra-local`; key prefix `sb` (keys read `sb_…` as today). Hosting stays on Coolify: Deploy's storage is ephemeral and its gateway would 401 keyless Index answers (ADR 0006).
-- **D2. What is verified, and what it costs.** *Recommended.* A key sent on a request the Index answers: `verifyKey` with `credits.cost: 0` (a bad key is still a 401, and nothing is spent). Discovery or `fresh`: cost 1; `USAGE_EXCEEDED` is the 429 it is today, `resetsAt` the next UTC midnight. No key sent: Unkey is never called.
+- **D2. What is verified, and what it costs.** *Taken (as recommended).* A key sent on a request the Index answers: `verifyKey` with `credits.cost: 0` (a bad key is still a 401, and nothing is spent). Discovery or `fresh`: cost 1; `USAGE_EXCEEDED` is the 429 it is today, `resetsAt` the next UTC midnight. No key sent: Unkey is never called.
 - **D3. Unkey unreachable: fail closed.** *Taken (Wes).* A keyed request gets 503 `{ error, hint: "retry shortly" }` with `retry-after: 30`; an SDK error, a timeout (2 s) and a 5xx all count. Keyless requests are unaffected.
 - **D4. Sign-in: WorkOS AuthKit.** *Taken (Wes).* `@workos/authkit-tanstack-react-start` (0.11.x, official) with its hosted sign-in. A key's owner is its Unkey identity, `externalId` = the WorkOS user id; swagger.bot stores no users.
-- **D5. Sign-in methods: GitHub and email (Magic Auth).** *Recommended.* GitHub is what the PRD named and what developers have; email covers the rest. Set in the WorkOS dashboard, not in code.
+- **D5. Sign-in methods: GitHub and email (Magic Auth).** *Taken (as recommended).* GitHub is what the PRD named and what developers have; email covers the rest. Set in the WorkOS dashboard, not in code.
 - **D6. One key per user, approved automatically.** *Taken (Wes).* Creating a key when the user has a live one is refused. Roll = Unkey's reroll (new secret, same key, credits kept); Revoke deletes it, after which the user may create a new one.
-- **D7. Quota.** *Recommended.* A new key gets `credits: { remaining: Q, refill: { interval: "daily", amount: Q } }` with Q = `DAILY_QUOTA` (default 100); refills replace the balance at midnight UTC, as the Index counts today. `scripts/keys.ts create --quota N` sets a larger Q for a key issued by hand.
-- **D8. Existing keys: migrate, secrets unchanged.** *Recommended.* Ask Unkey support for a `migrationId` (operator step O2), then `keys.migrateKeys` each live key with its hash re-encoded (sha256 hex → base64), its owner as `externalId: "operator:<owner>"`, and its quota as credits. If the id doesn't come in time, reissue those keys by hand and tell their owners.
-- **D9. Without `UNKEY_ROOT_KEY`, the SQLite key store.** *Recommended.* Tests, factory worktrees and local dev need no Unkey account, and behave as today. The app logs `keys: unkey` or `keys: local` at start; the deploy check (O1) confirms `unkey` on production. The `/keys` page needs both Unkey and WorkOS configured; without them it says keys are issued by hand and links the `mailto:`.
+- **D7. Quota.** *Taken (as recommended).* A new key gets `credits: { remaining: Q, refill: { interval: "daily", amount: Q } }` with Q = `DAILY_QUOTA` (default 100); refills replace the balance at midnight UTC, as the Index counts today. `scripts/keys.ts create --quota N` sets a larger Q for a key issued by hand.
+- **D8. Existing keys: migrate, secrets unchanged.** *Taken (as recommended).* Ask Unkey support for a `migrationId` (operator step O2), then `keys.migrateKeys` each live key with its hash re-encoded (sha256 hex → base64), its owner as `externalId: "operator:<owner>"`, and its quota as credits. If the id doesn't come in time, reissue those keys by hand and tell their owners.
+- **D9. Without `UNKEY_ROOT_KEY`, the SQLite key store.** *Taken (as recommended).* Tests, factory worktrees and local dev need no Unkey account, and behave as today. The app logs `keys: unkey` or `keys: local` at start; the deploy check (O1) confirms `unkey` on production. The `/keys` page needs both Unkey and WorkOS configured; without them it says keys are issued by hand and links the `mailto:`.
 
 ## Where it stands going in
 
@@ -26,12 +26,12 @@ Keys since Slice 3 (`src/index-store/keys.ts`): SQLite `api_keys` (id, owner, sh
 
 | # | Linear | Issue | Depends on | Wave |
 |---|---|---|---|---|
-| 1 | — | Keys through Unkey: the async seam, verification costs, fail closed, the admin script | — | 1 |
-| 2 | — | Sign-in with WorkOS AuthKit | — | 1 |
-| 3 | — | `/keys`: get, see, roll and revoke your key | 1, 2 | 2 |
-| 4 | — | Docs, Search and the top bar lead to `/keys`; `keycheck` | 3 | 3 |
+| 1 | WTR-148 | Keys through Unkey: the async seam, verification costs, fail closed, the admin script | — | 1 |
+| 2 | WTR-149 | Sign-in with WorkOS AuthKit | — | 1 |
+| 3 | WTR-150 | `/keys`: get, see, roll and revoke your key | 1, 2 | 2 |
+| 4 | WTR-151 | Docs, Search and the top bar lead to `/keys`; `keycheck` | 3 | 3 |
 
-#1 and #2 touch different files and build in parallel.
+#1 and #2 touch different files and build in parallel. Wave 1 (WTR-148, WTR-149) was queued on filing; WTR-150 is queued when both merge, WTR-151 when it has.
 
 ## Operator steps (not factory issues)
 
@@ -53,7 +53,7 @@ Keys are issued by hand into SQLite, and there is no way for a Caller to get one
 - Unkey: `keys.verifyKey({ key, credits: { cost } })` with a 2 s timeout; `valid` → ok; `NOT_FOUND`/`DISABLED`/`EXPIRED` → unknown; `USAGE_EXCEEDED` → quota (`resetsAt` next UTC midnight); anything else, an error or a timeout → unavailable. Never pass Unkey's codes through to a Caller.
 - The same seam also exposes what #3 needs: `create(ownerId, quota)` → `{ id, secret }` (prefix `sb`, `externalId` = ownerId, credits per D7), `liveKeyOf(ownerId)` → the key's id, start, created, remaining, limit, resetsAt, or none; `roll(id)` → new secret; `revoke(id)`. SQLite implements them too (owner = ownerId), so #3 is testable without Unkey.
 - `scripts/keys.ts` (`create <owner> [--quota N] | list | revoke <id>`) works against whichever store is configured; with Unkey, `create` uses `externalId: "operator:<owner>"`. Add `migrate`: reads the live SQLite keys and calls `keys.migrateKeys` with `UNKEY_MIGRATION_ID`, the hash as base64 of the sha256 bytes (D8); prints how many moved and any it couldn't.
-- Env: `UNKEY_ROOT_KEY`, `UNKEY_API_ID`, `UNKEY_MIGRATION_ID` (only for `migrate`). Add them to `.env.example` and the env line in `.weawr/instructions.md`.
+- Env: `UNKEY_ROOT_KEY`, `UNKEY_API_ID`, `UNKEY_MIGRATION_ID` (only for `migrate`); already in `.env.example`.
 
 ## Tests
 - A fake Unkey client (no network) covering: valid at cost 0 spends nothing; cost 1 spends one; `USAGE_EXCEEDED` → 429 with `resetsAt`; unknown → 401; a thrown error and a 2 s timeout → 503 with `retry-after`; a request with no key never calls the client, over `/api/lookup` and `/mcp`.
@@ -75,7 +75,7 @@ A self-service key needs an owner who has proved who they are. swagger.bot has n
 - A server helper `currentUser()` → `{ id, email, name? } | null` for #3; no users table.
 - Sign-in and sign-out are links (GET), so `form-action 'self'` needn't change. If sign-out has to reach WorkOS's logout URL, redirect to it from the server; check the CSP still holds and `uicheck` reports CSP 0.
 - The top bar shows "Sign in" when signed out and the user's initial with a menu (Your key, Sign out) when signed in, following `DESIGN.md` (navigation section). Signed-out pages render exactly as today apart from that link.
-- Env: `WORKOS_API_KEY`, `WORKOS_CLIENT_ID`, `WORKOS_COOKIE_PASSWORD`, `WORKOS_REDIRECT_URI`. Without them the "Sign in" link is not shown and `/auth/*` answers 404. Add them to `.env.example` and `.weawr/instructions.md`.
+- Env: `WORKOS_API_KEY`, `WORKOS_CLIENT_ID`, `WORKOS_COOKIE_PASSWORD`, `WORKOS_REDIRECT_URI`. Without them the "Sign in" link is not shown and `/auth/*` answers 404. They are already in `.env.example`.
 
 ## Tests
 - `currentUser()` with a valid sealed session, an expired one and none (mock the package's session reader, no network).
