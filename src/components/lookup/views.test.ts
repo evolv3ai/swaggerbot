@@ -71,6 +71,8 @@ const html = (page: LookupPage) =>
 /** The text of the page, tags stripped. */
 const text = (markup: string) =>
   markup
+    // A <wbr> is a place a line may break, not a space.
+    .replace(/<wbr\/?>/g, "")
     .replace(/<[^>]+>/g, " ")
     .replace(/\s+/g, " ")
     .replaceAll("&#x27;", "'")
@@ -112,7 +114,7 @@ describe("the Resolved view", () => {
     expect(block).toMatch(/<span class="whitespace-nowrap">…/);
     // ...which read the whole URL, as Copy copies it.
     expect(block).toContain(
-      `<span class="sr-only">curl -o openapi.yaml ${url}</span>`,
+      `<span class="sr-only" data-copy="true">curl -o openapi.yaml ${url}</span>`,
     );
   });
 
@@ -264,8 +266,8 @@ describe("the other views", () => {
       baseUrl: base,
     });
     expect(markup).toMatch(/<h1[^>]*>Not in the Index yet<\/h1>/);
-    expect(markup).toContain(`curl -X POST ${base}/api/lookup`);
-    expect(markup).toContain(`${base}/mcp --header`);
+    expect(text(markup)).toContain(`curl -X POST ${base}/api/lookup`);
+    expect(text(markup)).toContain(`${base}/mcp --header`);
     expect(markup).toContain('href="/docs#keys"');
     expect(markup).toContain('action="/lookup"');
   });

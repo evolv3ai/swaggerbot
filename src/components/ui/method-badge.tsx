@@ -23,7 +23,7 @@ export function MethodBadge({
           ? "px-[5px] py-px text-[10.5px] leading-4"
           : "px-1.5 py-0.5 text-[12px] leading-[18px]",
         method === "POST"
-          ? "bg-[color-mix(in_srgb,#6ea8ff_16%,transparent)] text-[#1d4ed8] dark:text-[#8fbaff]"
+          ? "bg-sb-method-post-soft text-sb-method-post-text"
           : "bg-sb-accent-soft text-sb-accent-soft-text",
         className,
       )}
