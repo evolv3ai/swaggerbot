@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DocsRouteImport } from './routes/docs'
+import { Route as KeysRouteImport } from './routes/keys'
 import { Route as LookupRouteImport } from './routes/lookup'
 import { Route as McpRouteImport } from './routes/mcp'
 import { Route as ApiSplatRouteImport } from './routes/api/$'
@@ -37,6 +38,11 @@ const IndexRoute = IndexRouteImport.update({
 const DocsRoute = DocsRouteImport.update({
   id: '/docs',
   path: '/docs',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const KeysRoute = KeysRouteImport.update({
+  id: '/keys',
+  path: '/keys',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LookupRoute = LookupRouteImport.update({
@@ -129,6 +135,7 @@ const ApiVendorsVendorApisRoute = ApiVendorsVendorApisRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/docs': typeof DocsRoute
+  '/keys': typeof KeysRoute
   '/lookup': typeof LookupRoute
   '/mcp': typeof McpRoute
   '/api/$': typeof ApiSplatRoute
@@ -150,6 +157,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/docs': typeof DocsRoute
+  '/keys': typeof KeysRoute
   '/lookup': typeof LookupRoute
   '/mcp': typeof McpRoute
   '/api/$': typeof ApiSplatRoute
@@ -172,6 +180,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/docs': typeof DocsRoute
+  '/keys': typeof KeysRoute
   '/lookup': typeof LookupRoute
   '/mcp': typeof McpRoute
   '/api/$': typeof ApiSplatRoute
@@ -195,6 +204,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/docs'
+    | '/keys'
     | '/lookup'
     | '/mcp'
     | '/api/$'
@@ -216,6 +226,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/docs'
+    | '/keys'
     | '/lookup'
     | '/mcp'
     | '/api/$'
@@ -237,6 +248,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/docs'
+    | '/keys'
     | '/lookup'
     | '/mcp'
     | '/api/$'
@@ -259,6 +271,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DocsRoute: typeof DocsRoute
+  KeysRoute: typeof KeysRoute
   LookupRoute: typeof LookupRoute
   McpRoute: typeof McpRoute
   ApiSplatRoute: typeof ApiSplatRoute
@@ -292,6 +305,13 @@ declare module '@tanstack/react-router' {
       path: '/docs'
       fullPath: '/docs'
       preLoaderRoute: typeof DocsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/keys': {
+      id: '/keys'
+      path: '/keys'
+      fullPath: '/keys'
+      preLoaderRoute: typeof KeysRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/lookup': {
@@ -419,6 +439,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DocsRoute: DocsRoute,
+  KeysRoute: KeysRoute,
   LookupRoute: LookupRoute,
   McpRoute: McpRoute,
   ApiSplatRoute: ApiSplatRoute,

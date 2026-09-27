@@ -3,6 +3,7 @@ import {
   clientIpHeader,
   clientIpOf,
   createRateLimiter,
+  createWindowLimiter,
   DEFAULT_RATE_LIMIT_PER_MINUTE,
   rateLimitPerMinute,
 } from "./rate-limit";
@@ -102,5 +103,44 @@ describe("client IP", () => {
     });
     expect(clientIpOf(request, "x-forwarded-for")).toBe("203.0.113.9");
     expect(clientIpOf(request, "cf-connecting-ip")).toBe("unknown");
+  });
+});
+
+describe("createWindowLimiter", () => {
+  it("allows the limit in a window, then says when the oldest take ages out", () => {
+    const c = clock();
+    const limiter = createWindowLimiter({
+      limit: 5,
+      windowMs: 3_600_000,
+      now: c.now,
+    });
+    for (let i = 0; i < 5; i++) {
+      expect(limiter.take("user_1").allowed).toBe(true);
+      c.advance(60_000);
+    }
+    // The first take was 5 minutes ago: 55 minutes until it ages out.
+    expect(limiter.take("user_1")).toEqual({
+      allowed: false,
+      retryAfterSeconds: 3_300,
+    });
+    expect(limiter.take("user_2").allowed).toBe(true);
+    c.advance(3_300_000);
+    expect(limiter.take("user_1").allowed).toBe(true);
+    expect(limiter.take("user_1").allowed).toBe(false);
+  });
+
+  it("drops a key once its takes have aged out", () => {
+    const c = clock();
+    const limiter = createWindowLimiter({
+      limit: 1,
+      windowMs: 1_000,
+      now: c.now,
+    });
+    limiter.take("a");
+    limiter.take("b");
+    expect(limiter.size()).toBe(2);
+    c.advance(1_000);
+    limiter.take("c");
+    expect(limiter.size()).toBe(1);
   });
 });
