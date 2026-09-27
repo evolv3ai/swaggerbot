@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { Outcome } from "~/domain/outcome";
-import { type ApiKey, type Keys, utcDay } from "~/index-store/keys";
+import type { KeyStore, Verification, VerifiedKey } from "~/index-store/keys";
 import type { IndexedLookup, LookupRequest } from "./lookup";
 import { clientIpOf, type RateLimiter } from "./rate-limit";
 
@@ -15,7 +15,7 @@ export const LookupBody = z.object({
 /** What `POST /api/lookup` runs on: the Lookup and the API keys. */
 export type LookupApp = {
   lookup: IndexedLookup;
-  keys: Pick<Keys, "findKey" | "takeQuota">;
+  keys: Pick<KeyStore, "verify">;
 };
 
 /** The limits `POST /api/lookup` enforces, and its clock. */
@@ -35,6 +35,15 @@ export const KEY_HINT =
 /** The body of every 401 for a key that is sent but names no live key. */
 export const UNKNOWN_KEY = { error: "Unknown or revoked API key." };
 
+/** The body of every 503 for a key that can't be checked because the key store isn't answering (D3). */
+export const KEYS_UNAVAILABLE = {
+  error: "API keys can't be checked right now.",
+  hint: "retry shortly",
+};
+
+/** Seconds a Caller is told to wait when keys can't be checked. */
+export const KEYS_RETRY_AFTER_SECONDS = 30;
+
 /** The body of a Lookup's refusal: what went wrong, and what fixes it. */
 export type LookupError = {
   error: string;
@@ -51,13 +60,13 @@ export type LookupError = {
 export type LookupAnswer =
   | { status: 200; body: Outcome; headers: Record<string, string> }
   | {
-      status: 401 | 429;
+      status: 401 | 429 | 503;
       body: LookupError;
       headers: Record<string, string>;
     };
 
-/** The key a Lookup runs under: its id and its own daily quota, if any. */
-export type LookupKey = Pick<ApiKey, "id" | "dailyQuota">;
+/** The key a Lookup runs under: its secret, verified again at cost 1 for Discovery. */
+export type LookupKey = { secret: string };
 
 /**
  * Handles `POST /api/lookup`, in this order:
@@ -65,7 +74,8 @@ export type LookupKey = Pick<ApiKey, "id" | "dailyQuota">;
  * 1. 429 when the client IP is over its rate limit;
  * 2. 400 with the zod issues for a bad body;
  * 3. 401 when an `Authorization` header is sent but names no live key, even
- *    when the Index could answer;
+ *    when the Index could answer (verified at cost 0); 503 when the key
+ *    store can't say;
  * 4. then `answerLookup`: the Index's answer, or Discovery under the key.
  *
  * `getApp` is called once a valid request needs it, so the real dependencies
@@ -93,10 +103,15 @@ export async function handleLookupRequest(
     );
 
   const app = getApp();
-  const auth = authenticate(request, app.keys);
+  const auth = await authenticate(request, app.keys);
   if ("response" in auth) return auth.response;
 
-  const answer = await answerLookup(body.data, auth.key, app, gate);
+  const answer = await answerLookup(
+    body.data,
+    auth.key ? { secret: auth.secret } : undefined,
+    app,
+    gate,
+  );
   return Response.json(answer.body, {
     status: answer.status,
     headers: answer.headers,
@@ -109,9 +124,10 @@ export async function handleLookupRequest(
  *
  * 1. 200 with the answer from the Index, unless `fresh`: open to anyone, no
  *    quota used;
- * 2. otherwise (Discovery or `fresh`), 401 without a key, 429 when the key's
- *    daily quota is used, else 200 with the Lookup's Outcome and the quota
- *    headers.
+ * 2. otherwise (Discovery or `fresh`), 401 without a key; the key verified
+ *    at cost 1: 401 when it is no longer live, 429 when its daily quota is
+ *    used, 503 when the key store can't say; else 200 with the Lookup's
+ *    Outcome and the quota headers.
  */
 export async function answerLookup(
   request: LookupRequest,
@@ -129,54 +145,99 @@ export async function answerLookup(
       body: { error: "Discovery needs an API key.", hint: KEY_HINT },
       headers: { "www-authenticate": "Bearer" },
     };
-  const quota = keys.takeQuota(
-    key.id,
-    utcDay(now),
-    key.dailyQuota ?? gate.dailyQuota,
-  );
-  const quotaHeaders = {
-    "x-quota-limit": String(quota.limit),
-    "x-quota-remaining": String(Math.max(0, quota.limit - quota.used)),
-  };
-  if (!quota.allowed)
-    return {
-      status: 429,
-      body: {
-        error: "Daily quota used.",
-        limit: quota.limit,
-        used: quota.used,
-      },
-      headers: {
-        ...quotaHeaders,
-        "retry-after": String(secondsToUtcMidnight(now)),
-      },
-    };
+  const verified = await keys.verify(key.secret, {
+    cost: 1,
+    now,
+    dailyQuota: gate.dailyQuota,
+  });
+  if (!verified.ok) return refusal(verified, now);
+  const quotaHeaders = quotaHeadersOf(verified.key);
   return { status: 200, body: await lookup(request), headers: quotaHeaders };
 }
 
 /**
- * The live key a request names in `Authorization: Bearer`, with its secret;
- * no key when the header isn't sent; or `{ response }`, a 401, when a key is
- * sent but names no live key.
+ * The live key a request names in `Authorization: Bearer`, verified at cost
+ * 0, with its secret; no key when the header isn't sent (the key store is
+ * never called); or `{ response }`, a 401 when a key is sent but names no
+ * live key, a 503 when the key store can't say.
  */
-export function authenticate(
+export async function authenticate(
   request: Request,
-  keys: Pick<Keys, "findKey">,
-):
-  | { key: ApiKey; secret: string }
+  keys: Pick<KeyStore, "verify">,
+): Promise<
+  | { key: VerifiedKey; secret: string }
   | { key: undefined }
-  | { response: Response } {
+  | { response: Response }
+> {
   const secret = bearerOf(request);
   if (secret === undefined) return { key: undefined };
-  const key = keys.findKey(secret);
-  if (!key)
-    return {
-      response: Response.json(UNKNOWN_KEY, {
+  // A header that isn't a Bearer names no key: not worth asking the store.
+  const verified: Verification = secret
+    ? await keys.verify(secret, { cost: 0 })
+    : { ok: false, reason: "unknown" };
+  if (verified.ok) return { key: verified.key, secret };
+  const { status, body, headers } = refusal(verified);
+  return { response: Response.json(body, { status, headers }) };
+}
+
+/**
+ * A failed verification as the answer a Caller gets: 401 for a key that
+ * isn't live, 429 for a used quota (as Slice 3 answers it), 503 with
+ * `retry-after` when the key store can't say. The store's own reasons stay
+ * here.
+ */
+export function refusal(
+  verified: Extract<Verification, { ok: false }>,
+  now: Date = new Date(),
+): Extract<LookupAnswer, { status: 401 | 429 | 503 }> {
+  switch (verified.reason) {
+    case "unknown":
+    case "revoked":
+      return {
         status: 401,
+        body: UNKNOWN_KEY,
         headers: { "www-authenticate": "Bearer" },
-      }),
-    };
-  return { key, secret };
+      };
+    case "quota": {
+      const { limit, used, resetsAt } = verified;
+      const resets = resetsAt ? new Date(resetsAt) : undefined;
+      const retryAfter =
+        resets && resets > now
+          ? Math.ceil((resets.getTime() - now.getTime()) / 1000)
+          : secondsToUtcMidnight(now);
+      return {
+        status: 429,
+        body: {
+          error: "Daily quota used.",
+          ...(limit === undefined ? {} : { limit }),
+          ...(used === undefined ? {} : { used }),
+        },
+        headers: {
+          ...quotaHeadersOf({ limit, remaining: 0 }),
+          "retry-after": String(retryAfter),
+        },
+      };
+    }
+    case "unavailable":
+      return {
+        status: 503,
+        body: KEYS_UNAVAILABLE,
+        headers: { "retry-after": String(KEYS_RETRY_AFTER_SECONDS) },
+      };
+  }
+}
+
+/** `x-quota-limit` and `x-quota-remaining`, each when the key store knows it. */
+function quotaHeadersOf({
+  limit,
+  remaining,
+}: Pick<VerifiedKey, "limit" | "remaining">): Record<string, string> {
+  return {
+    ...(limit === undefined ? {} : { "x-quota-limit": String(limit) }),
+    ...(remaining === undefined
+      ? {}
+      : { "x-quota-remaining": String(Math.max(0, remaining)) }),
+  };
 }
 
 /**

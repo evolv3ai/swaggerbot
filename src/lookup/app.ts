@@ -1,6 +1,7 @@
 import { createFetcher } from "~/fetch/fetcher";
 import { type Db, openDb } from "~/index-store/db";
-import { createKeys, type Keys } from "~/index-store/keys";
+import { createKeyStore } from "~/index-store/key-store";
+import type { KeyStore } from "~/index-store/keys";
 import { createJudge } from "~/judge";
 import { createApisGuru } from "~/sources/apis-guru";
 import { crawlForSpecs } from "~/sources/crawl";
@@ -34,8 +35,8 @@ export function createAppLookup(env: NodeJS.ProcessEnv = process.env): Lookup {
 
 /**
  * The app as the server runs it: `createAppLookup`'s Lookup, the API keys
- * in the same Index, the background Verification worker over the same
- * Lookup and Index, and the worker that builds each Spec's forms over the
+ * (in Unkey when it is configured, else in the same Index: `createKeyStore`),
+ * the background Verification worker over the same Lookup and Index, and the worker that builds each Spec's forms over the
  * same Index and fetcher (ADR 0004), both started; and the Index itself,
  * which the download routes read. Built once per server, when it starts,
  * by `getApp` in `src/server/app-instance.ts`.
@@ -43,7 +44,7 @@ export function createAppLookup(env: NodeJS.ProcessEnv = process.env): Lookup {
 export function createApp(env: NodeJS.ProcessEnv = process.env): {
   db: Db;
   lookup: IndexedLookup;
-  keys: Keys;
+  keys: KeyStore;
   verifier: Verifier;
   formsWorker: FormsWorker;
 } {
@@ -52,7 +53,7 @@ export function createApp(env: NodeJS.ProcessEnv = process.env): {
   verifier.start();
   const formsWorker = createFormsWorker({ db, fetcher, env });
   formsWorker.start();
-  return { db, lookup, keys: createKeys(db), verifier, formsWorker };
+  return { db, lookup, keys: createKeyStore(db, env), verifier, formsWorker };
 }
 
 /** `FRESHNESS_DAYS`, a positive number of days; unset, the default. */

@@ -14,7 +14,8 @@ import { authInfoOf } from "./auth";
  * 1. 429 with `retry-after` when the client IP is over the per-IP limit
  *    shared with every other route;
  * 2. 401 with `WWW-Authenticate: Bearer` when `Authorization` names no live
- *    key, as `POST /api/lookup` answers, before any tool runs;
+ *    key, or 503 with `retry-after` when the key store can't say, as
+ *    `POST /api/lookup` answers, before any tool runs;
  * 3. otherwise the MCP handler, with the key as this request's `authInfo`
  *    (none without a key).
  */
@@ -26,7 +27,7 @@ export async function handleMcpRequest(
 ): Promise<Response> {
   const limited = rateLimited(request, gate);
   if (limited) return limited;
-  const auth = authenticate(request, getApp().keys);
+  const auth = await authenticate(request, getApp().keys);
   if ("response" in auth) return auth.response;
   return handler.fetch(
     request,

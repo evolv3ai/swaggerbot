@@ -17,10 +17,14 @@ describe("parseKeysArgs", () => {
     });
   });
 
-  it("reads list and revoke", () => {
+  it("reads list, migrate and revoke", () => {
     expect(parseKeysArgs(["list"])).toEqual({
       ok: true,
       options: { command: "list" },
+    });
+    expect(parseKeysArgs(["migrate"])).toEqual({
+      ok: true,
+      options: { command: "migrate" },
     });
     expect(parseKeysArgs(["revoke", "key_abcdefgh"])).toEqual({
       ok: true,
@@ -39,6 +43,8 @@ describe("parseKeysArgs", () => {
     [["create", "ada", "--quota", "ten"], /positive integer/],
     [["list", "--quota", "5"], /only goes with create/],
     [["list", "extra"], /unexpected argument/],
+    [["migrate", "extra"], /unexpected argument/],
+    [["migrate", "--quota", "5"], /only goes with create/],
     [["revoke"], /needs a key id/],
     [["create", "ada", "--verbose"], /verbose/],
   ])("%j exits 2 with %s", (args, error) => {

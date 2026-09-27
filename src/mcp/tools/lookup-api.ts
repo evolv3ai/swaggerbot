@@ -4,6 +4,7 @@ import { Outcome, type SpecAnswer } from "~/domain/outcome";
 import { bestProvenance } from "~/domain/provenance";
 import {
   answerLookup,
+  KEYS_RETRY_AFTER_SECONDS,
   type LookupAnswer,
   LookupBody,
   secondsToUtcMidnight,
@@ -68,7 +69,7 @@ export function lookupResult(
       ...outcomeGuidance(request, answer.body),
       data: answer.body,
     });
-  const { error, limit, used } = answer.body;
+  const { error, hint, limit, used } = answer.body;
   const text =
     answer.status === 401
       ? `${error} ${
@@ -76,7 +77,13 @@ export function lookupResult(
             ? "A fresh Lookup runs Discovery on the live web, which needs an API key."
             : `"${request.name}" isn't in the Index yet, and finding it on the live web needs an API key.`
         } ${MCP_KEY_HINT}`
-      : `${error} This key has made ${used} of its ${limit} Discovery Lookups today. The quota resets at 00:00 UTC, in ${durationOf(secondsToUtcMidnight(now))}. Names already in the Index still answer without using any.`;
+      : answer.status === 503
+        ? `${error} Try again in ${answer.headers["retry-after"] ?? KEYS_RETRY_AFTER_SECONDS} seconds (${hint}). Names already in the Index still answer.`
+        : `${error} ${
+            used !== undefined && limit !== undefined
+              ? `This key has made ${used} of its ${limit} Discovery Lookups today.`
+              : "This key has made all of its Discovery Lookups for today."
+          } The quota resets at 00:00 UTC, in ${durationOf(secondsToUtcMidnight(now))}. Names already in the Index still answer without using any.`;
   return {
     isError: true,
     content: [{ type: "text", text }],

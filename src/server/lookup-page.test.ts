@@ -66,7 +66,7 @@ function realApp() {
     now: () => now,
   });
   const discovery = vi.fn(lookup);
-  const keys = { findKey: vi.fn(), takeQuota: vi.fn() };
+  const keys = { verify: vi.fn() };
   const app: LookupApp = {
     lookup: Object.assign(discovery, {
       fromIndex: vi.fn(lookup.fromIndex),
@@ -83,7 +83,7 @@ function fakeApp(outcome: Outcome | null) {
     throw new Error("Discovery ran");
   });
   const fromIndex = vi.fn((): Outcome | null => outcome);
-  const keys = { findKey: vi.fn(), takeQuota: vi.fn() };
+  const keys = { verify: vi.fn() };
   const app: LookupApp = {
     lookup: Object.assign(discovery, {
       fromIndex,
@@ -193,8 +193,7 @@ describe("answerLookupPage", () => {
     });
     expect(page.view === "outcome" && page.ms).toBeGreaterThanOrEqual(0);
     expect(discovery).not.toHaveBeenCalled();
-    expect(keys.findKey).not.toHaveBeenCalled();
-    expect(keys.takeQuota).not.toHaveBeenCalled();
+    expect(keys.verify).not.toHaveBeenCalled();
   });
 
   it("marks an answer verified before the freshness window as Stale", async () => {
@@ -216,7 +215,7 @@ describe("answerLookupPage", () => {
       baseUrl: "http://localhost:3000",
     });
     expect(discovery).not.toHaveBeenCalled();
-    expect(keys.takeQuota).not.toHaveBeenCalled();
+    expect(keys.verify).not.toHaveBeenCalled();
   });
 
   it("gives the Discovery calls under PUBLIC_BASE_URL when it is set", async () => {
@@ -247,8 +246,7 @@ describe("answerLookupPage", () => {
 
     expect(page.view).toBe("not-in-index");
     expect(fromIndex).toHaveBeenCalledWith({ name: "nope" });
-    expect(keys.findKey).not.toHaveBeenCalled();
-    expect(keys.takeQuota).not.toHaveBeenCalled();
+    expect(keys.verify).not.toHaveBeenCalled();
     expect(discovery).not.toHaveBeenCalled();
   });
 
