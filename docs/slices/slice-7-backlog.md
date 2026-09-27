@@ -102,7 +102,7 @@ With #1 and #2 in, a signed-in person can own a key, but there is no page to get
 - Without Unkey or WorkOS configured, `/keys` says keys are issued by hand and links the `mailto:` (D9).
 
 ## Tests
-- Server functions against the SQLite store (#1's seam) and a fake `currentUser()`: create once, second create refused, roll changes the secret and keeps the id, revoke then create works, another user's key can't be touched, signed-out calls are 401.
+- Server functions against the SQLite store (#1's seam) and a fake `currentUser()`: create once, second create refused, roll changes the secret and returns the key's id, which the page uses from then on (Unkey's reroll issues a new id, SQLite keeps it; `roll` returns `{ id, secret }`), revoke then create works, another user's key can't be touched, signed-out calls are 401.
 - The rendered views: signed out, no key, the once-only secret view, with a key (credits and reset shown).
 
 ## Done when
