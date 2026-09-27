@@ -2,7 +2,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import { handleCallbackRoute } from "@workos/authkit-tanstack-react-start";
 import { signInConfigured, signInOff } from "~/server/auth";
 
-const callback = handleCallbackRoute();
+// A failed sign-in (a stale or repeated callback, an expired verifier)
+// comes back to the home page, not to the package's JSON error.
+const callback = handleCallbackRoute({ errorRedirectUrl: "/?signin=failed" });
 
 /**
  * `GET /auth/callback` (`WORKOS_REDIRECT_URI`): AuthKit's hosted sign-in

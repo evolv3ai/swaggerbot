@@ -47,13 +47,37 @@ export function signInConfigured(env: Env = process.env): boolean {
 const authkit = authkitMiddleware();
 
 /**
- * The global request middleware (src/start.ts): AuthKit's, when sign-in is
- * configured; otherwise it passes the request on untouched.
+ * Paths AuthKit stays out of: the HTTP API and MCP authenticate by key, so
+ * WorkOS is never in their path (ADR 0006: WorkOS only at sign-in), even
+ * for a caller that also carries a session cookie.
  */
-export const auth = createMiddleware().server((args) => {
+const KEYED_PATHS = /^\/(api\/|mcp(\/|$))/;
+
+/** AuthKit's session cookie. */
+const SESSION_COOKIE = /(?:^|;\s*)wos-session=/;
+
+/**
+ * The global request middleware (src/start.ts): AuthKit's, when sign-in is
+ * configured and the path is a page or `/auth/…`; otherwise it passes the
+ * request on untouched. A page rendered for someone with a session names
+ * them, so it is marked private and never stored by a cache.
+ */
+export const auth = createMiddleware().server(async (args) => {
   const server = authkit.options.server;
-  return signInConfigured() && server ? server(args) : args.next();
+  if (!signInConfigured() || !server || KEYED_PATHS.test(args.pathname))
+    return args.next();
+  const result = await server(args);
+  if (SESSION_COOKIE.test(args.request.headers.get("cookie") ?? ""))
+    markPrivate(result.response);
+  return result;
 });
+
+/** Marks an HTML page `private, no-store`. Changes `response` in place. */
+export function markPrivate(response: Response): Response {
+  if ((response.headers.get("content-type") ?? "").startsWith("text/html"))
+    response.headers.set("Cache-Control", "private, no-store");
+  return response;
+}
 
 /** Who is signed in, as `/keys` needs it. swagger.bot keeps no users. */
 export type SignedInUser = { id: string; email: string; name?: string };
@@ -82,13 +106,26 @@ export function signInOff(): Response {
   });
 }
 
+/** A stand-in origin to resolve a path against; never served. */
+const PROBE_ORIGIN = "http://return.invalid";
+
 /**
- * A path on this site to come back to after signing in or out: `value` when
- * it is one (`/keys`, `/docs#keys`), else `/`. Never another origin.
+ * A path on this site to come back to after signing in or out: `value`'s
+ * path and query when it resolves to this site (`/keys`, `/docs?x=1`), else
+ * `/`. Never another origin: it is resolved as a browser would, which drops
+ * tabs and newlines, so `/\t/evil.example` is `//evil.example`, not a path.
+ * The hash is dropped: AuthKit can't carry one through the callback.
  */
 export function returnPath(value: string | null | undefined): string {
-  if (!value?.startsWith("/") || /^\/[/\\]/.test(value)) return "/";
-  return value;
+  if (!value?.startsWith("/")) return "/";
+  let url: URL;
+  try {
+    url = new URL(value, PROBE_ORIGIN);
+  } catch {
+    return "/";
+  }
+  if (url.origin !== PROBE_ORIGIN) return "/";
+  return `${url.pathname}${url.search}`;
 }
 
 /** A redirect to `location`, for a link followed with GET. */

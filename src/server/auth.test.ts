@@ -110,7 +110,19 @@ describe("currentUser", () => {
 describe("the auth middleware", () => {
   const server = auth.options.server;
   if (!server) throw new Error("no server middleware");
-  const args = () => ({ next: vi.fn(async () => "next") }) as never;
+  const args = (pathname = "/", cookie = "") =>
+    ({
+      pathname,
+      request: new Request(`https://swaggerbot.dev${pathname}`, {
+        headers: cookie ? { cookie } : {},
+      }),
+      next: vi.fn(async () => "next"),
+    }) as never;
+  const page = () => ({
+    response: new Response("<!doctype html>", {
+      headers: { "content-type": "text/html; charset=utf-8" },
+    }),
+  });
 
   it("passes the request on, never reading a session, without the WorkOS env", async () => {
     const a = args();
@@ -121,16 +133,47 @@ describe("the auth middleware", () => {
 
   it("is AuthKit's middleware with it", async () => {
     stubWorkOS();
+    reader.server.mockResolvedValueOnce(page());
     const a = args();
     await server(a);
     expect(reader.server).toHaveBeenCalledWith(a);
+  });
+
+  it("stays out of the HTTP API and MCP, which authenticate by key", async () => {
+    stubWorkOS();
+    for (const path of ["/api/lookup", "/api/specs/x/published", "/mcp"]) {
+      const a = args(path, "wos-session=sealed");
+      await server(a);
+      expect((a as { next: () => void }).next).toHaveBeenCalledOnce();
+    }
+    expect(reader.server).not.toHaveBeenCalled();
+  });
+
+  it("marks a page rendered with a session private, and no other", async () => {
+    stubWorkOS();
+    const signedIn = page();
+    reader.server.mockResolvedValueOnce(signedIn);
+    await server(args("/docs", "theme=dark; wos-session=sealed"));
+    expect(signedIn.response.headers.get("cache-control")).toBe(
+      "private, no-store",
+    );
+
+    const signedOut = page();
+    reader.server.mockResolvedValueOnce(signedOut);
+    await server(args("/docs", "theme=dark"));
+    expect(signedOut.response.headers.get("cache-control")).toBeNull();
   });
 });
 
 describe("returnPath", () => {
   it("keeps a path on this site", () => {
     expect(returnPath("/keys")).toBe("/keys");
-    expect(returnPath("/docs?x=1#keys")).toBe("/docs?x=1#keys");
+    expect(returnPath("/docs?x=1")).toBe("/docs?x=1");
+  });
+
+  it("drops the hash, which the callback can't carry", () => {
+    expect(returnPath("/docs?x=1#keys")).toBe("/docs?x=1");
+    expect(returnPath("/docs#keys")).toBe("/docs");
   });
 
   it("is / for anything else", () => {
@@ -142,6 +185,10 @@ describe("returnPath", () => {
       "https://evil.example/",
       "//evil.example/",
       "/\\evil.example/",
+      "/\t/evil.example",
+      "/\n/evil.example",
+      "/\r\n/evil.example",
+      "/\t\\evil.example",
     ]) {
       expect(returnPath(value)).toBe("/");
     }
