@@ -147,6 +147,124 @@ describe("keys", () => {
   });
 });
 
+describe("createKeys as a KeyStore", () => {
+  const NOW = new Date("2026-09-22T21:00:00.000Z");
+  let dir: string;
+  let db: Db;
+  let keys: Keys;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "swaggerbot-keystore-"));
+    db = openDb(join(dir, "test.db"));
+    keys = createKeys(db, {});
+  });
+
+  afterEach(() => {
+    db.$client.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("verifies at cost 0 like findKey, spending nothing", async () => {
+    const { id, secret } = keys.createKey("ada", 2);
+
+    expect(await keys.verify(secret, { cost: 0, now: NOW })).toEqual({
+      ok: true,
+      key: { id, owner: "ada" },
+    });
+    expect(keys.listKeys("2026-09-22")[0]?.used).toBe(0);
+    expect(await keys.verify("sb_nope", { cost: 0 })).toEqual({
+      ok: false,
+      reason: "unknown",
+    });
+    keys.revokeKey(id);
+    expect(await keys.verify(secret, { cost: 0 })).toEqual({
+      ok: false,
+      reason: "revoked",
+    });
+  });
+
+  it("verifies at cost 1 like takeQuota, then refuses past the quota", async () => {
+    const { id, secret } = keys.createKey("ada", 2);
+    const resetsAt = "2026-09-23T00:00:00.000Z";
+
+    expect(await keys.verify(secret, { cost: 1, now: NOW })).toEqual({
+      ok: true,
+      key: { id, owner: "ada", remaining: 1, limit: 2, resetsAt },
+    });
+    await keys.verify(secret, { cost: 1, now: NOW });
+    expect(await keys.verify(secret, { cost: 1, now: NOW })).toEqual({
+      ok: false,
+      reason: "quota",
+      limit: 2,
+      used: 2,
+      resetsAt,
+    });
+    expect(keys.listKeys("2026-09-22")[0]?.used).toBe(2);
+  });
+
+  it("uses the given default quota for a key without its own", async () => {
+    const { secret } = keys.createKey("bob");
+
+    await keys.verify(secret, { cost: 1, now: NOW, dailyQuota: 1 });
+    expect(
+      await keys.verify(secret, { cost: 1, now: NOW, dailyQuota: 1 }),
+    ).toMatchObject({ ok: false, reason: "quota", limit: 1 });
+  });
+
+  it("creates, finds, rolls and revokes an owner's key", async () => {
+    const { id, secret } = await keys.create("user_1", 3);
+    await keys.verify(secret, { cost: 1 });
+
+    expect(await keys.liveKeyOf("user_1")).toEqual({
+      id,
+      start: "sb_",
+      createdAt: expect.stringMatching(/^\d{4}-\d\d-\d\dT/),
+      remaining: 2,
+      limit: 3,
+      resetsAt: expect.stringMatching(/T00:00:00\.000Z$/),
+    });
+    expect(await keys.liveKeyOf("user_2")).toBeUndefined();
+
+    const rolled = await keys.roll(id);
+    expect(rolled?.id).toBe(id);
+    expect(rolled?.secret).toMatch(/^sb_/);
+    expect(rolled?.secret).not.toBe(secret);
+    expect(await keys.verify(secret, { cost: 0 })).toMatchObject({
+      reason: "unknown",
+    });
+    expect(
+      await keys.verify(rolled?.secret as string, { cost: 0 }),
+    ).toMatchObject({
+      ok: true,
+      key: { id },
+    });
+    // Rolling keeps the key's usage.
+    expect((await keys.liveKeyOf("user_1"))?.remaining).toBe(2);
+
+    expect(await keys.revoke(id)).toBe(true);
+    expect(await keys.liveKeyOf("user_1")).toBeUndefined();
+    expect(await keys.roll(id)).toBeUndefined();
+    expect(await keys.revoke(id)).toBe(false);
+  });
+
+  it("gives the live keys to migrate with their hashes and quotas", () => {
+    const a = keys.createKey("ada", 5);
+    const b = keys.createKey("bob");
+    const c = keys.createKey("cy");
+    keys.revokeKey(c.id);
+
+    expect(keys.liveKeysToMigrate()).toEqual([
+      { id: a.id, owner: "ada", keyHash: keyHashOf(a.secret), quota: 5 },
+      {
+        id: b.id,
+        owner: "bob",
+        keyHash: keyHashOf(b.secret),
+        quota: DEFAULT_DAILY_QUOTA,
+      },
+    ]);
+  });
+});
+
 describe("defaultDailyQuota", () => {
   it("is 100, or DAILY_QUOTA when that is a positive integer", () => {
     expect(DEFAULT_DAILY_QUOTA).toBe(100);
