@@ -68,7 +68,7 @@ export const auth = createMiddleware().server(async (args) => {
     return args.next();
   const result = await server(args);
   if (SESSION_COOKIE.test(args.request.headers.get("cookie") ?? ""))
-    markPrivate(result.response);
+    markPrivate(result instanceof Response ? result : result.response);
   return result;
 });
 
