@@ -204,6 +204,16 @@ The deploys of 2026-09-23:
 - `mcpcheck` PASS: slowest call 400 ms, largest result 28.4 kB.
 - `formscheck` PASS: outline p90 182 ms, operation p90 349 ms, 0 non-2xx.
 
+### `a5d3e78` (2026-09-28): our own sign-in page
+
+**Deployed at 00:11 CDT** (deployment `n8scuvszmlyu8wvgpvvuizt0`). #116: `/auth/sign-in` is our page (GitHub, Google, or a Magic Auth code), because WorkOS's hosted page bounced every visitor back without a code. The deploy also picked up the Coolify env change to the default WorkOS app (`WORKOS_CLIENT_ID` `client_01M3JB1G…` and its API key). Magic Auth was switched on in the WorkOS dashboard (Wes).
+
+**Live checks:**
+- `/auth/sign-in` is 200. `/auth/oauth/github` and `/google` 302 to WorkOS with the right provider, then on to github.com and accounts.google.com. Any other provider is 404.
+- Email round trip with a probe (`signin-probe@example.org`, code taken from the API): signed in, `/keys` offered "Create your key", sign-out went through WorkOS's logout. The probe user was deleted.
+- Start log: `keys: unkey`.
+- **Not yet checked:** Wes signs in and creates his key.
+
 ### `180f8cb` (2026-09-27): Slice 7, keys in Unkey, sign-in with WorkOS
 
 **Deployed at 20:47 CDT** (`134d0c9`, deployment `obo78mmvwzmmdftifvocptul`), then **20:53** (`180f8cb`, deployment `bcerzpmi5uuhhh2vimqk37li`, the callback-origin fix). #109 keys through Unkey, #110 sign-in with WorkOS AuthKit, #111 `/keys`, #112 the links and `keycheck`, #113 operator `externalId`, #114 callback redirects. **New env vars in Coolify:** `UNKEY_ROOT_KEY`, `UNKEY_API_ID` (`api_l3rRAX8C2`), `UNKEY_KEYSPACE_ID` (`ks_5OxEQKUG5`), `WORKOS_API_KEY`, `WORKOS_CLIENT_ID`, `WORKOS_REDIRECT_URI` (`https://swaggerbot.dev/auth/callback`), `WORKOS_COOKIE_PASSWORD`. The Unkey root key is scoped to the one API.
