@@ -204,8 +204,27 @@ The deploys of 2026-09-23:
 - `mcpcheck` PASS: slowest call 400 ms, largest result 28.4 kB.
 - `formscheck` PASS: outline p90 182 ms, operation p90 349 ms, 0 non-2xx.
 
+### `180f8cb` (2026-09-27): Slice 7, keys in Unkey, sign-in with WorkOS
+
+**Deployed at 20:47 CDT** (`134d0c9`, deployment `obo78mmvwzmmdftifvocptul`), then **20:53** (`180f8cb`, deployment `bcerzpmi5uuhhh2vimqk37li`, the callback-origin fix). #109 keys through Unkey, #110 sign-in with WorkOS AuthKit, #111 `/keys`, #112 the links and `keycheck`, #113 operator `externalId`, #114 callback redirects. **New env vars in Coolify:** `UNKEY_ROOT_KEY`, `UNKEY_API_ID` (`api_l3rRAX8C2`), `UNKEY_KEYSPACE_ID` (`ks_5OxEQKUG5`), `WORKOS_API_KEY`, `WORKOS_CLIENT_ID`, `WORKOS_REDIRECT_URI` (`https://swaggerbot.dev/auth/callback`), `WORKOS_COOKIE_PASSWORD`. The Unkey root key is scoped to the one API.
+
+**Before the deploy:**
+- `keycheck` ran against the real keyspace from a local build. It found that Unkey refuses an `externalId` outside `^[a-zA-Z0-9_.-]+$`, so operator keys are now `operator.<owner>` (#113). After that it passed, and the test key was revoked.
+- The one hand-issued key, `key_qyg4vkdz` (`loadcheck (operator)`), was **not migrated** (no `migrationId`). It stopped working at the deploy. It was reissued in Unkey as `key_6wXqiOlHo` (owner `operator.loadcheck`, 200 a day), and the new secret is `LOADCHECK_KEY` in `.env.local`.
+
+**Live checks:**
+- The start log says `keys: unkey`.
+- `keycheck` PASS: a keyed Index Lookup costs no credits (200 → 200), a Discovery costs one (200 → 199), a made-up key gets 401.
+- `mcpcheck` PASS on the second run. The first run caught Stripe's new Normalized Form still being built, after keycheck's fresh Lookup had refreshed it.
+- `formscheck` PASS.
+- `uicheck` PASS on `/`, `/keys`, `/docs`, `/lookup?name=stripe`, `/vendors` and `/nope#404` (24 runs). A run started right after the deploy had 2 failures during the container switch-over.
+- `/auth/sign-in` redirects to WorkOS. A bad callback redirects to `https://swaggerbot.dev/?signin=failed`.
+- **Not yet checked:** a real sign-in round trip (Wes signs in on `/keys` and creates a key).
+
 ## Gotchas
 
+- Unkey refuses an `externalId` outside `^[a-zA-Z0-9_.-]+$` (no `:`, spaces or `@`), with a 400. A fake client won't tell you; `keycheck` against a real keyspace will.
+- Behind Cloudflare and Traefik the app sees `http://`. Anything that builds an absolute URL from the request (AuthKit's callback redirects did) has to use the public origin (`PUBLIC_BASE_URL`, `WORKOS_REDIRECT_URI`).
 - Coolify's application health check runs `curl`/`wget` **inside** the container. An image without them is rolled back as unhealthy, even when its own Docker `HEALTHCHECK` passes.
 - A deploy log can't be read with a token lacking `read:sensitive`. Read it on the server instead: `docker exec coolify php artisan tinker` → `ApplicationDeploymentQueue::where('deployment_uuid', …)->first()->logs`.
 - Env values come back redacted without `read:sensitive`. To use them on the server, have tinker write them to a root-only file and shred it afterwards; they never need to leave the box.
