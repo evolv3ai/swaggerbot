@@ -25,6 +25,7 @@ import { Route as VendorsIndexRouteImport } from './routes/vendors/index'
 import { Route as VendorsVendorIdRouteImport } from './routes/vendors/$vendorId'
 import { Route as ApiApisSplatRouteImport } from './routes/api/apis/$'
 import { Route as ApiVendorsIndexRouteImport } from './routes/api/vendors/index'
+import { Route as AuthOauthProviderRouteImport } from './routes/auth/oauth.$provider'
 import { Route as EmbedSpecsSpecIdRouteImport } from './routes/embed/specs/$specId'
 import { Route as ApiSpecsSpecIdNormalizedRouteImport } from './routes/api/specs/$specId/normalized'
 import { Route as ApiSpecsSpecIdPublishedRouteImport } from './routes/api/specs/$specId/published'
@@ -110,6 +111,11 @@ const ApiVendorsIndexRoute = ApiVendorsIndexRouteImport.update({
   path: '/api/vendors/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthOauthProviderRoute = AuthOauthProviderRouteImport.update({
+  id: '/auth/oauth/$provider',
+  path: '/auth/oauth/$provider',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const EmbedSpecsSpecIdRoute = EmbedSpecsSpecIdRouteImport.update({
   id: '/embed/specs/$specId',
   path: '/embed/specs/$specId',
@@ -148,6 +154,7 @@ export interface FileRoutesByFullPath {
   '/vendors/$vendorId': typeof VendorsVendorIdRoute
   '/vendors/': typeof VendorsIndexRoute
   '/api/apis/$': typeof ApiApisSplatRoute
+  '/auth/oauth/$provider': typeof AuthOauthProviderRoute
   '/embed/specs/$specId': typeof EmbedSpecsSpecIdRoute
   '/api/vendors/': typeof ApiVendorsIndexRoute
   '/api/specs/$specId/normalized': typeof ApiSpecsSpecIdNormalizedRoute
@@ -170,6 +177,7 @@ export interface FileRoutesByTo {
   '/vendors/$vendorId': typeof VendorsVendorIdRoute
   '/vendors': typeof VendorsIndexRoute
   '/api/apis/$': typeof ApiApisSplatRoute
+  '/auth/oauth/$provider': typeof AuthOauthProviderRoute
   '/embed/specs/$specId': typeof EmbedSpecsSpecIdRoute
   '/api/vendors': typeof ApiVendorsIndexRoute
   '/api/specs/$specId/normalized': typeof ApiSpecsSpecIdNormalizedRoute
@@ -193,6 +201,7 @@ export interface FileRoutesById {
   '/vendors/$vendorId': typeof VendorsVendorIdRoute
   '/vendors/': typeof VendorsIndexRoute
   '/api/apis/$': typeof ApiApisSplatRoute
+  '/auth/oauth/$provider': typeof AuthOauthProviderRoute
   '/embed/specs/$specId': typeof EmbedSpecsSpecIdRoute
   '/api/vendors/': typeof ApiVendorsIndexRoute
   '/api/specs/$specId/normalized': typeof ApiSpecsSpecIdNormalizedRoute
@@ -217,6 +226,7 @@ export interface FileRouteTypes {
     | '/vendors/$vendorId'
     | '/vendors/'
     | '/api/apis/$'
+    | '/auth/oauth/$provider'
     | '/embed/specs/$specId'
     | '/api/vendors/'
     | '/api/specs/$specId/normalized'
@@ -239,6 +249,7 @@ export interface FileRouteTypes {
     | '/vendors/$vendorId'
     | '/vendors'
     | '/api/apis/$'
+    | '/auth/oauth/$provider'
     | '/embed/specs/$specId'
     | '/api/vendors'
     | '/api/specs/$specId/normalized'
@@ -261,6 +272,7 @@ export interface FileRouteTypes {
     | '/vendors/$vendorId'
     | '/vendors/'
     | '/api/apis/$'
+    | '/auth/oauth/$provider'
     | '/embed/specs/$specId'
     | '/api/vendors/'
     | '/api/specs/$specId/normalized'
@@ -284,6 +296,7 @@ export interface RootRouteChildren {
   VendorsVendorIdRoute: typeof VendorsVendorIdRoute
   VendorsIndexRoute: typeof VendorsIndexRoute
   ApiApisSplatRoute: typeof ApiApisSplatRoute
+  AuthOauthProviderRoute: typeof AuthOauthProviderRoute
   EmbedSpecsSpecIdRoute: typeof EmbedSpecsSpecIdRoute
   ApiVendorsIndexRoute: typeof ApiVendorsIndexRoute
   ApiSpecsSpecIdNormalizedRoute: typeof ApiSpecsSpecIdNormalizedRoute
@@ -405,6 +418,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiVendorsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/auth/oauth/$provider': {
+      id: '/auth/oauth/$provider'
+      path: '/auth/oauth/$provider'
+      fullPath: '/auth/oauth/$provider'
+      preLoaderRoute: typeof AuthOauthProviderRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/embed/specs/$specId': {
       id: '/embed/specs/$specId'
       path: '/embed/specs/$specId'
@@ -452,6 +472,7 @@ const rootRouteChildren: RootRouteChildren = {
   VendorsVendorIdRoute: VendorsVendorIdRoute,
   VendorsIndexRoute: VendorsIndexRoute,
   ApiApisSplatRoute: ApiApisSplatRoute,
+  AuthOauthProviderRoute: AuthOauthProviderRoute,
   EmbedSpecsSpecIdRoute: EmbedSpecsSpecIdRoute,
   ApiVendorsIndexRoute: ApiVendorsIndexRoute,
   ApiSpecsSpecIdNormalizedRoute: ApiSpecsSpecIdNormalizedRoute,

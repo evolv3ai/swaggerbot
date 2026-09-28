@@ -20,7 +20,7 @@ vi.mock("@workos/authkit-tanstack-react-start", () => ({
   handleCallbackRoute: () => fake.callback,
 }));
 
-const { Route: signIn } = await import("./sign-in");
+const { Route: oauth, withProvider } = await import("./oauth.$provider");
 const {
   Route: callback,
   logRefusal,
@@ -37,7 +37,10 @@ const WORKOS = {
 
 const ada = { id: "user_01", email: "ada@example.com" };
 
-type Handler = (ctx: { request: Request }) => Promise<Response> | Response;
+type Handler = (ctx: {
+  request: Request;
+  params?: Record<string, string>;
+}) => Promise<Response> | Response;
 
 function get(route: { options: { server?: unknown } }): Handler {
   const handlers = (route.options.server as { handlers?: { GET?: unknown } })
@@ -46,8 +49,12 @@ function get(route: { options: { server?: unknown } }): Handler {
   return handlers.GET as Handler;
 }
 
-const call = (route: { options: { server?: unknown } }, path: string) =>
-  get(route)({ request: new Request(`http://localhost:3000${path}`) });
+const call = (
+  route: { options: { server?: unknown } },
+  path: string,
+  params: Record<string, string> = {},
+) =>
+  get(route)({ request: new Request(`http://localhost:3000${path}`), params });
 
 beforeEach(() => {
   fake.context = { auth: () => ({ user: null }) };
@@ -65,11 +72,11 @@ function stubWorkOS() {
 
 describe("/auth/* without the WorkOS env", () => {
   it.each([
-    ["sign-in", signIn, "/auth/sign-in?returnTo=/keys"],
+    ["oauth/github", oauth, "/auth/oauth/github?returnTo=/keys"],
     ["callback", callback, "/auth/callback?code=c&state=s"],
     ["sign-out", signOut, "/auth/sign-out"],
   ])("/auth/%s is 404 and calls nothing", async (_, route, path) => {
-    const response = await call(route, path);
+    const response = await call(route, path, { provider: "github" });
     expect(response.status).toBe(404);
     expect(fake.getSignInUrl).not.toHaveBeenCalled();
     expect(fake.signOut).not.toHaveBeenCalled();
@@ -77,24 +84,53 @@ describe("/auth/* without the WorkOS env", () => {
   });
 });
 
-describe("GET /auth/sign-in", () => {
-  it("goes to AuthKit's sign-in, to come back to returnTo", async () => {
-    stubWorkOS();
-    fake.getSignInUrl.mockResolvedValue("https://auth.example/authorize?x");
-    const response = await call(signIn, "/auth/sign-in?returnTo=%2Fkeys");
-    expect(fake.getSignInUrl).toHaveBeenCalledWith({
-      data: { returnPathname: "/keys" },
-    });
-    expect(response.status).toBe(302);
-    expect(response.headers.get("location")).toBe(
-      "https://auth.example/authorize?x",
-    );
-  });
+describe("GET /auth/oauth/:provider", () => {
+  const AUTHORIZE =
+    "https://api.workos.com/user_management/authorize?client_id=client_x&provider=authkit&screen_hint=sign-in&state=s&code_challenge=c";
+
+  it.each([
+    ["github", "GitHubOAuth"],
+    ["google", "GoogleOAuth"],
+  ])(
+    "goes straight to %s, skipping AuthKit's hosted page",
+    async (provider, workos) => {
+      stubWorkOS();
+      fake.getSignInUrl.mockResolvedValue(AUTHORIZE);
+      const response = await call(
+        oauth,
+        `/auth/oauth/${provider}?returnTo=%2Fkeys`,
+        { provider },
+      );
+      expect(fake.getSignInUrl).toHaveBeenCalledWith({
+        data: { returnPathname: "/keys" },
+      });
+      expect(response.status).toBe(302);
+      const location = new URL(response.headers.get("location") ?? "");
+      expect(location.searchParams.get("provider")).toBe(workos);
+      expect(location.searchParams.get("screen_hint")).toBeNull();
+      expect(location.searchParams.get("state")).toBe("s");
+      expect(location.searchParams.get("code_challenge")).toBe("c");
+    },
+  );
+
+  it.each(["apple", "toString", "__proto__"])(
+    "is 404 for the provider %j",
+    async (provider) => {
+      stubWorkOS();
+      const response = await call(oauth, `/auth/oauth/${provider}`, {
+        provider,
+      });
+      expect(response.status).toBe(404);
+      expect(fake.getSignInUrl).not.toHaveBeenCalled();
+    },
+  );
 
   it("comes back home, never to another origin", async () => {
     stubWorkOS();
-    fake.getSignInUrl.mockResolvedValue("https://auth.example/authorize");
-    await call(signIn, "/auth/sign-in?returnTo=%2F%2Fevil.example");
+    fake.getSignInUrl.mockResolvedValue(AUTHORIZE);
+    await call(oauth, "/auth/oauth/github?returnTo=%2F%2Fevil.example", {
+      provider: "github",
+    });
     expect(fake.getSignInUrl).toHaveBeenCalledWith({
       data: { returnPathname: "/" },
     });
@@ -103,10 +139,25 @@ describe("GET /auth/sign-in", () => {
   it("sends someone already signed in straight to returnTo", async () => {
     stubWorkOS();
     fake.context = { auth: () => ({ user: ada, sessionId: "session_01" }) };
-    const response = await call(signIn, "/auth/sign-in?returnTo=%2Fkeys");
+    const response = await call(oauth, "/auth/oauth/github?returnTo=%2Fkeys", {
+      provider: "github",
+    });
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe("/keys");
     expect(fake.getSignInUrl).not.toHaveBeenCalled();
+  });
+});
+
+describe("withProvider", () => {
+  it("changes only the provider (and drops the hosted page's screen hint)", () => {
+    expect(
+      withProvider(
+        "https://api.workos.com/user_management/authorize?provider=authkit&redirect_uri=https%3A%2F%2Fswaggerbot.dev%2Fauth%2Fcallback&screen_hint=sign-in",
+        "github",
+      ),
+    ).toBe(
+      "https://api.workos.com/user_management/authorize?provider=GitHubOAuth&redirect_uri=https%3A%2F%2Fswaggerbot.dev%2Fauth%2Fcallback",
+    );
   });
 });
 
