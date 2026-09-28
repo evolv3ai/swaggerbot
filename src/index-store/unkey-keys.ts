@@ -278,7 +278,7 @@ export type LocalKeyToMigrate = {
 
 /**
  * Moves hand-issued keys into Unkey with their secrets unchanged (D8): each
- * key's hash re-encoded, its owner as `externalId: "operator:<owner>"`, its
+ * key's hash re-encoded, its owner as `externalId: "operator.<owner>"`, its
  * quota as credits refilled daily. Returns the ids that moved and those that
  * didn't.
  */
@@ -311,7 +311,18 @@ export async function migrateLocalKeys(
   return { migrated, failed };
 }
 
-/** The `externalId` of a key the operator issues by hand, as opposed to a WorkOS user's. */
+/** What Unkey accepts as an `externalId`. */
+export const EXTERNAL_ID = /^[a-zA-Z0-9_.-]+$/;
+
+/**
+ * The `externalId` of a key the operator issues by hand, as opposed to a
+ * WorkOS user's (`user_…`): `operator.<owner>`, with anything Unkey refuses
+ * in an `externalId` (spaces, `:`, `@`…) turned into `-`.
+ */
 export function operatorExternalId(owner: string): string {
-  return `operator:${owner.trim()}`;
+  const name = owner
+    .trim()
+    .replace(/[^a-zA-Z0-9_.-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return `operator.${name || "unnamed"}`;
 }

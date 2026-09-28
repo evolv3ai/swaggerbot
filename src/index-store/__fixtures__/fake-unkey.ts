@@ -1,5 +1,16 @@
 import { vi } from "vitest";
-import type { UnkeyClient } from "../unkey-keys";
+import { EXTERNAL_ID, type UnkeyClient } from "../unkey-keys";
+
+/** Unkey's 400 for a body it refuses, as the SDK throws it. */
+function refuseExternalId(externalId: string | undefined) {
+  if (externalId !== undefined && !EXTERNAL_ID.test(externalId))
+    throw Object.assign(
+      new Error(
+        `'${externalId}' does not match pattern '${EXTERNAL_ID.source}'`,
+      ),
+      { statusCode: 400 },
+    );
+}
 
 /** A key as the fake Unkey holds it. */
 export type FakeUnkeyKey = {
@@ -80,6 +91,7 @@ export function fakeUnkey(keys: FakeUnkeyKey[] = []) {
     keys: {
       verifyKey,
       createKey: vi.fn(async (request) => {
+        refuseExternalId(request.externalId);
         const key: FakeUnkeyKey = {
           keyId: `key_fake${state.next}`,
           secret: `${request.prefix}_secret${state.next}`,
@@ -124,16 +136,20 @@ export function fakeUnkey(keys: FakeUnkeyKey[] = []) {
         keys.splice(i, 1);
         return { meta: { requestId: "req_fake" }, data: {} };
       }),
-      migrateKeys: vi.fn(async ({ keys: migrating }) => ({
-        meta: { requestId: "req_fake" },
-        data: {
-          migrated: migrating.map((k: { hash: string }, i: number) => ({
-            hash: k.hash,
-            keyId: `key_migrated${i}`,
-          })),
-          failed: [] as string[],
-        },
-      })),
+      migrateKeys: vi.fn(async ({ keys: migrating }) => {
+        for (const k of migrating as { externalId?: string }[])
+          refuseExternalId(k.externalId);
+        return {
+          meta: { requestId: "req_fake" },
+          data: {
+            migrated: migrating.map((k: { hash: string }, i: number) => ({
+              hash: k.hash,
+              keyId: `key_migrated${i}`,
+            })),
+            failed: [] as string[],
+          },
+        };
+      }),
       getKey: vi.fn(),
     },
     apis: {

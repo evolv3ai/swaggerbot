@@ -137,7 +137,7 @@ Keys live in [Unkey](https://unkey.com) and accounts in [WorkOS](https://workos.
 
 With `UNKEY_ROOT_KEY` and `UNKEY_API_ID` set, keys are verified in Unkey (the start log says `keys: unkey`): an Index answer costs nothing, a Discovery or `fresh` Lookup one credit, and when Unkey doesn't answer within 2 s a keyed request gets a 503 with `Retry-After: 30` (keyless Index answers are unaffected). Without them, keys stay in the Index's SQLite table as before (`keys: local`), which is what tests and local development use. `/keys` needs both Unkey and WorkOS; without them it says keys are issued by hand and links the email. Without the WorkOS env, the top bar shows no "Sign in" and `/auth/*` is a 404.
 
-The operator can still issue keys by hand, on whichever store is configured (in Unkey, `create` makes the owner `operator:<owner>`):
+The operator can still issue keys by hand, on whichever store is configured (in Unkey, `create` makes the owner `operator.<owner>`):
 
 ```sh
 pnpm tsx scripts/keys.ts create "<owner>" [--quota N]   # prints the key's id and secret
@@ -146,7 +146,7 @@ pnpm tsx scripts/keys.ts revoke <id>
 pnpm tsx scripts/keys.ts migrate                         # move the Index's live keys into Unkey
 ```
 
-`migrate` moves every live key in the Index at `DATABASE_PATH` into Unkey with its secret unchanged (the stored sha256 is re-encoded as Unkey expects), its owner as `operator:<owner>` and its quota as daily credits. It needs `UNKEY_ROOT_KEY`, `UNKEY_API_ID` and `UNKEY_MIGRATION_ID`, and prints how many keys moved and any it couldn't. Run it before the first deploy with Unkey, so no hand-issued key stops working.
+`migrate` moves every live key in the Index at `DATABASE_PATH` into Unkey with its secret unchanged (the stored sha256 is re-encoded as Unkey expects), its owner as `operator.<owner>` and its quota as daily credits. It needs `UNKEY_ROOT_KEY`, `UNKEY_API_ID` and `UNKEY_MIGRATION_ID`, and prints how many keys moved and any it couldn't. Run it before the first deploy with Unkey, so no hand-issued key stops working.
 
 In production the image has no `scripts/` or `tsx`. `pnpm build` bundles the same CLI into `.output/cli/keys.mjs`, which the image carries, so run it in the container, against the Index on its volume:
 

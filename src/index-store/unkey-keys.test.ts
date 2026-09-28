@@ -9,7 +9,9 @@ import { createKeyStore } from "./key-store";
 import { keyHashOf } from "./keys";
 import {
   createUnkeyKeys,
+  EXTERNAL_ID,
   migrateLocalKeys,
+  operatorExternalId,
   unkeyHashOf,
   VERIFY_TIMEOUT_MS,
 } from "./unkey-keys";
@@ -351,7 +353,7 @@ describe("migrateLocalKeys", () => {
         {
           hash: unkeyHashOf(hash),
           name: "key_abcdefgh",
-          externalId: "operator:Ada",
+          externalId: "operator.Ada",
           enabled: true,
           credits: {
             remaining: 250,
@@ -415,5 +417,27 @@ describe("createKeyStore", () => {
     if (line === "keys: unkey")
       expect(unkeyClient).toHaveBeenCalledWith("unkey_root");
     index.$client.close();
+  });
+});
+
+describe("operatorExternalId", () => {
+  it("is operator.<owner>, in what Unkey accepts as an externalId", () => {
+    expect(operatorExternalId("Ada")).toBe("operator.Ada");
+    expect(operatorExternalId(" keycheck-test ")).toBe(
+      "operator.keycheck-test",
+    );
+    expect(operatorExternalId("Ada Lovelace <ada@example.com>")).toBe(
+      "operator.Ada-Lovelace-ada-example.com",
+    );
+    expect(operatorExternalId("::")).toBe("operator.unnamed");
+    for (const owner of ["Ada", "a b", "x:y", "é"])
+      expect(operatorExternalId(owner)).toMatch(EXTERNAL_ID);
+  });
+
+  it("lets the fake Unkey refuse an externalId the real one refuses", async () => {
+    const { keys } = store();
+    await expect(keys.create("operator:ada")).rejects.toMatchObject({
+      statusCode: 400,
+    });
   });
 });
