@@ -21,7 +21,7 @@ vi.mock("@workos/authkit-tanstack-react-start", () => ({
 }));
 
 const { Route: signIn } = await import("./sign-in");
-const { Route: callback } = await import("./callback");
+const { Route: callback, onPublicOrigin } = await import("./callback");
 const { Route: signOut } = await import("./sign-out");
 
 const WORKOS = {
@@ -113,6 +113,42 @@ describe("GET /auth/callback", () => {
     const response = await call(callback, "/auth/callback?code=c&state=s");
     expect(response.status).toBe(307);
     expect(fake.callback).toHaveBeenCalledOnce();
+  });
+
+  it("hands AuthKit the request on the public origin, so its redirects stay on https", async () => {
+    stubWorkOS();
+    vi.stubEnv("WORKOS_REDIRECT_URI", "https://swaggerbot.dev/auth/callback");
+    fake.callback.mockResolvedValue(new Response(null, { status: 307 }));
+    await get(callback)({
+      request: new Request(
+        "http://swaggerbot.dev/auth/callback?code=c&state=s",
+        {
+          headers: { cookie: "wos-auth-verifier=v" },
+        },
+      ),
+    });
+    const [[{ request: seen }]] = fake.callback.mock.calls as [
+      [{ request: Request }],
+    ];
+    expect(seen.url).toBe(
+      "https://swaggerbot.dev/auth/callback?code=c&state=s",
+    );
+    expect(seen.headers.get("cookie")).toBe("wos-auth-verifier=v");
+  });
+});
+
+describe("onPublicOrigin", () => {
+  it("keeps the request as it is without a redirect URI", () => {
+    const request = new Request("http://localhost:3000/auth/callback?code=c");
+    expect(onPublicOrigin(request, undefined)).toBe(request);
+  });
+
+  it("moves only the scheme and host", () => {
+    const moved = onPublicOrigin(
+      new Request("http://10.0.0.5:3000/auth/callback?code=c"),
+      "https://swaggerbot.dev/auth/callback",
+    );
+    expect(moved.url).toBe("https://swaggerbot.dev/auth/callback?code=c");
   });
 });
 
