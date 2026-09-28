@@ -245,7 +245,7 @@ export function SignedOut({ quota }: { quota: number }) {
         <a href={signInHref("/keys")} className={buttonClass({ size: "lg" })}>
           Sign in to get a key
         </a>
-        <p className={NOTE}>With GitHub or your email.</p>
+        <p className={NOTE}>With GitHub, Google or your email.</p>
       </div>
       <KeyRules quota={quota} />
     </div>

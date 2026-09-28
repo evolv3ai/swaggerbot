@@ -3,7 +3,7 @@ import { cn } from "~/lib/utils";
 import type { ShellAccount } from "~/server/account";
 import { TOP_LINK } from "./nav";
 
-/** Where "Sign in" goes: AuthKit's sign-in, back to `returnTo` after. */
+/** Where "Sign in" goes: our sign-in page, back to `returnTo` after. */
 export function signInHref(returnTo: string): string {
   return `/auth/sign-in?returnTo=${encodeURIComponent(returnTo)}`;
 }
