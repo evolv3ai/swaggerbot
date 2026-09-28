@@ -21,7 +21,11 @@ vi.mock("@workos/authkit-tanstack-react-start", () => ({
 }));
 
 const { Route: signIn } = await import("./sign-in");
-const { Route: callback, onPublicOrigin } = await import("./callback");
+const {
+  Route: callback,
+  logRefusal,
+  onPublicOrigin,
+} = await import("./callback");
 const { Route: signOut } = await import("./sign-out");
 
 const WORKOS = {
@@ -173,5 +177,31 @@ describe("GET /auth/sign-out", () => {
     expect(fake.clearSession).toHaveBeenCalledOnce();
     expect(fake.signOut).not.toHaveBeenCalled();
     expect(response.headers.get("location")).toBe("/");
+  });
+});
+
+describe("logRefusal", () => {
+  it("logs WorkOS's error when it comes back without a code", () => {
+    const warn = vi.fn();
+    logRefusal(
+      new Request(
+        "https://swaggerbot.dev/auth/callback?error=access_denied&error_description=Sign-ups+are+disabled&state=s",
+      ),
+      warn,
+    );
+    expect(warn.mock.calls).toEqual([
+      [
+        "sign-in: WorkOS returned no code (error=access_denied: Sign-ups are disabled)",
+      ],
+    ]);
+  });
+
+  it("says nothing when there is a code", () => {
+    const warn = vi.fn();
+    logRefusal(
+      new Request("https://swaggerbot.dev/auth/callback?code=c&state=s"),
+      warn,
+    );
+    expect(warn).not.toHaveBeenCalled();
   });
 });

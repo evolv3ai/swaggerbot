@@ -26,6 +26,22 @@ export function onPublicOrigin(
 }
 
 /**
+ * Logs why WorkOS came back without a code: it sends `error` and
+ * `error_description` instead (a refused sign-in, a misconfigured
+ * environment), which AuthKit reports only as "Missing authorization code".
+ * Both are WorkOS's own words, never a secret; capped in length.
+ */
+export function logRefusal(request: Request, warn = console.warn): void {
+  const params = new URL(request.url).searchParams;
+  if (params.get("code")) return;
+  const error = params.get("error") ?? "none";
+  const description = params.get("error_description") ?? "";
+  warn(
+    `sign-in: WorkOS returned no code (error=${error.slice(0, 80)}${description ? `: ${description.slice(0, 300)}` : ""})`,
+  );
+}
+
+/**
  * `GET /auth/callback` (`WORKOS_REDIRECT_URI`): AuthKit's hosted sign-in
  * returns here; the session cookie is set and the visitor goes on to the
  * `returnTo` they signed in from. 404 when sign-in is off.
@@ -33,10 +49,11 @@ export function onPublicOrigin(
 export const Route = createFileRoute("/auth/callback")({
   server: {
     handlers: {
-      GET: (ctx) =>
-        signInConfigured()
-          ? callback({ ...ctx, request: onPublicOrigin(ctx.request) })
-          : signInOff(),
+      GET: (ctx) => {
+        if (!signInConfigured()) return signInOff();
+        logRefusal(ctx.request);
+        return callback({ ...ctx, request: onPublicOrigin(ctx.request) });
+      },
     },
   },
 });
