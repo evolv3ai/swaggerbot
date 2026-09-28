@@ -153,6 +153,9 @@ export function createEmailSignIn(deps: EmailSignInDeps) {
       try {
         session = await deps.checkCode(email, code, meta);
       } catch (error) {
+        // Logged even for a wrong code: WorkOS may refuse a right one too
+        // (`sso_required` for a domain an organisation's SSO claims).
+        warn(`sign-in: checking a code failed (${detailOf(error)})`);
         const status = statusOf(error);
         if (status === 429) return tooMany(60);
         if (status !== undefined && status >= 400 && status < 500)
@@ -160,7 +163,6 @@ export function createEmailSignIn(deps: EmailSignInDeps) {
             400,
             "That code is wrong or has expired. Check it, or send a new one.",
           );
-        warn(`sign-in: checking a code failed (${detailOf(error)})`);
         return refuse(503, UNAVAILABLE);
       }
       await deps.startSession(session);

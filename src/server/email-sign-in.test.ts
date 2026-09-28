@@ -160,6 +160,9 @@ describe("checkCode", () => {
     if (result.ok) throw new Error("expected a refusal");
     expect(result.error).toMatch(/wrong or has expired/);
     expect(deps.startSession).not.toHaveBeenCalled();
+    expect(deps.warn).toHaveBeenCalledWith(
+      expect.stringContaining("invalid_one_time_code"),
+    );
   });
 
   it("allows 10 tries in 10 minutes for one address", async () => {

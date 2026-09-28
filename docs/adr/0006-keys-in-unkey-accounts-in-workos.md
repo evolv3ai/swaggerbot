@@ -9,6 +9,8 @@ The key seam stays where Slice 3 put it (`findKey`, `takeQuota`, used by `/api/l
 - **Discovery or `fresh`** verifies at cost 1. `USAGE_EXCEEDED` is the 429 it is today, with the reset at the next UTC midnight.
 - **When Unkey can't be reached, keyed requests fail closed** with a 503 and a retry hint. Requests with no key never call Unkey, so every Index answer, the outline, operations and schemas keep working through an Unkey outage.
 
+**Amended 2026-09-28 (Wes): our own sign-in page.** WorkOS's hosted AuthKit page never rendered: its sign-in layout sent every visitor, even one with no flow at all, straight back to our callback without a code. `/auth/sign-in` is now our page in the docs shell. GitHub and Google still go by way of WorkOS (the package's authorize URL with the provider named instead of `authkit`, finished by the same callback). Email is Magic Auth over WorkOS's API: it emails a 6-digit code, and the answer is sealed into the package's own session cookie, so the middleware, `/keys` and sign-out did not change. What we took on: rate limits on sending and checking codes (5 codes an hour per address, 20 per IP, 10 tries per address in 10 minutes). WorkOS still holds every account, and is still only in the path at sign-in.
+
 ## Considered
 
 - **Keys in our own table, with our own sign-up page** (recommended in the 2026-09-26 research, `.jez/research/unkey-key-issuance-2026-09-26.md`). No outside service in the auth path, but we would build key management, usage display and revocation ourselves, and move later anyway if paid tiers come. Wes chose Unkey.
