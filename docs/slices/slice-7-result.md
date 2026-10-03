@@ -2,7 +2,7 @@
 
 **Acceptance** ([backlog](slice-7-backlog.md)): on production, someone who has never had a key signs in at `swaggerbot.dev/keys` with GitHub, gets a key without anyone approving it, and uses it for a Discovery over HTTP and over MCP; the page then shows one credit used and when it resets. A second key can't be created while the first is live. After Revoke, the key gets a 401. A key issued by hand before Slice 7 still works. With Unkey unreachable, a keyed Discovery gets a 503 and a keyless Index answer is still 200. `uicheck`, `mcpcheck` and `formscheck` still pass.
 
-**For Wes to accept.**
+**Accepted by Wes, 2026-10-03,** on these results.
 - Every condition is met, with two deviations Wes chose along the way: sign-in is our own page rather than WorkOS's hosted one, and the one hand-issued key was reissued rather than migrated.
 - Two conditions differ from the letter:
   - The first sign-in was with **Google**, not GitHub. GitHub is only checked as far as its consent screen.
@@ -14,7 +14,7 @@
 | Gets a key with no approval | issued at once | "Create your key" issued `key_X9s5OUMRt`, owner = Wes's WorkOS user | pass |
 | Uses it for a Discovery over HTTP | 200, one credit | `POST /api/lookup` `{"name":"Val Town","fresh":true}` **200** in 11.4 s. Credits 100 → 99 (Unkey `verifyKey`, cost 0) | pass |
 | … and over MCP | 200, one credit | `tools/call lookup_api` `{"name":"Val Town","fresh":true}` **Resolved** in 11.5 s. Credits 99 → 98 | pass |
-| The page shows credits used and the reset | shown | Unkey reports 98 of 100. The page reads the same `liveKeyOf` data (unit-tested, and `/keys` renders signed in). Not looked at on Wes's page since | Wes to glance |
+| The page shows credits used and the reset | shown | Unkey reports 98 of 100. The page reads the same `liveKeyOf` data (unit-tested, and `/keys` renders signed in). Not looked at on Wes's page since | accepted on Unkey's reading |
 | A keyed Index Lookup costs nothing | 200, no credit | Stripe **200** in 0.5 s. Credits unchanged | pass |
 | A second key while one is live | refused | Probe account on production: the page's own create call replayed → **409** "You already have a live key: one per person." | pass |
 | After Revoke | 401 | Probe account: the key answered 200, was revoked on the page ("Your key is revoked: it no longer works"), then got **401** | pass |

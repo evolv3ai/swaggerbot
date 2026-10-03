@@ -149,7 +149,8 @@ Each slice is usable end to end and demonstrable. Later slices don't start until
 - Until then, `/` is a static landing page (#81, 2026-09-24: what the service does, a real Lookup, the HTTP API) in the UX spec's colours and type. Slice 6 replaces it.
 
 ### Slice 7 — Self-service API keys
-- Brought forward from "Later" (Wes, 2026-09-27): anyone signs in at `/keys` (WorkOS AuthKit: GitHub or email) and gets one key, managed and verified in Unkey; the app still runs on Coolify ([ADR 0006](adr/0006-keys-in-unkey-accounts-in-workos.md), [backlog](slices/slice-7-backlog.md)).
+- Brought forward from "Later" (Wes, 2026-09-27): anyone signs in at `/keys` (our sign-in page: GitHub, Google or an emailed code; accounts in WorkOS) and gets one key, managed and verified in Unkey; the app still runs on Coolify ([ADR 0006](adr/0006-keys-in-unkey-accounts-in-workos.md), [backlog](slices/slice-7-backlog.md)).
+- **Accepted 2026-10-03** ([result](slices/slice-7-result.md)).
 - **Accept when:** a newcomer gets a key on production without anyone approving it and uses it for a Discovery over HTTP and MCP; revoking it stops it; hand-issued keys still work; with Unkey unreachable, keyed requests fail closed and Index answers still work.
 
 ## Open questions (decide during the build)
