@@ -1,6 +1,6 @@
 # Slice 1 backlog: Benchmark and core Lookup
 
-The issues for [Slice 1](../PRD.md#slice-1--benchmark-and-core-lookup), written so the weawr factory can build them: each body is filed as-is on Linear (team WTR, labels `ai` + `swaggerbot`). Capitalised terms are from [`CONTEXT.md`](../../CONTEXT.md). Conventions shared by every issue (layout, env vars, the gate) live in `.weawr/instructions.md`, which every agent reads.
+The issues for [Slice 1](../PRD.md#slice-1--benchmark-and-core-lookup), written so the weawr factory can build them: each body is filed as-is on Linear (team WTR, labels `ai` + `swaggerbot`). Capitalised terms are from [`CONTEXT.md`](../../CONTEXT.md). Conventions shared by every issue (layout, env vars, the gate) live in `docs/development.md`, which every agent reads.
 
 ## Order
 

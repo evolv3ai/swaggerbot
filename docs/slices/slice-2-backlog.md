@@ -1,6 +1,6 @@
 # Slice 2 backlog: Provenance and versions
 
-The issues for [Slice 2](../PRD.md#slice-2--provenance-and-versions), written so the weawr factory can build them: each body is filed as-is on Linear (team WTR, labels `ai` + `swaggerbot`). Capitalised terms are from [`CONTEXT.md`](../../CONTEXT.md). Conventions shared by every issue (layout, env vars, the gate) live in `.weawr/instructions.md`, which every agent reads.
+The issues for [Slice 2](../PRD.md#slice-2--provenance-and-versions), written so the weawr factory can build them: each body is filed as-is on Linear (team WTR, labels `ai` + `swaggerbot`). Capitalised terms are from [`CONTEXT.md`](../../CONTEXT.md). Conventions shared by every issue (layout, env vars, the gate) live in `docs/development.md`, which every agent reads.
 
 **Acceptance:** False Resolution < 2% and long-tail coverage ≥ 60%.
 

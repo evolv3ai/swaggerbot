@@ -199,6 +199,8 @@ It also caps a fetched body at 64 MB, counted as it streams in (after decompress
 pnpm check   # Biome lint, tsc --noEmit, vitest run; stops at the first failure
 ```
 
+To work on the code, read [`docs/development.md`](docs/development.md): the source layout, the test rules and the environment variables.
+
 `uicheck`'s tests drive a headless Chromium: install it once with `pnpm exec playwright install chromium`.
 
 The same `pnpm check` and `pnpm build` run in CI (`.github/workflows/ci.yml`) on every PR and push to `main`.

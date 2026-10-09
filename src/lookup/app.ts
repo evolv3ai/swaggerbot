@@ -83,8 +83,9 @@ export function specStepBudgetMsOf(env: NodeJS.ProcessEnv): number {
 function buildAppLookup(env: NodeJS.ProcessEnv) {
   const judge = createJudge(env);
   const fetcher = createFetcher();
-  // Not `GITHUB_TOKEN`: tools run in this repo (weawr, `gh`) read that name
-  // from `.env` as their own credential. Still accepted as a fallback.
+  // Not `GITHUB_TOKEN`: other tools run in this repo (`gh`, agent runners)
+  // read that name from `.env` as their own credential. Still accepted as a
+  // fallback.
   const token =
     env.GITHUB_SEARCH_TOKEN?.trim() || env.GITHUB_TOKEN?.trim() || undefined;
   const github = createGitHubRepos({ token });

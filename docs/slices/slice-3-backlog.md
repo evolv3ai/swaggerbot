@@ -1,6 +1,6 @@
 # Slice 3 backlog: Live service
 
-The issues for [Slice 3](../PRD.md#slice-3--live-service), written so the weawr factory can build them: each numbered body is filed as-is on Linear (team WTR, labels `ai` + `swaggerbot`). Capitalised terms are from [`CONTEXT.md`](../../CONTEXT.md). Conventions shared by every issue live in `.weawr/instructions.md`.
+The issues for [Slice 3](../PRD.md#slice-3--live-service), written so the weawr factory can build them: each numbered body is filed as-is on Linear (team WTR, labels `ai` + `swaggerbot`). Capitalised terms are from [`CONTEXT.md`](../../CONTEXT.md). Conventions shared by every issue live in `docs/development.md`.
 
 **Acceptance:** in production, answers from the Index hit p90 < 200 ms, Discovery hits p90 < 15 s, and a restore from the backup has been done. Precision must hold: False Resolution stays < 2% on `pnpm bench`.
 

@@ -2,7 +2,7 @@
 
 **Status: approved by Wes, 2026-09-25** (D1–D8 as recommended; D9 a `mailto:` to hello@evolv3.ai). Filed on Linear as in the Order table. Unkey for keys was considered the same day and deferred to self-service keys (PRD "Later"): see D9.
 
-The issues for [Slice 6](../PRD.md#slice-6--web-ui), written so the weawr factory can build them: each numbered body is filed as-is on Linear (team WTR, labels `ai` + `swaggerbot`). Capitalised terms are from [`CONTEXT.md`](../../CONTEXT.md). Conventions shared by every issue live in `.weawr/instructions.md`.
+The issues for [Slice 6](../PRD.md#slice-6--web-ui), written so the weawr factory can build them: each numbered body is filed as-is on Linear (team WTR, labels `ai` + `swaggerbot`). Capitalised terms are from [`CONTEXT.md`](../../CONTEXT.md). Conventions shared by every issue live in `docs/development.md`.
 
 **Acceptance (PRD):** `/impeccable audit` is clean, and the UI is keyboard-navigable and meets WCAG AA. Proposed concretely (D8):
 - **Impeccable:** `audit` reports no P0 or P1 findings, and no dimension scores below 3 of 4 (Accessibility 4). `npx impeccable detect` reports nothing, or only findings that are written down as false positives with a reason.
