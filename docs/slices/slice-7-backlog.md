@@ -2,7 +2,7 @@
 
 **Status: approved by Wes, 2026-09-27** (Unkey, WorkOS, fail closed, auto-approval and one key per user his choices; D2, D5 and D7–D9 as recommended; ADR 0006 accepted). Filed on Linear as in the Order table.
 
-The issues for self-service keys (the PRD's "Later" line, brought forward), written so the weawr factory can build them: each numbered body is filed as-is on Linear (team WTR, labels `ai` + `swaggerbot`). Capitalised terms are from [`CONTEXT.md`](../../CONTEXT.md). Conventions shared by every issue live in `.weawr/instructions.md`. The decision is [ADR 0006](../adr/0006-keys-in-unkey-accounts-in-workos.md).
+The issues for self-service keys (the PRD's "Later" line, brought forward), written so the weawr factory can build them: each numbered body is filed as-is on Linear (team WTR, labels `ai` + `swaggerbot`). Capitalised terms are from [`CONTEXT.md`](../../CONTEXT.md). Conventions shared by every issue live in `docs/development.md`. The decision is [ADR 0006](../adr/0006-keys-in-unkey-accounts-in-workos.md).
 
 **Acceptance (proposed):** on production, someone who has never had a key signs in at `swaggerbot.dev/keys` with GitHub, gets a key without anyone approving it, and uses it for a Discovery over HTTP and over MCP; the page then shows one credit used and when it resets. A second key can't be created while the first is live. After Revoke, the key gets a 401. A key issued by hand before Slice 7 still works. With Unkey unreachable (a wrong `UNKEY_ROOT_KEY` on a preview deploy), a keyed Discovery gets a 503 and a keyless Index answer still 200. `uicheck`, `mcpcheck` and `formscheck` still pass.
 

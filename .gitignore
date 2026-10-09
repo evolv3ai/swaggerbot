@@ -23,6 +23,3 @@ uicheck-out/
 
 # Impeccable review captures
 .impeccable/review/
-
-# weawr (the dispatcher that built slices 1-7) leaves state/ and worktrees/ here in older checkouts
-.weawr/

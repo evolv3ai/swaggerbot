@@ -2,7 +2,7 @@
 
 **Status: approved by Wes, 2026-09-24** (D1–D8 as recommended; ADR 0005 accepted). Filed on Linear as in the Order table; all five merged and deployed the same day. Result: [`slice-5-result.md`](slice-5-result.md).
 
-The issues for [Slice 5](../PRD.md#slice-5--mcp-server), written so the weawr factory can build them: each numbered body is filed as-is on Linear (team WTR, labels `ai` + `swaggerbot`). Capitalised terms are from [`CONTEXT.md`](../../CONTEXT.md). Conventions shared by every issue live in `.weawr/instructions.md`.
+The issues for [Slice 5](../PRD.md#slice-5--mcp-server), written so the weawr factory can build them: each numbered body is filed as-is on Linear (team WTR, labels `ai` + `swaggerbot`). Capitalised terms are from [`CONTEXT.md`](../../CONTEXT.md). Conventions shared by every issue live in `docs/development.md`.
 
 **Acceptance (PRD):** Claude Code, given only the MCP server, can find and call three operations of a Benchmark API it hasn't seen before. Proposed concretely (decision D7): **Val Town** (long-tail, Resolved, Official, 52 operations), with Claude Code allowed the swagger.bot MCP tools and Bash to call the API, but no web search or fetch. It must make three successful calls to three different Val Town operations that need no key (`/v1/alias/{username}`, `/v1/users/{user_id}`, `/v1/users/{user_id}/vals` all answer 200 without one), once on the default model and once on Haiku as the canary for unclear tool descriptions. Every MCP result it received stays under 30 kB. Nothing may cost what Slices 3 and 4 bought: `formscheck` still passes, and the HTTP API answers as before.
 

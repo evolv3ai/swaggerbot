@@ -1,6 +1,6 @@
 # Slice 4 backlog: Spec forms and navigation
 
-The issues for [Slice 4](../PRD.md#slice-4--spec-forms-and-navigation), written so the weawr factory can build them: each numbered body is filed as-is on Linear (team WTR, labels `ai` + `swaggerbot`). Capitalised terms are from [`CONTEXT.md`](../../CONTEXT.md). Conventions shared by every issue live in `.weawr/instructions.md`.
+The issues for [Slice 4](../PRD.md#slice-4--spec-forms-and-navigation), written so the weawr factory can build them: each numbered body is filed as-is on Linear (team WTR, labels `ai` + `swaggerbot`). Capitalised terms are from [`CONTEXT.md`](../../CONTEXT.md). Conventions shared by every issue live in `docs/development.md`.
 
 **Acceptance:** the Normalized Form (with Swagger 2 → OpenAPI conversion and bundling), Validity Issues, download URLs for both forms, `get_spec_outline`, `get_operation` and `list_vendor_apis` work on the largest Benchmark Specs without timeouts. The PRD names GitHub and Stripe; we also hold Cloudflare to it, because at 26 MB it is the largest Spec in the Index. Measured in production by `scripts/formscheck.ts` (#8). Nothing may cost what Slice 3 bought: False Resolution stays < 2% on `pnpm bench`, and Discovery p90 stays < 15 s.
 
