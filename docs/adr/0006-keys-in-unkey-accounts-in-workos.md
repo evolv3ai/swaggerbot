@@ -13,7 +13,7 @@ The key seam stays where Slice 3 put it (`findKey`, `takeQuota`, used by `/api/l
 
 ## Considered
 
-- **Keys in our own table, with our own sign-up page** (recommended in the 2026-09-26 research, `.jez/research/unkey-key-issuance-2026-09-26.md`). No outside service in the auth path, but we would build key management, usage display and revocation ourselves, and move later anyway if paid tiers come. Wes chose Unkey.
+- **Keys in our own table, with our own sign-up page** (recommended in the 2026-09-26 research, [`docs/research/unkey-key-issuance-2026-09-26.md`](../research/unkey-key-issuance-2026-09-26.md)). No outside service in the auth path, but we would build key management, usage display and revocation ourselves, and move later anyway if paid tiers come. Wes chose Unkey.
 - **Unkey's customer portal.** Unlaunched ("The Customer Portal has not launched", docs, 2026-09-27), and even then it can't create a first key or revoke one, and it has no sign-in of its own. Revisit when it launches.
 - **Unkey Deploy** (hosting behind Unkey's gateway, $5 Starter). Instance storage is ephemeral (`/data` "is created when the instance starts and destroyed when it stops"), so the SQLite Index would not survive a deploy, and the gateway's key policy 401s keyless requests that the Index should answer. No.
 - **GitHub sign-in on our own** (the PRD's "Later" line). AuthKit gives GitHub plus email sign-in, sessions and a hosted UI, free for the first 1M monthly active users (workos.com/pricing, 2026-09-27), with an official TanStack Start package.
