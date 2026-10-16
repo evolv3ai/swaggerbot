@@ -1,13 +1,8 @@
 import { createInterface } from "node:readline";
 import { Writable } from "node:stream";
+import type { KeyAnswer } from "../../domain/api-key";
 import { storeKey } from "../config";
-import {
-  type CliHttp,
-  getJson,
-  KEYS_URL,
-  type KeyAnswer,
-  TIMEOUT_MS,
-} from "../http";
+import { type CliHttp, getJson, KEYS_URL, TIMEOUT_MS } from "../http";
 import { creditsWords, type Io, palette } from "../render";
 import { type CommandContext, failed } from "./lookup";
 
@@ -63,7 +58,7 @@ export async function runLogin(
 /**
  * The key typed at a terminal, hidden (readline writes its echo to a sink,
  * so nothing shows), or the first line piped in; empty when neither gives
- * one.
+ * one, or when the prompt is left with Ctrl-C or Ctrl-D.
  */
 async function promptKey(io: Io): Promise<string> {
   const { stdin } = io;
@@ -75,12 +70,14 @@ async function promptKey(io: Io): Promise<string> {
       },
     });
     const rl = createInterface({ input: stdin, output: muted, terminal: true });
+    rl.on("SIGINT", () => rl.close());
     io.stderr.write("API key (hidden): ");
     try {
       return (
-        await new Promise<string>((resolve) =>
-          rl.question("", (answer) => resolve(answer)),
-        )
+        await new Promise<string>((resolve) => {
+          rl.once("close", () => resolve(""));
+          rl.question("", (answer) => resolve(answer));
+        })
       ).trim();
     } finally {
       rl.close();

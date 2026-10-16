@@ -157,6 +157,10 @@ function stored(): Record<string, string> | undefined {
 const piped = (text: string): Io["stdin"] =>
   Object.assign(Readable.from([text]), { isTTY: false });
 
+/** What a person types at the hidden prompt, keystroke by keystroke, then the terminal's end. */
+const typed = (...keys: string[]): Io["stdin"] =>
+  Object.assign(Readable.from(keys), { isTTY: true });
+
 describe("swaggerbot login", () => {
   it("checks the --key with GET /api/key at cost 0, stores it for the origin and says who it is, exit 0", async () => {
     const { code, stdout, stderr } = await cli(["login", "--key", "sb_live"]);
@@ -228,6 +232,37 @@ describe("swaggerbot login", () => {
     expect(stderr).toContain("No key given.");
     expect(stored()).toBeUndefined();
   });
+
+  it("takes the key typed at the hidden prompt without echoing it", async () => {
+    const { code, stdout, stderr } = await cli(["login"], {
+      stdin: typed("sb_", "live", "\r"),
+    });
+
+    expect(code).toBe(0);
+    expect(stderr).toBe("API key (hidden): \n");
+    expect(stdout).not.toContain("sb_live");
+    expect(stored()).toEqual({ [url]: "sb_live" });
+  });
+
+  it.each([
+    ["Ctrl-C", "\x03"],
+    ["Ctrl-D", "\x04"],
+    ["the terminal's end", ""],
+  ])(
+    "ends the hidden prompt on %s as no key given, sending nothing, exit 2",
+    async (_how, key) => {
+      const { code, stderr } = await cli(["login"], {
+        stdin: typed(...(key ? [key] : [])),
+      });
+
+      expect(code).toBe(2);
+      expect(seen).toHaveLength(0);
+      expect(stderr).toBe(
+        "API key (hidden): \nerror  No key given. Get one at https://swaggerbot.dev/keys and pass it with --key, or pipe it in.\n",
+      );
+      expect(stored()).toBeUndefined();
+    },
+  );
 
   it("prints the server's body byte for byte with --json, and still stores on 200 only", async () => {
     const live = await cli(["login", "--key", "sb_live", "--json"]);

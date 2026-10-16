@@ -1,4 +1,5 @@
-import { getJson, KEYS_URL, type KeyAnswer, TIMEOUT_MS } from "../http";
+import type { KeyAnswer } from "../../domain/api-key";
+import { getJson, KEYS_URL, TIMEOUT_MS } from "../http";
 import { creditsWords, palette, resetWords } from "../render";
 import { type CommandContext, failed } from "./lookup";
 

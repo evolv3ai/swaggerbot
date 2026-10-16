@@ -40,14 +40,6 @@ export type CliHttpResult<T> =
   | { ok: true; status: number; body: T; text: string; headers: Headers }
   | { ok: false; error: CliHttpError; text?: string };
 
-/** What `GET /api/key` answers: the key the bearer names and its credits as far as the key store knows them. */
-export type KeyAnswer = {
-  id: string;
-  remaining?: number;
-  limit?: number;
-  resetsAt?: string;
-};
-
 /**
  * The CLI's origin: `--url`, else `SWAGGERBOT_URL`, else swaggerbot.dev,
  * without a trailing slash.
