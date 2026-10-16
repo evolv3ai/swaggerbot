@@ -29,13 +29,14 @@ export type CommandContext = {
  * `swaggerbot lookup <name>`: `POST /api/lookup`, then one line per Outcome
  * (or the body as is with `--json`). Exit 0 for Resolved, 1 for any other
  * Outcome, 3 when the request failed. `--fresh` needs a key, so without
- * one it says what the server would, and sends nothing.
+ * one it says what the server would, and sends nothing; with `--json` the
+ * request goes out so stdout carries the server's own answer.
  */
 export async function runLookup(
   args: LookupArgs,
   { http, globals, io, color }: CommandContext,
 ): Promise<number> {
-  if (args.fresh && !http.key)
+  if (args.fresh && !http.key && !globals.json)
     return failed(
       {
         error: {

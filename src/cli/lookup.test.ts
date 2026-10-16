@@ -332,6 +332,22 @@ describe("swaggerbot lookup", () => {
     `);
   });
 
+  it("sends --fresh without a key under --json and prints the server's 401 body byte for byte, exit 3", async () => {
+    const { code, stdout, stderr } = await cli([
+      "lookup",
+      "Not Yet Indexed",
+      "--fresh",
+      "--json",
+    ]);
+
+    expect(seen).toHaveLength(1);
+    expect(seen[0]?.body).toEqual({ name: "Not Yet Indexed", fresh: true });
+    expect(seen[0]?.headers.authorization).toBeUndefined();
+    expect(code).toBe(3);
+    expect(stderr).toBe("");
+    expect(stdout).toBe(`${NEEDS_KEY_TEXT}\n`);
+  });
+
   it("explains a 401 for Discovery with where to get a key, exit 3", async () => {
     const { code, stdout, stderr } = await cli(["lookup", "Not Yet Indexed"]);
 
