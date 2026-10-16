@@ -20,3 +20,5 @@ jobs:
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm check
       - run: pnpm build
+      # The public CLI bundle must at least start.
+      - run: node cli/dist/swaggerbot.mjs --version

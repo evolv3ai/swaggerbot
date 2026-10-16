@@ -8,6 +8,8 @@ node_modules/
 .nitro/
 .tanstack/
 dist/
+# the public CLI bundle (pnpm build:cli)
+cli/dist/
 
 # local Index database
 data/

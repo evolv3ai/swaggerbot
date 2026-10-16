@@ -2,7 +2,7 @@
 
 # swagger.bot
 
-swagger.bot turns the name of an API into a verified OpenAPI/Swagger Spec with its Provenance, or says honestly why it can't. It is a single TanStack Start app (HTTP API, MCP endpoint and web UI) with the Index in SQLite. See [`docs/PRD.md`](docs/PRD.md) for what it does and why, [`CONTEXT.md`](CONTEXT.md) for the glossary and [`docs/adr/`](docs/adr/) for the decisions behind it. To use it rather than run it, read the docs at [swaggerbot.dev/docs](https://swaggerbot.dev/docs): the HTTP API with a `curl` and its answer for each route, the MCP server, the key rules and how to get a key.
+swagger.bot turns the name of an API into a verified OpenAPI/Swagger Spec with its Provenance, or says honestly why it can't. It is a single TanStack Start app (HTTP API, MCP endpoint and web UI) with the Index in SQLite. See [`docs/PRD.md`](docs/PRD.md) for what it does and why, [`CONTEXT.md`](CONTEXT.md) for the glossary and [`docs/adr/`](docs/adr/) for the decisions behind it. To use it rather than run it, read the docs at [swaggerbot.dev/docs](https://swaggerbot.dev/docs): the HTTP API with a `curl` and its answer for each route, the MCP server, the key rules and how to get a key. The `swaggerbot` command-line client is documented in [`cli/README.md`](cli/README.md).
 
 ## Install
 
@@ -19,7 +19,7 @@ The Index database lives at `DATABASE_PATH` (default `./data/swaggerbot.db`); it
 
 ```sh
 pnpm dev     # dev server; GET /api/health returns {"ok":true}
-pnpm build   # production build into .output/
+pnpm build   # production build into .output/, plus the public CLI bundle (cli/dist/)
 ```
 
 ## Running in production

@@ -8,13 +8,14 @@
   "packageManager": "pnpm@10.33.0",
   "scripts": {
     "dev": "vite dev",
-    "build": "vite build && vite build -c vite.cli.config.ts",
+    "build": "vite build && vite build -c vite.cli.config.ts && pnpm build:cli",
     "start": "node .output/server/index.mjs",
     "lint": "biome check .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "check": "pnpm lint && pnpm typecheck && pnpm test",
-    "bench": "tsx scripts/bench.ts"
+    "bench": "tsx scripts/bench.ts",
+    "build:cli": "vite build -c vite.public-cli.config.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "2.1.0",

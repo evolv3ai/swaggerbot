@@ -1,0 +1,31 @@
+{
+  "name": "swaggerbot",
+  "version": "0.1.0",
+  "description": "The swagger.bot CLI: the name of an API in, its verified OpenAPI/Swagger Spec with its Provenance out.",
+  "type": "module",
+  "bin": {
+    "swaggerbot": "./dist/swaggerbot.mjs"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/evolv3ai/swaggerbot.git",
+    "directory": "cli"
+  },
+  "homepage": "https://swaggerbot.dev",
+  "keywords": [
+    "openapi",
+    "swagger",
+    "api",
+    "cli"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}
