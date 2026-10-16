@@ -37,7 +37,13 @@ export async function runLookup(
 ): Promise<number> {
   if (args.fresh && !http.key)
     return failed(
-      { status: 401, error: "--fresh needs an API key.", hint: NEEDS_KEY_HINT },
+      {
+        error: {
+          status: 401,
+          error: "--fresh needs an API key.",
+          hint: NEEDS_KEY_HINT,
+        },
+      },
       globals,
       io,
       color,
@@ -52,7 +58,7 @@ export async function runLookup(
   const result = await postJson<Outcome>(http, "/api/lookup", body, {
     timeoutMs: http.key ? KEYED_LOOKUP_TIMEOUT_MS : TIMEOUT_MS,
   });
-  if (!result.ok) return failed(result.error, globals, io, color);
+  if (!result.ok) return failed(result, globals, io, color);
 
   if (globals.json) io.stdout.write(`${result.text}\n`);
   else
@@ -62,14 +68,21 @@ export async function runLookup(
   return outcomeExitCode(result.body);
 }
 
-/** A failed request: the error as JSON on stdout with `--json`, else for a person on stderr. Exit 3. */
+/**
+ * A failed request. With `--json`, stdout gets the server's body exactly as
+ * it answered, or `{"status":0,"error":…}` when no answer came; otherwise
+ * stderr gets the error for a person. Exit 3.
+ */
 export function failed(
-  error: CliHttpError,
+  { error, text }: { error: CliHttpError; text?: string },
   globals: Pick<CliGlobals, "json">,
   io: Io,
   color: boolean,
 ): number {
-  if (globals.json) io.stdout.write(`${JSON.stringify(error)}\n`);
+  if (globals.json)
+    io.stdout.write(
+      `${text ?? JSON.stringify({ status: error.status, error: error.error })}\n`,
+    );
   else io.stderr.write(renderError(error, color));
   return 3;
 }

@@ -71,8 +71,9 @@ function day(timestamp: string): string {
 
 /**
  * One line for the Outcome, the Spec's URL (its Published Form) and the
- * Provenance where there is one, and a second, dimmer line for what else
- * the Caller should know: alternates, candidates, reasons, diagnostics.
+ * Provenance where there is one; Resolved is that one line alone. Dimmer
+ * lines follow for what explains the other Outcomes: candidates, reasons,
+ * diagnostics.
  */
 export function renderOutcome(
   outcome: Outcome,
@@ -82,29 +83,15 @@ export function renderOutcome(
   const lines: string[] = [];
   switch (outcome.outcome) {
     case "Resolved": {
-      const spec = outcome.currentSpec;
       lines.push(
         [
           p.green(p.bold("Resolved")),
           `${outcome.api.name} (${outcome.api.id})`,
           outcome.provenance,
-          absolute(spec.downloads.published, baseUrl),
+          absolute(outcome.currentSpec.downloads.published, baseUrl),
           p.dim(`verified ${day(outcome.verifiedAt)}`),
         ].join("  "),
       );
-      const notes: string[] = [];
-      if (spec.apiVersion) notes.push(`API Version ${spec.apiVersion}`);
-      if (outcome.alternateSpecs.length > 0)
-        notes.push(
-          `${outcome.alternateSpecs.length} Alternate Spec${outcome.alternateSpecs.length === 1 ? "" : "s"}: ${outcome.alternateSpecs.map((s) => s.apiVersion ?? s.id.slice(0, 12)).join(", ")}`,
-        );
-      if (outcome.validityIssueCount > 0)
-        notes.push(
-          `${outcome.validityIssueCount} Validity Issue${outcome.validityIssueCount === 1 ? "" : "s"}`,
-        );
-      if (spec.normalized !== "ready")
-        notes.push(`Normalized Form ${spec.normalized}`);
-      if (notes.length > 0) lines.push(p.dim(`  ${notes.join("; ")}`));
       break;
     }
     case "Ambiguous": {

@@ -28,14 +28,10 @@ Resolved  Val API (val.town/api)  Official  https://swaggerbot.dev/api/specs/4b4
 - `--api-version V` asks for the Spec of that API Version instead of the Current Spec.
 - `--community` allows a Community Spec when no Official, Endorsed or Mirror one exists.
 - `--fresh` demands a Verification against the live web before answering. Needs an API key.
-- `--json` prints the Outcome exactly as the HTTP API answers it, for `jq` and programs.
+- `--json` prints the answer exactly as the HTTP API gives it, for `jq` and programs: the Outcome, or on a failed request the HTTP API's error body too. When no answer came at all (unreachable, timed out) it prints `{"status":0,"error":"…"}`.
 
 A name the Index already answers needs no key. Finding a new one on the live web is Discovery, which does: get one at <https://swaggerbot.dev/keys> and pass it with `--key <key>` or `SWAGGERBOT_API_KEY`.
 
 Exit codes: `0` Resolved, `1` any other Outcome, `2` usage error, `3` the request failed (no key, quota used, the service unreachable).
 
 Global flags: `--url <origin>` (or `SWAGGERBOT_URL`) points the CLI at another swagger.bot; `--no-color` (or `NO_COLOR`) turns colour off; `--version`; `--help`.
-
-## License
-
-MIT. Source: <https://github.com/evolv3ai/swaggerbot>.

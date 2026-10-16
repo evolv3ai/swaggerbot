@@ -30,10 +30,13 @@ export type CliHttp = {
  */
 export type CliHttpError = { status: number; error: string; hint?: string };
 
-/** A request's answer: the parsed JSON and the exact bytes, or the error. */
+/**
+ * A request's answer: the parsed JSON and the exact bytes, or the error
+ * with the exact bytes the server answered, when it answered at all.
+ */
 export type CliHttpResult<T> =
   | { ok: true; status: number; body: T; text: string; headers: Headers }
-  | { ok: false; error: CliHttpError };
+  | { ok: false; error: CliHttpError; text?: string };
 
 /**
  * The CLI's origin: `--url`, else `SWAGGERBOT_URL`, else swaggerbot.dev,
@@ -112,10 +115,11 @@ export async function postJson<T>(
           status: response.status,
           error: `${http.baseUrl} answered ${response.status} but not with JSON.`,
         },
+        text,
       };
     }
   }
-  return { ok: false, error: serverError(response, text, http.baseUrl) };
+  return { ok: false, error: serverError(response, text, http.baseUrl), text };
 }
 
 /** A failed response as the CLI's error: the server's words, plus a way past. */

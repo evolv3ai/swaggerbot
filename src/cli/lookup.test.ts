@@ -213,7 +213,6 @@ describe("swaggerbot lookup", () => {
     expect(code).toBe(0);
     expect(stdout).toMatchInlineSnapshot(`
       "Resolved  Val API (val.town/api)  Official  https://swaggerbot.dev/api/specs/4b446f57c9327311b6b68ad0a0e53b19341971a436cd9f0fda2630e3445483df/published  verified 2026-09-24
-        API Version 1
       "
     `);
   });
@@ -262,12 +261,19 @@ describe("swaggerbot lookup", () => {
     `);
   });
 
-  it("prints the body byte for byte with --json, then a newline", async () => {
+  it("prints the body byte for byte with --json, then a newline, errors included", async () => {
     for (const [name, answer] of Object.entries(ANSWERS)) {
-      if (answer.status !== 200 || name === "Not JSON") continue;
-      const { code, stdout } = await cli(["lookup", name, "--json"]);
+      const { code, stdout, stderr } = await cli([
+        "lookup",
+        name,
+        "--json",
+        "--key",
+        "sb_x",
+      ]);
       expect(stdout).toBe(`${answer.body}\n`);
-      expect(code).toBe(name === "Val Town" ? 0 : 1);
+      expect(stderr).toBe("");
+      const outcome = answer.status === 200 && name !== "Not JSON";
+      expect(code).toBe(!outcome ? 3 : name === "Val Town" ? 0 : 1);
     }
   });
 
@@ -390,16 +396,22 @@ describe("swaggerbot lookup", () => {
     expect(stderr).toContain("answered 200 but not with JSON");
   });
 
-  it("prints the error as JSON on stdout with --json, exit 3", async () => {
-    const { code, stdout, stderr } = await cli(["lookup", "Quota", "--json"]);
+  it("prints {status: 0, error} as JSON on stdout with --json when no answer came, exit 3", async () => {
+    const { code, stdout, stderr } = await cli(
+      ["lookup", "Val Town", "--json"],
+      {
+        at: refusedUrl,
+      },
+    );
 
     expect(code).toBe(3);
     expect(stderr).toBe("");
-    expect(JSON.parse(stdout)).toEqual({
-      status: 429,
-      error: "Daily quota used.",
-      hint: "Retry in 60 min.",
-    });
+    const printed = JSON.parse(stdout) as Record<string, unknown>;
+    expect(Object.keys(printed)).toEqual(["status", "error"]);
+    expect(printed.status).toBe(0);
+    expect(printed.error).toMatch(
+      /^Could not reach http:\/\/127\.0\.0\.1:\d+: .*ECONNREFUSED/,
+    );
   });
 
   it("takes --url over SWAGGERBOT_URL", async () => {
