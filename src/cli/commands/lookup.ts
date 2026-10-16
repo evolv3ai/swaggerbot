@@ -1,0 +1,75 @@
+import type { Outcome } from "../../domain/outcome";
+import type { CliCommand, CliGlobals } from "../args";
+import {
+  type CliHttp,
+  type CliHttpError,
+  KEYED_LOOKUP_TIMEOUT_MS,
+  NEEDS_KEY_HINT,
+  postJson,
+  TIMEOUT_MS,
+} from "../http";
+import {
+  type Io,
+  outcomeExitCode,
+  renderError,
+  renderOutcome,
+} from "../render";
+
+export type LookupArgs = Extract<CliCommand, { command: "lookup" }>;
+
+/** What `swaggerbot lookup` runs with, beyond its own arguments. */
+export type CommandContext = {
+  http: CliHttp;
+  globals: CliGlobals;
+  io: Io;
+  color: boolean;
+};
+
+/**
+ * `swaggerbot lookup <name>`: `POST /api/lookup`, then one line per Outcome
+ * (or the body as is with `--json`). Exit 0 for Resolved, 1 for any other
+ * Outcome, 3 when the request failed. `--fresh` needs a key, so without
+ * one it says what the server would, and sends nothing.
+ */
+export async function runLookup(
+  args: LookupArgs,
+  { http, globals, io, color }: CommandContext,
+): Promise<number> {
+  if (args.fresh && !http.key)
+    return failed(
+      { status: 401, error: "--fresh needs an API key.", hint: NEEDS_KEY_HINT },
+      globals,
+      io,
+      color,
+    );
+
+  const body = {
+    name: args.name,
+    ...(args.apiVersion === undefined ? {} : { apiVersion: args.apiVersion }),
+    ...(args.community ? { allowCommunity: true } : {}),
+    ...(args.fresh ? { fresh: true } : {}),
+  };
+  const result = await postJson<Outcome>(http, "/api/lookup", body, {
+    timeoutMs: http.key ? KEYED_LOOKUP_TIMEOUT_MS : TIMEOUT_MS,
+  });
+  if (!result.ok) return failed(result.error, globals, io, color);
+
+  if (globals.json) io.stdout.write(`${result.text}\n`);
+  else
+    io.stdout.write(
+      renderOutcome(result.body, { baseUrl: http.baseUrl, color }),
+    );
+  return outcomeExitCode(result.body);
+}
+
+/** A failed request: the error as JSON on stdout with `--json`, else for a person on stderr. Exit 3. */
+export function failed(
+  error: CliHttpError,
+  globals: Pick<CliGlobals, "json">,
+  io: Io,
+  color: boolean,
+): number {
+  if (globals.json) io.stdout.write(`${JSON.stringify(error)}\n`);
+  else io.stderr.write(renderError(error, color));
+  return 3;
+}

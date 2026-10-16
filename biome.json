@@ -67,6 +67,47 @@
           }
         }
       }
+    },
+    {
+      "includes": ["src/cli/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["@scalar/**"],
+                    "message": "Only src/spec-forms/ may import Scalar (ADR 0004)."
+                  },
+                  {
+                    "group": [
+                      "~/index-store/**",
+                      "**/index-store/**",
+                      "~/lookup/**",
+                      "**/lookup/**",
+                      "~/spec-forms/**",
+                      "**/spec-forms/**",
+                      "~/server/**",
+                      "**/server/**",
+                      "~/mcp/**",
+                      "**/mcp/**",
+                      "~/judge/**",
+                      "**/judge/**",
+                      "~/fetch/**",
+                      "**/fetch/**",
+                      "~/sources/**",
+                      "**/sources/**"
+                    ],
+                    "message": "The public CLI (src/cli/) talks to swagger.bot over HTTP only: types from src/domain/, nothing from the server."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
     }
   ]
 }
