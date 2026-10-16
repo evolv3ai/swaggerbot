@@ -1,5 +1,3 @@
-import { storedKeyOf } from "./config";
-
 /** Where the CLI goes unless `--url` or `SWAGGERBOT_URL` says otherwise. */
 export const DEFAULT_URL = "https://swaggerbot.dev";
 
@@ -55,20 +53,15 @@ export function baseUrlOf(
 }
 
 /**
- * The key: `--key`, else `SWAGGERBOT_API_KEY`, else the one `swaggerbot
- * login` stored in the config file for `baseUrl`'s origin (D3), so
- * another origin never receives it; none when there is none of these.
+ * The key in hand: `--key`, else `SWAGGERBOT_API_KEY`; none without either.
+ * The one `swaggerbot login` stored comes after these (D3), read by a
+ * command only when it needs a key (`storedKeyOf`).
  */
 export function keyOf(
   flag: string | undefined,
   env: NodeJS.ProcessEnv,
-  config?: { path: string; baseUrl: string },
 ): string | undefined {
-  return (
-    flag ??
-    (env.SWAGGERBOT_API_KEY?.trim() || undefined) ??
-    (config ? storedKeyOf(config.path, config.baseUrl) : undefined)
-  );
+  return flag ?? (env.SWAGGERBOT_API_KEY?.trim() || undefined);
 }
 
 /** `swaggerbot-cli/<version> node/<v>`, so the server can tell the CLI apart. */

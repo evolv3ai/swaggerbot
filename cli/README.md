@@ -56,7 +56,7 @@ Signed out of https://swaggerbot.dev: the stored key is forgotten
 
 `key` shows the key in use: its id, the credits left today and when they reset. `logout` forgets the stored key, and says so when there was none.
 
-The key a command sends is `--key`, else `SWAGGERBOT_API_KEY`, else the one `login` stored for the swagger.bot it talks to. Stored keys live in a config file, readable only by you (`0600`): `$XDG_CONFIG_HOME/swaggerbot/config.json` (`~/.config/swaggerbot/config.json`), `%APPDATA%\swaggerbot\config.json` on Windows, or wherever `SWAGGERBOT_CONFIG` points. Each key is kept under the origin it was checked with and sent to that origin only: `--url` pointing elsewhere never receives it. The key is never printed or written anywhere else.
+The key a command sends is `--key`, else `SWAGGERBOT_API_KEY`, else the one `login` stored for the swagger.bot it talks to. The stored key is read only when a command needs one: `key`, `--fresh`, and a `lookup` the Index can't answer, which is then sent again with it. Stored keys live in a config file, readable only by you (`0600`): `$XDG_CONFIG_HOME/swaggerbot/config.json` (`~/.config/swaggerbot/config.json`), `%APPDATA%\swaggerbot\config.json` on Windows, or wherever `SWAGGERBOT_CONFIG` points. Each key is kept under the origin it was checked with and sent to that origin only: `--url` pointing elsewhere never receives it. The key is never printed or written anywhere else. A config file that isn't JSON is read as holding no key, with a warning on stderr, and the next `login` or `logout` replaces it.
 
 With `--json`, `login` and `key` print the service's answer (`{ "id", "remaining"?, "limit"?, "resetsAt"? }`) as is, and `logout` prints `{ "url", "removed" }`.
 

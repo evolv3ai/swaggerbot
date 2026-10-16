@@ -186,6 +186,12 @@ export function renderError(error: CliHttpError, color: boolean): string {
   return `${lines.join("\n")}\n`;
 }
 
+/** A warning, for stderr: something the command went on past. */
+export function renderWarning(message: string, color: boolean): string {
+  const p = palette(color);
+  return `${p.yellow(p.bold("warning"))}  ${message}\n`;
+}
+
 /** A usage error, for stderr, with where to read the usage. */
 export function renderUsageError(message: string, color: boolean): string {
   const p = palette(color);

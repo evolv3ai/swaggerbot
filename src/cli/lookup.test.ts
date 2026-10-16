@@ -1,5 +1,7 @@
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { EXAMPLES } from "../components/docs/reference";
 import type { Outcome } from "../domain/outcome";
@@ -214,7 +216,12 @@ async function cli(
     stderr: { write: (text) => (stderr += text) },
     isTTY,
     stderrIsTTY,
-    env: { SWAGGERBOT_URL: at, ...env },
+    // No config file: these tests are about the key in hand, or none.
+    env: {
+      SWAGGERBOT_URL: at,
+      SWAGGERBOT_CONFIG: join(tmpdir(), "swaggerbot-cli-lookup-none.json"),
+      ...env,
+    },
   };
   const code = await runCli(args, io);
   return { code, stdout, stderr };

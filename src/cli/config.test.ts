@@ -1,5 +1,4 @@
 import {
-  existsSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -20,10 +19,13 @@ import { keyOf } from "./http";
 
 let dir: string;
 let path: string;
+let notes: string[];
+const note = (message: string) => notes.push(message);
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "swaggerbot-cli-config-"));
   path = join(dir, "nested", "config.json");
+  notes = [];
 });
 
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
@@ -61,7 +63,7 @@ describe("configPathOf", () => {
 
 describe("the config file", () => {
   it("is written 0600 in a 0700 directory, as { keys: { origin: key } }", () => {
-    storeKey(path, "https://swaggerbot.dev", "sb_one");
+    storeKey(path, "https://swaggerbot.dev", "sb_one", note);
 
     expect(JSON.parse(readFileSync(path, "utf8"))).toEqual({
       keys: { "https://swaggerbot.dev": "sb_one" },
@@ -73,60 +75,74 @@ describe("the config file", () => {
   });
 
   it("keeps one key per origin and reads it for that origin only", () => {
-    storeKey(path, "https://swaggerbot.dev", "sb_one");
-    storeKey(path, "http://localhost:3000/some/path", "sb_local");
-    storeKey(path, "https://swaggerbot.dev", "sb_two");
+    storeKey(path, "https://swaggerbot.dev", "sb_one", note);
+    storeKey(path, "http://localhost:3000/some/path", "sb_local", note);
+    storeKey(path, "https://swaggerbot.dev", "sb_two", note);
 
-    expect(readConfig(path).keys).toEqual({
+    expect(readConfig(path, note).keys).toEqual({
       "https://swaggerbot.dev": "sb_two",
       "http://localhost:3000": "sb_local",
     });
-    expect(storedKeyOf(path, "https://swaggerbot.dev")).toBe("sb_two");
-    expect(storedKeyOf(path, "http://localhost:3000")).toBe("sb_local");
-    expect(storedKeyOf(path, "https://other.example")).toBeUndefined();
-    expect(storedKeyOf(path, "not a url")).toBeUndefined();
+    expect(storedKeyOf(path, "https://swaggerbot.dev", note)).toBe("sb_two");
+    expect(storedKeyOf(path, "http://localhost:3000", note)).toBe("sb_local");
+    expect(storedKeyOf(path, "https://other.example", note)).toBeUndefined();
+    expect(storedKeyOf(path, "not a url", note)).toBeUndefined();
+    expect(notes).toEqual([]);
   });
 
-  it("is empty when missing, and an error naming it when it isn't JSON", () => {
-    expect(readConfig(path)).toEqual({ keys: {} });
-    storeKey(path, "https://swaggerbot.dev", "sb_one");
+  it("is empty when missing, and empty with a note naming it when it isn't JSON", () => {
+    expect(readConfig(path, note)).toEqual({ keys: {} });
+    storeKey(path, "https://swaggerbot.dev", "sb_one", note);
     rmSync(path);
-    expect(readConfig(path)).toEqual({ keys: {} });
+    expect(readConfig(path, note)).toEqual({ keys: {} });
+    expect(notes).toEqual([]);
+
     const bad = join(dir, "bad.json");
     writeFileSync(bad, "{");
-    expect(() => readConfig(bad)).toThrow(`${bad} isn't JSON`);
+    expect(readConfig(bad, note)).toEqual({ keys: {} });
+    expect(storedKeyOf(bad, "https://swaggerbot.dev", note)).toBeUndefined();
+    expect(notes).toEqual([
+      `${bad} isn't JSON: read as holding no key; the next \`swaggerbot login\` or \`logout\` replaces it.`,
+      `${bad} isn't JSON: read as holding no key; the next \`swaggerbot login\` or \`logout\` replaces it.`,
+    ]);
+    expect(readFileSync(bad, "utf8")).toBe("{");
   });
 
-  it("forgets one origin's key on removeKey, says when there was none, and removes an emptied file", () => {
-    storeKey(path, "https://swaggerbot.dev", "sb_one");
-    storeKey(path, "https://other.example", "sb_other");
+  it("forgets one origin's key on removeKey, says when there was none, and leaves an emptied config", () => {
+    storeKey(path, "https://swaggerbot.dev", "sb_one", note);
+    storeKey(path, "https://other.example", "sb_other", note);
 
-    expect(removeKey(path, "https://swaggerbot.dev")).toBe(true);
-    expect(readConfig(path).keys).toEqual({
+    expect(removeKey(path, "https://swaggerbot.dev", note)).toBe(true);
+    expect(readConfig(path, note).keys).toEqual({
       "https://other.example": "sb_other",
     });
-    expect(removeKey(path, "https://swaggerbot.dev")).toBe(false);
-    expect(removeKey(path, "https://other.example")).toBe(true);
-    expect(existsSync(path)).toBe(false);
-    expect(removeKey(path, "https://other.example")).toBe(false);
+    expect(removeKey(path, "https://swaggerbot.dev", note)).toBe(false);
+    expect(removeKey(path, "https://other.example", note)).toBe(true);
+    expect(JSON.parse(readFileSync(path, "utf8"))).toEqual({ keys: {} });
+    expect(removeKey(path, "https://other.example", note)).toBe(false);
+    expect(notes).toEqual([]);
+  });
+
+  it("replaces a file that isn't JSON on storeKey and on removeKey, with a note each", () => {
+    const bad = join(dir, "bad.json");
+    writeFileSync(bad, "{");
+
+    expect(removeKey(bad, "https://swaggerbot.dev", note)).toBe(false);
+    expect(JSON.parse(readFileSync(bad, "utf8"))).toEqual({ keys: {} });
+    writeFileSync(bad, "{");
+    storeKey(bad, "https://swaggerbot.dev", "sb_one", note);
+    expect(JSON.parse(readFileSync(bad, "utf8"))).toEqual({
+      keys: { "https://swaggerbot.dev": "sb_one" },
+    });
+    expect(notes).toHaveLength(2);
   });
 });
 
 describe("keyOf", () => {
-  it("takes --key, else SWAGGERBOT_API_KEY, else the stored key for the origin, else none", () => {
-    storeKey(path, "https://swaggerbot.dev", "sb_stored");
-    const config = { path, baseUrl: "https://swaggerbot.dev" };
-
-    expect(keyOf("sb_flag", { SWAGGERBOT_API_KEY: "sb_env" }, config)).toBe(
-      "sb_flag",
-    );
-    expect(keyOf(undefined, { SWAGGERBOT_API_KEY: "sb_env" }, config)).toBe(
-      "sb_env",
-    );
-    expect(keyOf(undefined, {}, config)).toBe("sb_stored");
-    expect(
-      keyOf(undefined, {}, { path, baseUrl: "https://other.example" }),
-    ).toBeUndefined();
+  it("takes --key, else SWAGGERBOT_API_KEY, else none: the stored key is read by the command that needs it", () => {
+    expect(keyOf("sb_flag", { SWAGGERBOT_API_KEY: "sb_env" })).toBe("sb_flag");
+    expect(keyOf(undefined, { SWAGGERBOT_API_KEY: "sb_env" })).toBe("sb_env");
+    expect(keyOf(undefined, { SWAGGERBOT_API_KEY: "  " })).toBeUndefined();
     expect(keyOf(undefined, {})).toBeUndefined();
   });
 });

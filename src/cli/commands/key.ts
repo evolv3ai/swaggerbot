@@ -1,4 +1,5 @@
 import type { KeyAnswer } from "../../domain/api-key";
+import { storedKeyOf } from "../config";
 import { getJson, KEYS_URL, TIMEOUT_MS } from "../http";
 import { creditsWords, palette, resetWords } from "../render";
 import { type CommandContext, failed } from "./lookup";
@@ -11,9 +12,10 @@ import { type CommandContext, failed } from "./lookup";
  */
 export async function runKey(
   _args: unknown,
-  { http, globals, io, color, stderrColor }: CommandContext,
+  { http, configPath, note, globals, io, color, stderrColor }: CommandContext,
 ): Promise<number> {
-  if (!http.key)
+  const key = http.key ?? storedKeyOf(configPath, http.baseUrl, note);
+  if (!key)
     return failed(
       {
         error: {
@@ -26,7 +28,7 @@ export async function runKey(
       io,
       stderrColor,
     );
-  const result = await getJson<KeyAnswer>(http, "/api/key", {
+  const result = await getJson<KeyAnswer>({ ...http, key }, "/api/key", {
     timeoutMs: TIMEOUT_MS,
   });
   if (!result.ok) return failed(result, globals, io, stderrColor);

@@ -4,14 +4,15 @@ import type { CommandContext } from "./lookup";
 
 /**
  * `swaggerbot logout`: removes the key `login` stored for this
- * swagger.bot's origin, and says when there was none. Exit 0 either way.
- * With `--json`, `{ "url", "removed" }`.
+ * swagger.bot's origin, and says when there was none; a config file that
+ * isn't JSON is replaced by an empty one. Exit 0 either way. With `--json`,
+ * `{ "url", "removed" }`.
  */
 export async function runLogout(
   _args: unknown,
-  { http, configPath, globals, io, color }: CommandContext,
+  { http, configPath, note, globals, io, color }: CommandContext,
 ): Promise<number> {
-  const removed = removeKey(configPath, http.baseUrl);
+  const removed = removeKey(configPath, http.baseUrl, note);
   if (globals.json) {
     io.stdout.write(`${JSON.stringify({ url: http.baseUrl, removed })}\n`);
     return 0;

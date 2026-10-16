@@ -3,7 +3,6 @@ import {
   mkdirSync,
   readFileSync,
   renameSync,
-  unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
@@ -15,6 +14,9 @@ import { dirname, join } from "node:path";
  * in it, and the key is written nowhere else.
  */
 export type CliConfig = { keys: Record<string, string> };
+
+/** Told, on stderr, when the config file isn't the config: once per command, as only one read happens. */
+export type Note = (message: string) => void;
 
 /**
  * Where the config file lives: `SWAGGERBOT_CONFIG` when set; else
@@ -43,8 +45,12 @@ export function originOf(baseUrl: string): string | undefined {
   }
 }
 
-/** The config file as it stands, or an empty one when there is none; a file that isn't the config is an error naming it. */
-export function readConfig(path: string): CliConfig {
+/**
+ * The config file as it stands, or an empty one when there is none. A file
+ * that isn't JSON is read as empty too, and `note` is told, so no command
+ * is blocked by it and the next write replaces it.
+ */
+export function readConfig(path: string, note: Note): CliConfig {
   let text: string;
   try {
     text = readFileSync(path, "utf8");
@@ -56,7 +62,10 @@ export function readConfig(path: string): CliConfig {
   try {
     parsed = JSON.parse(text);
   } catch {
-    throw new Error(`${path} isn't JSON; fix or remove it.`);
+    note(
+      `${path} isn't JSON: read as holding no key; the next \`swaggerbot login\` or \`logout\` replaces it.`,
+    );
+    return { keys: {} };
   }
   const keys =
     parsed && typeof parsed === "object"
@@ -86,37 +95,45 @@ export function writeConfig(path: string, config: CliConfig): void {
 }
 
 /** The key stored for `baseUrl`'s origin, and no other's; none without one. */
-export function storedKeyOf(path: string, baseUrl: string): string | undefined {
+export function storedKeyOf(
+  path: string,
+  baseUrl: string,
+  note: Note,
+): string | undefined {
   const origin = originOf(baseUrl);
   if (!origin) return undefined;
-  return readConfig(path).keys[origin];
+  return readConfig(path, note).keys[origin];
 }
 
 /** Stores `key` for `baseUrl`'s origin, keeping the other origins' keys. */
-export function storeKey(path: string, baseUrl: string, key: string): void {
+export function storeKey(
+  path: string,
+  baseUrl: string,
+  key: string,
+  note: Note,
+): void {
   const origin = originOf(baseUrl);
   if (!origin) throw new Error(`${baseUrl} isn't a URL.`);
-  const config = readConfig(path);
+  const config = readConfig(path, note);
   config.keys[origin] = key;
   writeConfig(path, config);
 }
 
 /**
  * Removes the key stored for `baseUrl`'s origin: true when there was one.
- * A config with no key left is removed with it.
+ * A file that isn't JSON is replaced by an empty config, so `logout` always
+ * leaves a config with no key for the origin.
  */
-export function removeKey(path: string, baseUrl: string): boolean {
+export function removeKey(path: string, baseUrl: string, note: Note): boolean {
   const origin = originOf(baseUrl);
   if (!origin) return false;
-  const config = readConfig(path);
-  if (!(origin in config.keys)) return false;
+  let replace = false;
+  const config = readConfig(path, (message) => {
+    replace = true;
+    note(message);
+  });
+  const removed = origin in config.keys;
   delete config.keys[origin];
-  if (Object.keys(config.keys).length === 0) {
-    try {
-      unlinkSync(path);
-    } catch (err) {
-      if ((err as { code?: string }).code !== "ENOENT") throw err;
-    }
-  } else writeConfig(path, config);
-  return true;
+  if (removed || replace) writeConfig(path, config);
+  return removed;
 }

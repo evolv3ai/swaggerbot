@@ -6,7 +6,12 @@ import { runLogout } from "./commands/logout";
 import { type CommandContext, runLookup } from "./commands/lookup";
 import { configPathOf } from "./config";
 import { baseUrlOf, keyOf } from "./http";
-import { colorEnabled, type Io, renderUsageError } from "./render";
+import {
+  colorEnabled,
+  type Io,
+  renderUsageError,
+  renderWarning,
+} from "./render";
 
 /** The CLI's version, from `cli/package.json`, bundled in. */
 export const CLI_VERSION: string = pkg.version;
@@ -63,10 +68,11 @@ export async function runCli(argv: string[], io: Io): Promise<number> {
       return run(command, {
         http: {
           baseUrl,
-          key: keyOf(globals.key, io.env, { path: configPath, baseUrl }),
+          key: keyOf(globals.key, io.env),
           version: CLI_VERSION,
         },
         configPath,
+        note: (message) => io.stderr.write(renderWarning(message, stderrColor)),
         globals,
         io,
         color,

@@ -20,7 +20,7 @@ const NO_KEY_GIVEN = `No key given. Get one at ${KEYS_URL} and pass it with --ke
  */
 export async function runLogin(
   _args: unknown,
-  { http, configPath, globals, io, color, stderrColor }: CommandContext,
+  { http, configPath, note, globals, io, color, stderrColor }: CommandContext,
 ): Promise<number> {
   const key = globals.key ?? (await promptKey(io));
   if (!key) {
@@ -41,7 +41,7 @@ export async function runLogin(
     return failed({ error, text: result.text }, globals, io, stderrColor);
   }
 
-  storeKey(configPath, http.baseUrl, key);
+  storeKey(configPath, http.baseUrl, key, note);
   if (globals.json) {
     io.stdout.write(`${result.text}\n`);
     return 0;

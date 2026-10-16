@@ -1,4 +1,10 @@
-import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
+import {
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -60,7 +66,18 @@ const ANSWERS: Record<
   },
 };
 
-type Seen = { method?: string; url?: string; authorization?: string };
+type Seen = {
+  method?: string;
+  url?: string;
+  authorization?: string;
+  body?: unknown;
+};
+
+/** The fake's `POST /api/lookup`: an Index answer for Val Town, else Discovery, which needs the live key. */
+const RESOLVED_TEXT = JSON.stringify({ outcome: "Resolved" });
+const NEEDS_KEY_TEXT = JSON.stringify({
+  error: "Discovery needs an API key.",
+});
 
 let server: Server;
 let url: string;
@@ -70,6 +87,30 @@ const seen: Seen[] = [];
 
 beforeAll(async () => {
   server = createServer((req, res) => {
+    const bearer = /^Bearer (\S+)$/.exec(req.headers.authorization ?? "")?.[1];
+    if (req.method === "POST" && req.url === "/api/lookup") {
+      let raw = "";
+      req.on("data", (chunk) => {
+        raw += chunk;
+      });
+      req.on("end", () => {
+        const body = JSON.parse(raw) as { name: string; fresh?: boolean };
+        seen.push({
+          method: req.method,
+          url: req.url,
+          authorization: req.headers.authorization,
+          body,
+        });
+        const indexed = body.name === "Val Town" && !body.fresh;
+        const answer =
+          indexed || bearer === "sb_live"
+            ? { status: 200, body: RESOLVED_TEXT }
+            : { status: 401, body: NEEDS_KEY_TEXT };
+        res.writeHead(answer.status, { "content-type": "application/json" });
+        res.end(answer.body);
+      });
+      return;
+    }
     seen.push({
       method: req.method,
       url: req.url,
@@ -79,7 +120,6 @@ beforeAll(async () => {
       res.writeHead(404).end();
       return;
     }
-    const bearer = /^Bearer (\S+)$/.exec(req.headers.authorization ?? "")?.[1];
     const answer = bearer
       ? (ANSWERS[bearer] ?? {
           status: 401,
@@ -189,7 +229,7 @@ describe("swaggerbot login", () => {
   });
 
   it("ignores SWAGGERBOT_API_KEY and the stored key: login checks the key it is given", async () => {
-    storeKey(configPath, url, "sb_old");
+    storeKey(configPath, url, "sb_old", () => {});
     const { code } = await cli(["login", "--key", "sb_unkey"], {
       env: { SWAGGERBOT_API_KEY: "sb_env" },
     });
@@ -278,7 +318,7 @@ describe("swaggerbot login", () => {
   });
 
   it("leaves a key stored for the origin alone when signing in elsewhere, keyed by origin", async () => {
-    storeKey(configPath, "https://other.example", "sb_other");
+    storeKey(configPath, "https://other.example", "sb_other", () => {});
     await cli(["login", "--key", "sb_live"]);
 
     expect(stored()).toEqual({
@@ -290,7 +330,7 @@ describe("swaggerbot login", () => {
 
 describe("swaggerbot key", () => {
   it("sends the stored key for the origin and renders the id, credits and reset, exit 0", async () => {
-    storeKey(configPath, url, "sb_live");
+    storeKey(configPath, url, "sb_live", () => {});
     const { code, stdout, stderr } = await cli(["key"]);
 
     expect(stderr).toBe("");
@@ -302,20 +342,20 @@ describe("swaggerbot key", () => {
   });
 
   it("renders a spent key, a key without a limit, and one without figures", async () => {
-    storeKey(configPath, url, "sb_spent");
+    storeKey(configPath, url, "sb_spent", () => {});
     expect((await cli(["key"])).stdout).toBe(
       "key_spent  no credits left today of 100  resets at 00:00 UTC, in 5 h\n",
     );
-    storeKey(configPath, url, "sb_unkey");
+    storeKey(configPath, url, "sb_unkey", () => {});
     expect((await cli(["key"])).stdout).toBe(
       "key_unkey  1 credit left today\n",
     );
-    storeKey(configPath, url, "sb_bare");
+    storeKey(configPath, url, "sb_bare", () => {});
     expect((await cli(["key"])).stdout).toBe("key_bare  credits unknown\n");
   });
 
   it("takes --key, then SWAGGERBOT_API_KEY, over the stored key", async () => {
-    storeKey(configPath, url, "sb_live");
+    storeKey(configPath, url, "sb_live", () => {});
     await cli(["key"], { env: { SWAGGERBOT_API_KEY: "sb_unkey" } });
     expect(seen[0]?.authorization).toBe("Bearer sb_unkey");
     await cli(["key", "--key", "sb_bare"], {
@@ -325,7 +365,7 @@ describe("swaggerbot key", () => {
   });
 
   it("never sends the stored key to another origin: --url elsewhere has no key, exit 3", async () => {
-    storeKey(configPath, url, "sb_live");
+    storeKey(configPath, url, "sb_live", () => {});
     const { code, stderr } = await cli([
       "key",
       "--url",
@@ -353,7 +393,7 @@ describe("swaggerbot key", () => {
   });
 
   it("explains a 401 for a stored key that is no longer live, exit 3", async () => {
-    storeKey(configPath, url, "sb_dead");
+    storeKey(configPath, url, "sb_dead", () => {});
     const { code, stderr } = await cli(["key"]);
 
     expect(code).toBe(3);
@@ -362,7 +402,7 @@ describe("swaggerbot key", () => {
   });
 
   it("prints the body byte for byte with --json", async () => {
-    storeKey(configPath, url, "sb_live");
+    storeKey(configPath, url, "sb_live", () => {});
     const { code, stdout } = await cli(["key", "--json"]);
 
     expect(code).toBe(0);
@@ -372,8 +412,8 @@ describe("swaggerbot key", () => {
 
 describe("swaggerbot logout", () => {
   it("removes the origin's key and keeps the others', exit 0", async () => {
-    storeKey(configPath, url, "sb_live");
-    storeKey(configPath, "https://other.example", "sb_other");
+    storeKey(configPath, url, "sb_live", () => {});
+    storeKey(configPath, "https://other.example", "sb_other", () => {});
     const { code, stdout } = await cli(["logout"]);
 
     expect(code).toBe(0);
@@ -390,7 +430,7 @@ describe("swaggerbot logout", () => {
   });
 
   it("answers { url, removed } with --json", async () => {
-    storeKey(configPath, url, "sb_live");
+    storeKey(configPath, url, "sb_live", () => {});
     expect((await cli(["logout", "--json"])).stdout).toBe(
       `${JSON.stringify({ url, removed: true })}\n`,
     );
@@ -401,16 +441,137 @@ describe("swaggerbot logout", () => {
 });
 
 describe("the stored key and lookup", () => {
-  it("lets --fresh through with the stored key for the origin", async () => {
-    storeKey(configPath, url, "sb_live");
-    // The fake answers only /api/key: a 404 shows the request went out with the bearer.
-    const { code } = await cli(["lookup", "Val Town", "--fresh"]);
+  it("sends an Index lookup without the stored key", async () => {
+    storeKey(configPath, url, "sb_live", () => {});
+    const { code, stdout, stderr } = await cli([
+      "lookup",
+      "Val Town",
+      "--json",
+    ]);
+
+    expect(code).toBe(0);
+    expect(stderr).toBe("");
+    expect(stdout).toBe(`${RESOLVED_TEXT}\n`);
+    expect(seen).toEqual([
+      {
+        method: "POST",
+        url: "/api/lookup",
+        authorization: undefined,
+        body: { name: "Val Town" },
+      },
+    ]);
+  });
+
+  it("sends a Discovery lookup again with the stored key once the server asks for one", async () => {
+    storeKey(configPath, url, "sb_live", () => {});
+    const { code, stdout, stderr } = await cli([
+      "lookup",
+      "Not Yet Indexed",
+      "--json",
+    ]);
+
+    expect(code).toBe(0);
+    expect(stderr).toBe("");
+    expect(stdout).toBe(`${RESOLVED_TEXT}\n`);
+    expect(seen.map((s) => s.authorization)).toEqual([
+      undefined,
+      "Bearer sb_live",
+    ]);
+  });
+
+  it("explains the 401 for Discovery when no key is stored, sending once", async () => {
+    const { code, stderr } = await cli(["lookup", "Not Yet Indexed"]);
 
     expect(code).toBe(3);
-    expect(seen[0]).toEqual({
+    expect(seen).toHaveLength(1);
+    expect(stderr).toContain("Discovery needs an API key.");
+  });
+
+  it("lets --fresh through with the stored key for the origin, sent the first time", async () => {
+    storeKey(configPath, url, "sb_live", () => {});
+    const { code, stdout } = await cli([
+      "lookup",
+      "Val Town",
+      "--fresh",
+      "--json",
+    ]);
+
+    expect(code).toBe(0);
+    expect(stdout).toBe(`${RESOLVED_TEXT}\n`);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({
       method: "POST",
       url: "/api/lookup",
       authorization: "Bearer sb_live",
+      body: { name: "Val Town", fresh: true },
     });
+  });
+
+  it("does not send the stored key again when the key in hand is refused", async () => {
+    storeKey(configPath, url, "sb_live", () => {});
+    const { code } = await cli(["lookup", "Not Yet Indexed", "--key", "sb_x"]);
+
+    expect(code).toBe(3);
+    expect(seen.map((s) => s.authorization)).toEqual(["Bearer sb_x"]);
+  });
+});
+
+describe("a config file that isn't JSON", () => {
+  const warning = () =>
+    `warning  ${configPath} isn't JSON: read as holding no key; the next \`swaggerbot login\` or \`logout\` replaces it.\n`;
+
+  beforeEach(() => writeFileSync(configPath, "{"));
+
+  it("doesn't touch an Index lookup, which never reads it", async () => {
+    const { code, stdout, stderr } = await cli([
+      "lookup",
+      "Val Town",
+      "--json",
+    ]);
+
+    expect(code).toBe(0);
+    expect(stderr).toBe("");
+    expect(stdout).toBe(`${RESOLVED_TEXT}\n`);
+    expect(readFileSync(configPath, "utf8")).toBe("{");
+  });
+
+  it("is said once when a Discovery lookup looks for the stored key, then the 401 is explained", async () => {
+    const { code, stderr } = await cli(["lookup", "Not Yet Indexed"]);
+
+    expect(code).toBe(3);
+    expect(stderr).toBe(
+      `${warning()}error  Discovery needs an API key.\n  Discovery needs an API key. Get one at https://swaggerbot.dev/keys, then run \`swaggerbot login\`.\n`,
+    );
+    expect(readFileSync(configPath, "utf8")).toBe("{");
+  });
+
+  it("is replaced by login, which stores the key it checked", async () => {
+    const { code, stdout, stderr } = await cli(["login", "--key", "sb_live"]);
+
+    expect(code).toBe(0);
+    expect(stderr).toBe(warning());
+    expect(stdout).toBe(
+      `Signed in to ${url} as key_abcd2345: 87 credits left today\n`,
+    );
+    expect(stored()).toEqual({ [url]: "sb_live" });
+  });
+
+  it("is replaced by logout with an empty config, which had no key to forget", async () => {
+    const { code, stdout, stderr } = await cli(["logout"]);
+
+    expect(code).toBe(0);
+    expect(stderr).toBe(warning());
+    expect(stdout).toBe(`No key was stored for ${url}; nothing to forget\n`);
+    expect(stored()).toEqual({});
+  });
+
+  it("leaves key saying no key is configured", async () => {
+    const { code, stderr } = await cli(["key"]);
+
+    expect(code).toBe(3);
+    expect(seen).toHaveLength(0);
+    expect(stderr).toBe(
+      `${warning()}error  No API key is configured for ${url}.\n  Get one at https://swaggerbot.dev/keys, then run \`swaggerbot login\`.\n`,
+    );
   });
 });
