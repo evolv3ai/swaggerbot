@@ -7,14 +7,17 @@ import { colorEnabled, type Io, renderUsageError } from "./render";
 /** The CLI's version, from `cli/package.json`, bundled in. */
 export const CLI_VERSION: string = pkg.version;
 
+/** Every command the table runs: all but `help` and `version`, which `runCli` answers itself. */
+type RunCommand = Exclude<CliCommand["command"], "help" | "version">;
+
 /** A command's runner: its validated arguments and the context, to an exit code. */
-type Runner<K extends CliCommand["command"]> = (
+type Runner<K extends RunCommand> = (
   args: Extract<CliCommand, { command: K }>,
   context: CommandContext,
 ) => Promise<number>;
 
-/** The command table. Issues 2 to 5 add one line each. */
-const COMMANDS: { [K in CliCommand["command"]]?: Runner<K> } = {
+/** The command table, one line per command; a command missing here is a type error. Issues 2 to 5 add theirs. */
+const COMMANDS: { [K in RunCommand]: Runner<K> } = {
   lookup: runLookup,
 };
 
@@ -44,8 +47,7 @@ export async function runCli(argv: string[], io: Io): Promise<number> {
       io.stdout.write(`${CLI_USAGE}\n`);
       return 0;
     default: {
-      const run = COMMANDS[command.command] as Runner<typeof command.command>;
-      return run(command, {
+      return COMMANDS[command.command](command, {
         http: {
           baseUrl: baseUrlOf(globals.url, io.env),
           key: keyOf(globals.key, io.env),
