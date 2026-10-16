@@ -17,9 +17,11 @@ import {
 
 export type LookupArgs = Extract<CliCommand, { command: "lookup" }>;
 
-/** What `swaggerbot lookup` runs with, beyond its own arguments. */
+/** What a command runs with, beyond its own arguments. */
 export type CommandContext = {
   http: CliHttp;
+  /** The config file `login` writes and `logout` empties (D3). */
+  configPath: string;
   globals: CliGlobals;
   io: Io;
   /** Whether to colour stdout, and separately stderr. */

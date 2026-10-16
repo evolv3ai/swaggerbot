@@ -1,3 +1,5 @@
+import { storedKeyOf } from "./config";
+
 /** Where the CLI goes unless `--url` or `SWAGGERBOT_URL` says otherwise. */
 export const DEFAULT_URL = "https://swaggerbot.dev";
 
@@ -38,6 +40,14 @@ export type CliHttpResult<T> =
   | { ok: true; status: number; body: T; text: string; headers: Headers }
   | { ok: false; error: CliHttpError; text?: string };
 
+/** What `GET /api/key` answers: the key the bearer names and its credits as far as the key store knows them. */
+export type KeyAnswer = {
+  id: string;
+  remaining?: number;
+  limit?: number;
+  resetsAt?: string;
+};
+
 /**
  * The CLI's origin: `--url`, else `SWAGGERBOT_URL`, else swaggerbot.dev,
  * without a trailing slash.
@@ -52,12 +62,21 @@ export function baseUrlOf(
   );
 }
 
-/** The key: `--key`, else `SWAGGERBOT_API_KEY`; none when neither is set. */
+/**
+ * The key: `--key`, else `SWAGGERBOT_API_KEY`, else the one `swaggerbot
+ * login` stored in the config file for `baseUrl`'s origin (D3), so
+ * another origin never receives it; none when there is none of these.
+ */
 export function keyOf(
   flag: string | undefined,
   env: NodeJS.ProcessEnv,
+  config?: { path: string; baseUrl: string },
 ): string | undefined {
-  return flag ?? (env.SWAGGERBOT_API_KEY?.trim() || undefined);
+  return (
+    flag ??
+    (env.SWAGGERBOT_API_KEY?.trim() || undefined) ??
+    (config ? storedKeyOf(config.path, config.baseUrl) : undefined)
+  );
 }
 
 /** `swaggerbot-cli/<version> node/<v>`, so the server can tell the CLI apart. */
@@ -78,11 +97,32 @@ export async function postJson<T>(
   body: unknown,
   { timeoutMs }: { timeoutMs: number },
 ): Promise<CliHttpResult<T>> {
+  return requestJson(http, path, { timeoutMs, method: "POST", body });
+}
+
+/** `GET <baseUrl><path>`, otherwise as `postJson`. */
+export async function getJson<T>(
+  http: CliHttp,
+  path: string,
+  { timeoutMs }: { timeoutMs: number },
+): Promise<CliHttpResult<T>> {
+  return requestJson(http, path, { timeoutMs, method: "GET" });
+}
+
+async function requestJson<T>(
+  http: CliHttp,
+  path: string,
+  {
+    timeoutMs,
+    method,
+    body,
+  }: { timeoutMs: number; method: "GET" | "POST"; body?: unknown },
+): Promise<CliHttpResult<T>> {
   const headers: Record<string, string> = {
-    "content-type": "application/json",
     accept: "application/json",
     "user-agent": userAgentOf(http.version),
   };
+  if (method === "POST") headers["content-type"] = "application/json";
   if (http.key) headers.authorization = `Bearer ${http.key}`;
   const doFetch = http.fetch ?? globalThis.fetch;
 
@@ -90,9 +130,9 @@ export async function postJson<T>(
   let text: string;
   try {
     response = await doFetch(`${http.baseUrl}${path}`, {
-      method: "POST",
+      method,
       headers,
-      body: JSON.stringify(body),
+      ...(method === "POST" ? { body: JSON.stringify(body) } : {}),
       signal: AbortSignal.timeout(timeoutMs),
     });
     text = await response.text();
@@ -208,6 +248,11 @@ function retryAfterWords(value: string): string {
   const seconds = /^\d+$/.test(value)
     ? Number(value)
     : Math.ceil((Date.parse(value) - Date.now()) / 1000);
+  return durationWords(seconds);
+}
+
+/** A wait in a person's words: `45 s`, `20 min`, `5 h`; `a moment` when it is over or unknown. */
+export function durationWords(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds <= 0) return "a moment";
   if (seconds < 90) return `${seconds} s`;
   if (seconds < 5400) return `${Math.ceil(seconds / 60)} min`;

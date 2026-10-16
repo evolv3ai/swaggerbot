@@ -164,14 +164,20 @@ describe("createKeys as a KeyStore", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it("verifies at cost 0 like findKey, spending nothing", async () => {
+  it("verifies at cost 0 like findKey, reading the day's figures and spending nothing", async () => {
     const { id, secret } = keys.createKey("ada", 2);
+    const resetsAt = "2026-09-23T00:00:00.000Z";
 
     expect(await keys.verify(secret, { cost: 0, now: NOW })).toEqual({
       ok: true,
-      key: { id, owner: "ada" },
+      key: { id, owner: "ada", remaining: 2, limit: 2, resetsAt },
     });
     expect(keys.listKeys("2026-09-22")[0]?.used).toBe(0);
+    await keys.verify(secret, { cost: 1, now: NOW });
+    expect(await keys.verify(secret, { cost: 0, now: NOW })).toMatchObject({
+      key: { remaining: 1, limit: 2 },
+    });
+    expect(keys.listKeys("2026-09-22")[0]?.used).toBe(1);
     expect(await keys.verify("sb_nope", { cost: 0 })).toEqual({
       ok: false,
       reason: "unknown",

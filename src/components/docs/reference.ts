@@ -74,6 +74,12 @@ export const ROUTES: RouteRow[] = [
     gives: "The Spec's Published Form or Normalized Form.",
     key: "No",
   },
+  {
+    route: "GET /api/key",
+    gives:
+      "The key the bearer names: its `id`, and today's credits `remaining`, the `limit` and when they reset (`resetsAt`) as far as the key store knows them. Verifies the key without spending a credit.",
+    key: "Yes (costs nothing)",
+  },
   { route: "GET /api/health", gives: '`{"ok":true}`', key: "No" },
 ];
 

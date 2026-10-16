@@ -4,10 +4,14 @@ export const CLI_USAGE = `usage: swaggerbot <command> [options]
   lookup <name> [--api-version V] [--community] [--fresh]
                       resolve a name to its verified Spec and Provenance,
                       or say why not
+  login [--key K]     check a key and store it for this swagger.bot
+                      (prompted for it when --key isn't given)
+  logout              forget the stored key
+  key                 the key in use: its id, credits left, when they reset
 Options:
   --json              print the answer as the HTTP API gives it
-  --key <key>         the API key (or SWAGGERBOT_API_KEY); needed for
-                      Discovery and --fresh
+  --key <key>         the API key (or SWAGGERBOT_API_KEY, or the one
+                      login stored); needed for Discovery and --fresh
   --url <origin>      another swagger.bot (or SWAGGERBOT_URL);
                       default https://swaggerbot.dev
   --no-color          no colour (or NO_COLOR); never on a pipe anyway
@@ -25,7 +29,7 @@ export type CliGlobals = {
   noColor: boolean;
 };
 
-/** A `swaggerbot` command, once validated. Issues 2 to 5 add theirs here. */
+/** A `swaggerbot` command, once validated. Issues 3 to 5 add theirs here. */
 export type CliCommand =
   | {
       command: "lookup";
@@ -34,6 +38,9 @@ export type CliCommand =
       community: boolean;
       fresh: boolean;
     }
+  | { command: "login" }
+  | { command: "logout" }
+  | { command: "key" }
   | { command: "help" }
   | { command: "version" };
 
@@ -132,6 +139,12 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
         },
         globals,
       };
+    }
+    case "login":
+    case "logout":
+    case "key": {
+      if (rest.length > 0) return fail(`unexpected argument: ${rest[0]}`);
+      return { ok: true, command: { command }, globals };
     }
     case undefined:
       return fail("no command given");

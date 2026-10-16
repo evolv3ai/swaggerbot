@@ -157,6 +157,53 @@ export async function answerLookup(
   return { status: 200, body: await lookup(request), headers: quotaHeaders };
 }
 
+/** The body of `GET /api/key`'s 400, when no bearer is sent. */
+export const KEY_ROUTE_NEEDS_BEARER = {
+  error: "Send the key as Authorization: Bearer <key>.",
+};
+
+/** What `GET /api/key` answers: the key the bearer names and its credits, as far as the store knows them. */
+export type KeyAnswer = {
+  id: string;
+  remaining?: number;
+  limit?: number;
+  resetsAt?: string;
+};
+
+/**
+ * Handles `GET /api/key`, the CLI's `login` and `key` (Slice 8): 429 when
+ * the client IP is over its rate limit; 400 without a bearer; else the
+ * bearer verified at cost 0 by `authenticate`, so a key that isn't live is
+ * the usual 401 and a key store outage the usual 503; 200 with the key's
+ * id and today's figures, never cached. `getApp` is called only once a
+ * bearer is there to check.
+ */
+export async function handleKeyRequest(
+  request: Request,
+  getApp: () => Pick<LookupApp, "keys">,
+  gate: Pick<Gate, "rateLimiter" | "clientIpHeader">,
+): Promise<Response> {
+  const limited = rateLimited(request, gate);
+  if (limited) return limited;
+  if (bearerOf(request) === undefined)
+    return Response.json(KEY_ROUTE_NEEDS_BEARER, { status: 400 });
+
+  const auth = await authenticate(request, getApp().keys);
+  if ("response" in auth) return auth.response;
+  if (!auth.key) return Response.json(KEY_ROUTE_NEEDS_BEARER, { status: 400 });
+  const { id, remaining, limit, resetsAt } = auth.key;
+  const body: KeyAnswer = {
+    id,
+    ...(remaining === undefined ? {} : { remaining: Math.max(0, remaining) }),
+    ...(limit === undefined ? {} : { limit }),
+    ...(resetsAt === undefined ? {} : { resetsAt }),
+  };
+  return Response.json(body, {
+    status: 200,
+    headers: { "cache-control": "private, no-store" },
+  });
+}
+
 /**
  * The live key a request names in `Authorization: Bearer`, verified at cost
  * 0, with its secret; no key when the header isn't sent (the key store is

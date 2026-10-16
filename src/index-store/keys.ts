@@ -288,8 +288,9 @@ export function createKeys(
     },
 
     /**
-     * Cost 0 is `findKey`; cost 1 also takes one from the key's quota for
-     * `now`'s UTC day (`takeQuota`).
+     * Cost 0 is `findKey`, with the day's figures read and nothing spent;
+     * cost 1 also takes one from the key's quota for `now`'s UTC day
+     * (`takeQuota`).
      */
     async verify(
       secret: string,
@@ -303,13 +304,19 @@ export function createKeys(
       if (!found) return { ok: false, reason: "unknown" };
       if (found.revokedAt) return { ok: false, reason: "revoked" };
       const key = { id: found.id, owner: found.owner };
-      if (cost === 0) return { ok: true, key };
-      const quota = store.takeQuota(
-        found.id,
-        utcDay(now),
-        found.dailyQuota ?? dailyQuota ?? defaultDailyQuota(env),
-      );
+      const limit = found.dailyQuota ?? dailyQuota ?? defaultDailyQuota(env);
       const resetsAt = nextUtcMidnight(now);
+      if (cost === 0)
+        return {
+          ok: true,
+          key: {
+            ...key,
+            remaining: Math.max(0, limit - usedOn(found.id, utcDay(now))),
+            limit,
+            resetsAt,
+          },
+        };
+      const quota = store.takeQuota(found.id, utcDay(now), limit);
       if (!quota.allowed)
         return {
           ok: false,

@@ -1,6 +1,10 @@
 import pkg from "../../cli/package.json";
 import { CLI_USAGE, type CliCommand, parseCliArgs } from "./args";
+import { runKey } from "./commands/key";
+import { runLogin } from "./commands/login";
+import { runLogout } from "./commands/logout";
 import { type CommandContext, runLookup } from "./commands/lookup";
+import { configPathOf } from "./config";
 import { baseUrlOf, keyOf } from "./http";
 import { colorEnabled, type Io, renderUsageError } from "./render";
 
@@ -16,9 +20,12 @@ type Runner<K extends RunCommand> = (
   context: CommandContext,
 ) => Promise<number>;
 
-/** The command table, one line per command; a command missing here is a type error. Issues 2 to 5 add theirs. */
+/** The command table, one line per command; a command missing here is a type error. Issues 3 to 5 add theirs. */
 const COMMANDS: { [K in RunCommand]: Runner<K> } = {
   lookup: runLookup,
+  login: runLogin,
+  logout: runLogout,
+  key: runKey,
 };
 
 /**
@@ -47,12 +54,19 @@ export async function runCli(argv: string[], io: Io): Promise<number> {
       io.stdout.write(`${CLI_USAGE}\n`);
       return 0;
     default: {
-      return COMMANDS[command.command](command, {
+      const baseUrl = baseUrlOf(globals.url, io.env);
+      const configPath = configPathOf(io.env);
+      // Indexing the table by the union's `command` gives the runners'
+      // intersection, which takes no command at all; each runner takes
+      // exactly the command the switch narrowed to.
+      const run = COMMANDS[command.command] as Runner<typeof command.command>;
+      return run(command, {
         http: {
-          baseUrl: baseUrlOf(globals.url, io.env),
-          key: keyOf(globals.key, io.env),
+          baseUrl,
+          key: keyOf(globals.key, io.env, { path: configPath, baseUrl }),
           version: CLI_VERSION,
         },
+        configPath,
         globals,
         io,
         color,
@@ -67,6 +81,7 @@ export async function main(): Promise<void> {
   const io: Io = {
     stdout: process.stdout,
     stderr: process.stderr,
+    stdin: process.stdin,
     isTTY: process.stdout.isTTY === true,
     stderrIsTTY: process.stderr.isTTY === true,
     env: process.env,

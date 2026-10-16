@@ -16,6 +16,7 @@ import { Route as LookupRouteImport } from './routes/lookup'
 import { Route as McpRouteImport } from './routes/mcp'
 import { Route as ApiSplatRouteImport } from './routes/api/$'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
+import { Route as ApiKeyRouteImport } from './routes/api/key'
 import { Route as ApiLookupRouteImport } from './routes/api/lookup'
 import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
 import { Route as AuthSignInRouteImport } from './routes/auth/sign-in'
@@ -64,6 +65,11 @@ const ApiSplatRoute = ApiSplatRouteImport.update({
 const ApiHealthRoute = ApiHealthRouteImport.update({
   id: '/api/health',
   path: '/api/health',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiKeyRoute = ApiKeyRouteImport.update({
+  id: '/api/key',
+  path: '/api/key',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiLookupRoute = ApiLookupRouteImport.update({
@@ -146,6 +152,7 @@ export interface FileRoutesByFullPath {
   '/mcp': typeof McpRoute
   '/api/$': typeof ApiSplatRoute
   '/api/health': typeof ApiHealthRoute
+  '/api/key': typeof ApiKeyRoute
   '/api/lookup': typeof ApiLookupRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/sign-in': typeof AuthSignInRoute
@@ -169,6 +176,7 @@ export interface FileRoutesByTo {
   '/mcp': typeof McpRoute
   '/api/$': typeof ApiSplatRoute
   '/api/health': typeof ApiHealthRoute
+  '/api/key': typeof ApiKeyRoute
   '/api/lookup': typeof ApiLookupRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/sign-in': typeof AuthSignInRoute
@@ -193,6 +201,7 @@ export interface FileRoutesById {
   '/mcp': typeof McpRoute
   '/api/$': typeof ApiSplatRoute
   '/api/health': typeof ApiHealthRoute
+  '/api/key': typeof ApiKeyRoute
   '/api/lookup': typeof ApiLookupRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/sign-in': typeof AuthSignInRoute
@@ -218,6 +227,7 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/api/$'
     | '/api/health'
+    | '/api/key'
     | '/api/lookup'
     | '/auth/callback'
     | '/auth/sign-in'
@@ -241,6 +251,7 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/api/$'
     | '/api/health'
+    | '/api/key'
     | '/api/lookup'
     | '/auth/callback'
     | '/auth/sign-in'
@@ -264,6 +275,7 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/api/$'
     | '/api/health'
+    | '/api/key'
     | '/api/lookup'
     | '/auth/callback'
     | '/auth/sign-in'
@@ -288,6 +300,7 @@ export interface RootRouteChildren {
   McpRoute: typeof McpRoute
   ApiSplatRoute: typeof ApiSplatRoute
   ApiHealthRoute: typeof ApiHealthRoute
+  ApiKeyRoute: typeof ApiKeyRoute
   ApiLookupRoute: typeof ApiLookupRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
   AuthSignInRoute: typeof AuthSignInRoute
@@ -353,6 +366,13 @@ declare module '@tanstack/react-router' {
       path: '/api/health'
       fullPath: '/api/health'
       preLoaderRoute: typeof ApiHealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/key': {
+      id: '/api/key'
+      path: '/api/key'
+      fullPath: '/api/key'
+      preLoaderRoute: typeof ApiKeyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/lookup': {
@@ -464,6 +484,7 @@ const rootRouteChildren: RootRouteChildren = {
   McpRoute: McpRoute,
   ApiSplatRoute: ApiSplatRoute,
   ApiHealthRoute: ApiHealthRoute,
+  ApiKeyRoute: ApiKeyRoute,
   ApiLookupRoute: ApiLookupRoute,
   AuthCallbackRoute: AuthCallbackRoute,
   AuthSignInRoute: AuthSignInRoute,

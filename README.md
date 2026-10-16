@@ -115,6 +115,7 @@ The routes, all but `GET /api/health` under the per-IP limit:
 | `GET /api/apis/{apiId}/outline`, `…/operation`, `…/schema` | The Spec Outline (paged with `tag`, `query`, `cursor`, `limit`), one operation, one component schema. | No |
 | `GET /api/vendors[?query=&cursor=&limit=]` | The Vendors with at least one API in the Index, by name, each with its `id`, `name` and `apiCount`: 50 a page by default (`limit` at most 200), `query` a substring of the id or name ignoring case, with `total` and `nextCursor` (null on the last page). 400 for a bad `limit` or `cursor`. | No |
 | `GET /api/vendors/{vendor}/apis` | A Vendor's APIs in the Index, each with its Current Spec. | No |
+| `GET /api/key` | The key the bearer names: `{ id, remaining?, limit?, resetsAt? }`, today's credits as far as the key store knows them, verified without spending one (the CLI's `login` and `key`). 400 without a bearer, 401 for a key that isn't live, 503 with `Retry-After` when the key store can't say. Never cached. | Yes (costs nothing) |
 | `GET /api/health` | `{"ok":true}`. | No |
 
 Every API route answers a method it doesn't take with 405 and an `Allow` header, and a path under `/api/` that no route serves with a JSON 404, never the web page.
