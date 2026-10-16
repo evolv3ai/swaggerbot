@@ -45,7 +45,8 @@ export async function runKey(
     parts.push(
       `${creditsWords(remaining)}${limit === undefined ? "" : ` of ${limit}`}`,
     );
-  if (resetsAt) parts.push(p.dim(resetWords(resetsAt, now)));
-  io.stdout.write(`${parts.filter(Boolean).join("  ")}\n`);
+  const reset = resetsAt ? resetWords(resetsAt, now) : "";
+  if (reset) parts.push(p.dim(reset));
+  io.stdout.write(`${parts.join("  ")}\n`);
   return 0;
 }

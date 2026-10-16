@@ -51,6 +51,10 @@ const ANSWERS: Record<
     }),
   },
   sb_bare: { status: 200, body: JSON.stringify({ id: "key_bare" }) },
+  sb_odd: {
+    status: 200,
+    body: JSON.stringify({ id: "key_odd", remaining: 3, resetsAt: "soon" }),
+  },
   sb_dead: {
     status: 401,
     body: JSON.stringify({ error: "Unknown or revoked API key." }),
@@ -162,11 +166,13 @@ async function cli(
     stdin,
     at = url,
     now = new Date("2026-10-16T19:00:00Z"),
+    isTTY = false,
   }: {
     env?: NodeJS.ProcessEnv;
     stdin?: Io["stdin"];
     at?: string;
     now?: Date;
+    isTTY?: boolean;
   } = {},
 ) {
   let stdout = "";
@@ -175,7 +181,7 @@ async function cli(
     stdout: { write: (text) => (stdout += text) },
     stderr: { write: (text) => (stderr += text) },
     stdin,
-    isTTY: false,
+    isTTY,
     stderrIsTTY: false,
     env: { SWAGGERBOT_URL: at, SWAGGERBOT_CONFIG: configPath, ...env },
     now: () => now,
@@ -352,6 +358,14 @@ describe("swaggerbot key", () => {
     );
     storeKey(configPath, url, "sb_bare", () => {});
     expect((await cli(["key"])).stdout).toBe("key_bare  credits unknown\n");
+  });
+
+  it("leaves out a reset it can't read, with colour on too", async () => {
+    storeKey(configPath, url, "sb_odd", () => {});
+    expect((await cli(["key"])).stdout).toBe("key_odd  3 credits left today\n");
+    expect((await cli(["key"], { isTTY: true })).stdout).toBe(
+      "\u001b[1mkey_odd\u001b[22m  3 credits left today\n",
+    );
   });
 
   it("takes --key, then SWAGGERBOT_API_KEY, over the stored key", async () => {
