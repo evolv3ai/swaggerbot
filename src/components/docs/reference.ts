@@ -2,8 +2,9 @@
  * What `/docs` says: the public origin, the HTTP API's routes with a `curl`
  * for each and the answer it gave, the MCP tools, and where to ask for a
  * key. The answers were recorded from swaggerbot.dev on the date below
- * (Val Town's API, a small Spec); ids and dates move as the Index
- * re-verifies, the shapes don't.
+ * (Val Town's API, a small Spec), but for `GET /api/key`'s, whose note says
+ * where and when; ids and dates move as the Index re-verifies, the shapes
+ * don't.
  */
 
 /** Where the service is reached. */
@@ -297,6 +298,20 @@ export const EXAMPLES: Example[] = [
       "The Spec's Normalized Form: bundled and converted to OpenAPI 3.1, JSON. 409 while it is still being built.",
     curl: `curl -s ${BASE_URL}/api/specs/${SPEC_ID}/normalized | head -c 19`,
     answer: `{"openapi":"3.1.0",`,
+  },
+  {
+    id: "key",
+    route: "GET /api/key",
+    about:
+      "The key the bearer names, verified at no cost to its credits: its `id`, today's `remaining` credits and `limit`, and `resetsAt`, when they refill (midnight UTC). 400 without a bearer, 401 for a key that isn't live. The CLI's `login` and `key` call it.",
+    curl: `curl ${BASE_URL}/api/key -H "Authorization: Bearer <key>"`,
+    answer: `{
+  "id": "key_6n4y7w33",
+  "remaining": 100,
+  "limit": 100,
+  "resetsAt": "2026-10-17T00:00:00.000Z"
+}`,
+    note: "Recorded on 2026-10-16 against a build of the service on a copy of the Index, with a key issued by hand (`scripts/keys.ts create`): the id and figures are that key's, which had spent nothing that day.",
   },
   {
     id: "health",
