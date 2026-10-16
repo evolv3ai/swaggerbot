@@ -5,22 +5,24 @@ import type { CliHttpError } from "./http";
 export type Io = {
   stdout: { write(text: string): unknown };
   stderr: { write(text: string): unknown };
-  /** Whether stdout is a terminal: colour is only ever used on one. */
+  /** Whether stdout, and separately stderr, is a terminal: colour is only ever used on one. */
   isTTY: boolean;
+  stderrIsTTY: boolean;
   env: NodeJS.ProcessEnv;
 };
 
 /**
- * Whether to colour the output: only on a terminal, and never with
- * `--no-color` or `NO_COLOR` set in the environment (https://no-color.org).
+ * Whether to colour a stream's output: only when it is a terminal, and never
+ * with `--no-color` or `NO_COLOR` set in the environment (https://no-color.org).
  */
 export function colorEnabled(
-  io: Pick<Io, "isTTY" | "env">,
+  isTTY: boolean,
+  env: NodeJS.ProcessEnv,
   noColor: boolean,
 ): boolean {
   if (noColor) return false;
-  if (io.env.NO_COLOR !== undefined && io.env.NO_COLOR !== "") return false;
-  return io.isTTY;
+  if (env.NO_COLOR !== undefined && env.NO_COLOR !== "") return false;
+  return isTTY;
 }
 
 type Paint = (text: string) => string;

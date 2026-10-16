@@ -3,6 +3,7 @@ import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { EXAMPLES } from "../components/docs/reference";
 import type { Outcome } from "../domain/outcome";
+import { postJson, TIMEOUT_MS } from "./http";
 import { CLI_VERSION, runCli } from "./main";
 import type { Io } from "./render";
 
@@ -156,6 +157,12 @@ beforeAll(async () => {
         res.writeHead(404).end();
         return;
       }
+      if (body.name === "Stall") {
+        // Headers and the start of a body, then nothing more, ever.
+        res.writeHead(200, { "content-type": "application/json" });
+        res.write("{");
+        return;
+      }
       const answer = ANSWERS[body.name] ?? {
         status: 500,
         body: JSON.stringify({ error: `the fake knows no ${body.name}` }),
@@ -177,6 +184,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  server.closeAllConnections();
   await new Promise<void>((resolve) => server.close(() => resolve()));
 });
 
@@ -190,8 +198,14 @@ async function cli(
   {
     env = {},
     isTTY = false,
+    stderrIsTTY = false,
     at = url,
-  }: { env?: NodeJS.ProcessEnv; isTTY?: boolean; at?: string } = {},
+  }: {
+    env?: NodeJS.ProcessEnv;
+    isTTY?: boolean;
+    stderrIsTTY?: boolean;
+    at?: string;
+  } = {},
 ) {
   let stdout = "";
   let stderr = "";
@@ -199,6 +213,7 @@ async function cli(
     stdout: { write: (text) => (stdout += text) },
     stderr: { write: (text) => (stderr += text) },
     isTTY,
+    stderrIsTTY,
     env: { SWAGGERBOT_URL: at, ...env },
   };
   const code = await runCli(args, io);
@@ -405,6 +420,25 @@ describe("swaggerbot lookup", () => {
     expect(stderr).toContain("Check the network");
   });
 
+  it("maps a body that stalls past the timeout like no answer at all", async () => {
+    const result = await postJson(
+      { baseUrl: url, version: CLI_VERSION },
+      "/api/lookup",
+      { name: "Stall" },
+      { timeoutMs: 500 },
+    );
+
+    expect(result).toEqual({
+      ok: false,
+      error: {
+        status: 0,
+        error: `${url} did not answer within 1 s.`,
+        hint: "Retry, or check the service at https://swaggerbot.dev/api/health.",
+      },
+    });
+    expect(TIMEOUT_MS).toBeGreaterThan(500);
+  });
+
   it("refuses an answer that isn't JSON, exit 3", async () => {
     const { code, stderr } = await cli(["lookup", "Not JSON"]);
 
@@ -455,6 +489,26 @@ describe("swaggerbot lookup", () => {
     ).stdout;
     expect(env).toBe(plain);
   });
+
+  it("colours stderr only when stderr is a TTY, whatever stdout is", async () => {
+    const args = ["lookup", "Not Yet Indexed"];
+    const plain = (await cli(args)).stderr;
+    expect(plain).not.toContain("\u001b[");
+
+    const piped = (await cli(args, { isTTY: true })).stderr;
+    expect(piped).toBe(plain);
+
+    const tty = (await cli(args, { stderrIsTTY: true })).stderr;
+    expect(tty).toContain("\u001b[31m");
+    expect(tty.replaceAll(new RegExp(`${ESC}\\[\\d+m`, "g"), "")).toBe(plain);
+
+    expect(
+      (await cli([...args, "--no-color"], { stderrIsTTY: true })).stderr,
+    ).toBe(plain);
+    expect(
+      (await cli(args, { stderrIsTTY: true, env: { NO_COLOR: "1" } })).stderr,
+    ).toBe(plain);
+  });
 });
 
 describe("swaggerbot", () => {
@@ -482,5 +536,24 @@ describe("swaggerbot", () => {
     expect(stdout).toBe("");
     expect(stderr).toContain("usage error  Unknown option '--bogus'");
     expect(seen).toHaveLength(0);
+  });
+
+  it("colours a usage error only when stderr is a TTY, and never with --no-color or NO_COLOR", async () => {
+    const args = ["lookup", "x", "--bogus"];
+    const plain = (await cli(args)).stderr;
+    expect(plain).not.toContain("\u001b[");
+
+    expect((await cli(args, { isTTY: true })).stderr).toBe(plain);
+
+    const tty = (await cli(args, { stderrIsTTY: true })).stderr;
+    expect(tty).toContain("\u001b[31m");
+    expect(tty.replaceAll(new RegExp(`${ESC}\\[\\d+m`, "g"), "")).toBe(plain);
+
+    expect(
+      (await cli([...args, "--no-color"], { stderrIsTTY: true })).stderr,
+    ).toBe(plain);
+    expect(
+      (await cli(args, { stderrIsTTY: true, env: { NO_COLOR: "1" } })).stderr,
+    ).toBe(plain);
   });
 });

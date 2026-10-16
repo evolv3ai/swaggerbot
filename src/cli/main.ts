@@ -25,12 +25,16 @@ const COMMANDS: { [K in CliCommand["command"]]?: Runner<K> } = {
  */
 export async function runCli(argv: string[], io: Io): Promise<number> {
   const parsed = parseCliArgs(argv);
+  const noColor = parsed.ok
+    ? parsed.globals.noColor
+    : argv.includes("--no-color");
+  const stderrColor = colorEnabled(io.stderrIsTTY, io.env, noColor);
   if (!parsed.ok) {
-    io.stderr.write(renderUsageError(parsed.error, colorEnabled(io, false)));
+    io.stderr.write(renderUsageError(parsed.error, stderrColor));
     return parsed.exitCode;
   }
   const { command, globals } = parsed;
-  const color = colorEnabled(io, globals.noColor);
+  const color = colorEnabled(io.isTTY, io.env, noColor);
 
   switch (command.command) {
     case "version":
@@ -50,6 +54,7 @@ export async function runCli(argv: string[], io: Io): Promise<number> {
         globals,
         io,
         color,
+        stderrColor,
       });
     }
   }
@@ -61,6 +66,7 @@ export async function main(): Promise<void> {
     stdout: process.stdout,
     stderr: process.stderr,
     isTTY: process.stdout.isTTY === true,
+    stderrIsTTY: process.stderr.isTTY === true,
     env: process.env,
   };
   try {

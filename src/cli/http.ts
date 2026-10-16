@@ -67,7 +67,7 @@ export function userAgentOf(version: string): string {
 
 /**
  * `POST <baseUrl><path>` with a JSON body, the bearer when a key is given,
- * and `timeoutMs` to answer. A 2xx is `ok` with the body parsed and its
+ * and `timeoutMs` to answer, body included. A 2xx is `ok` with the body parsed and its
  * exact text; anything else, or no answer, is the error mapped from the
  * server's body (`error`, `hint`) with a hint for the statuses the CLI
  * knows how to get past.
@@ -87,6 +87,7 @@ export async function postJson<T>(
   const doFetch = http.fetch ?? globalThis.fetch;
 
   let response: Response;
+  let text: string;
   try {
     response = await doFetch(`${http.baseUrl}${path}`, {
       method: "POST",
@@ -94,11 +95,11 @@ export async function postJson<T>(
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(timeoutMs),
     });
+    text = await response.text();
   } catch (err) {
     return { ok: false, error: transportError(err, http.baseUrl, timeoutMs) };
   }
 
-  const text = await response.text();
   if (response.ok) {
     try {
       return {

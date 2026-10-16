@@ -22,7 +22,9 @@ export type CommandContext = {
   http: CliHttp;
   globals: CliGlobals;
   io: Io;
+  /** Whether to colour stdout, and separately stderr. */
   color: boolean;
+  stderrColor: boolean;
 };
 
 /**
@@ -34,7 +36,7 @@ export type CommandContext = {
  */
 export async function runLookup(
   args: LookupArgs,
-  { http, globals, io, color }: CommandContext,
+  { http, globals, io, color, stderrColor }: CommandContext,
 ): Promise<number> {
   if (args.fresh && !http.key && !globals.json)
     return failed(
@@ -47,7 +49,7 @@ export async function runLookup(
       },
       globals,
       io,
-      color,
+      stderrColor,
     );
 
   const body = {
@@ -59,7 +61,7 @@ export async function runLookup(
   const result = await postJson<Outcome>(http, "/api/lookup", body, {
     timeoutMs: http.key ? KEYED_LOOKUP_TIMEOUT_MS : TIMEOUT_MS,
   });
-  if (!result.ok) return failed(result, globals, io, color);
+  if (!result.ok) return failed(result, globals, io, stderrColor);
 
   if (globals.json) io.stdout.write(`${result.text}\n`);
   else

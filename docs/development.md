@@ -17,6 +17,8 @@ One TanStack Start app, TypeScript throughout, pnpm, Node 24 (the pnpm version i
 - `src/routes/`, `src/components/`, `src/styles/`, `src/lib/`: the web UI (TanStack Start routes, shadcn components, Tailwind 4 theme); `src/server/`: request middleware such as the security headers.
 - `src/benchmark/` and `benchmark/entries.json`: the Benchmark and its runner, plus the deployment checks' code.
 - `scripts/`: CLI entry points run with `pnpm tsx` (`bench.ts`, `keys.ts`, the `*check.ts` deployment checks, `lookup.ts`). The README documents each.
+- `src/cli/`: the public `swaggerbot` CLI (Slice 8), a client of the HTTP API only: it may import types from `src/domain/` and nothing from the server (Biome enforces it).
+- `cli/`: the npm package around that CLI (`package.json`, `README.md`); `pnpm build:cli` bundles `src/cli/bin.ts` into `cli/dist/swaggerbot.mjs`, which is ignored by git.
 - `docker/` and `Dockerfile`: the production image and its Litestream entrypoint ([`docs/deploy.md`](deploy.md)).
 
 UI work follows `PRODUCT.md` and `DESIGN.md` at the repo root.
@@ -24,7 +26,7 @@ UI work follows `PRODUCT.md` and `DESIGN.md` at the repo root.
 ## Build and checks
 
 - Install: `pnpm install`
-- Before opening a PR, all green: `pnpm check` (Biome lint, `tsc --noEmit`, `vitest run`) and `pnpm build`. CI (`.github/workflows/ci.yml`) runs the same on every PR and push to `main`.
+- Before opening a PR, all green: `pnpm check` (Biome lint, `tsc --noEmit`, `vitest run`) and `pnpm build` (the app, the operator CLI and, through `pnpm build:cli`, the public CLI bundle). CI (`.github/workflows/ci.yml`) runs the same on every PR and push to `main`, then starts the bundle with `--version`.
 - Tests are colocated as `src/**/*.test.ts` (`vitest.config.ts` looks nowhere else). No test may call a real external service (TypeSafe, Brave, Tavily, APIs.guru, Unkey, WorkOS, any website). Fake them: the fake judge, a fake WebSearch, fake Unkey and WorkOS clients, fixtures under `src/**/__fixtures__/`, or a local `node:http` server on port 0. `uicheck`'s tests drive a headless Chromium: install it once with `pnpm exec playwright install chromium`.
 - Add a dependency only when the work needs it, and say so in the PR.
 - Don't edit `docs/PRD.md`, `CONTEXT.md` or `docs/adr/` as part of a change. If the work shows the design is wrong or silent, say so in the PR description.
