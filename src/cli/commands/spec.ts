@@ -127,12 +127,15 @@ async function choose(
           stored: () => storedKeyOf(configPath, http.baseUrl, note),
         });
       const { apiVersion } = args;
+      let needsKey = false;
       if (apiVersion !== undefined) {
         const versioned = await lookup({ name: target.name, apiVersion });
-        if (!versioned.ok) return failed(versioned, globals, io, stderrColor);
-        const outcome = versioned.body;
+        needsKey = !versioned.ok && versioned.error.status === 401;
+        if (!versioned.ok && !needsKey)
+          return failed(versioned, globals, io, stderrColor);
+        const outcome = versioned.ok ? versioned.body : undefined;
         if (
-          outcome.outcome === "Resolved" &&
+          outcome?.outcome === "Resolved" &&
           outcome.currentSpec.apiVersion === apiVersion
         )
           return {
@@ -155,7 +158,7 @@ async function choose(
             error: {
               status: 404,
               error: `${outcome.api.name} (${outcome.api.id}) has no Spec for API Version ${apiVersion}.`,
-              hint: `Its API Versions: ${versions.join(", ")}.`,
+              hint: `Its API Versions: ${versions.join(", ")}.${needsKey ? ` With an API key (swaggerbot login), Discovery can look for ${apiVersion}.` : ""}`,
             },
           },
           globals,

@@ -151,13 +151,14 @@ beforeAll(async () => {
           name: string;
           apiVersion?: string;
         };
-        if (name === "Val Town")
-          return json(
-            200,
-            apiVersion === undefined
-              ? resolved(url)
-              : resolvedAt(url, apiVersion),
-          );
+        if (name === "Val Town") {
+          if (apiVersion === undefined) return json(200, resolved(url));
+          const answer = resolvedAt(url, apiVersion);
+          // Without a key, the Index alone answers: a version it lacks needs Discovery.
+          if (answer.outcome !== "Resolved" && !req.headers.authorization)
+            return json(401, { error: "Discovery needs an API key." });
+          return json(200, answer);
+        }
         if (name === "Jira") return json(200, AMBIGUOUS);
         return json(500, { error: `the fake knows no ${name}` });
       }
@@ -369,6 +370,8 @@ describe("swaggerbot spec", () => {
       "Val Town",
       "--api-version",
       "3",
+      "--key",
+      "sb_test",
     ]);
 
     expect(code).toBe(1);
@@ -376,6 +379,24 @@ describe("swaggerbot spec", () => {
     expect(stderr).toMatchInlineSnapshot(`
       "error  Val API (val.town/api) has no Spec for API Version 3.
         Its API Versions: 1 (Current), 2.
+      "
+    `);
+    expect(seen).toEqual(["POST /api/lookup", "POST /api/lookup"]);
+  });
+
+  it("names the API Versions there are when, with no key, the Index lacks --api-version's (401), exit 1", async () => {
+    const { code, stdout, stderr } = await cli([
+      "spec",
+      "Val Town",
+      "--api-version",
+      "3",
+    ]);
+
+    expect(code).toBe(1);
+    expect(stdout).toBe("");
+    expect(stderr).toMatchInlineSnapshot(`
+      "error  Val API (val.town/api) has no Spec for API Version 3.
+        Its API Versions: 1 (Current), 2. With an API key (swaggerbot login), Discovery can look for 3.
       "
     `);
     expect(seen).toEqual(["POST /api/lookup", "POST /api/lookup"]);
