@@ -52,7 +52,11 @@ export function baseUrlOf(
   );
 }
 
-/** The key: `--key`, else `SWAGGERBOT_API_KEY`; none when neither is set. */
+/**
+ * The key in hand: `--key`, else `SWAGGERBOT_API_KEY`; none without either.
+ * The one `swaggerbot login` stored comes after these (D3), read by a
+ * command only when it needs a key (`storedKeyOf`).
+ */
 export function keyOf(
   flag: string | undefined,
   env: NodeJS.ProcessEnv,
@@ -78,11 +82,32 @@ export async function postJson<T>(
   body: unknown,
   { timeoutMs }: { timeoutMs: number },
 ): Promise<CliHttpResult<T>> {
+  return requestJson(http, path, { timeoutMs, method: "POST", body });
+}
+
+/** `GET <baseUrl><path>`, otherwise as `postJson`. */
+export async function getJson<T>(
+  http: CliHttp,
+  path: string,
+  { timeoutMs }: { timeoutMs: number },
+): Promise<CliHttpResult<T>> {
+  return requestJson(http, path, { timeoutMs, method: "GET" });
+}
+
+async function requestJson<T>(
+  http: CliHttp,
+  path: string,
+  {
+    timeoutMs,
+    method,
+    body,
+  }: { timeoutMs: number; method: "GET" | "POST"; body?: unknown },
+): Promise<CliHttpResult<T>> {
   const headers: Record<string, string> = {
-    "content-type": "application/json",
     accept: "application/json",
     "user-agent": userAgentOf(http.version),
   };
+  if (method === "POST") headers["content-type"] = "application/json";
   if (http.key) headers.authorization = `Bearer ${http.key}`;
   const doFetch = http.fetch ?? globalThis.fetch;
 
@@ -90,9 +115,9 @@ export async function postJson<T>(
   let text: string;
   try {
     response = await doFetch(`${http.baseUrl}${path}`, {
-      method: "POST",
+      method,
       headers,
-      body: JSON.stringify(body),
+      ...(method === "POST" ? { body: JSON.stringify(body) } : {}),
       signal: AbortSignal.timeout(timeoutMs),
     });
     text = await response.text();
@@ -208,6 +233,11 @@ function retryAfterWords(value: string): string {
   const seconds = /^\d+$/.test(value)
     ? Number(value)
     : Math.ceil((Date.parse(value) - Date.now()) / 1000);
+  return durationWords(seconds);
+}
+
+/** A wait in a person's words: `45 s`, `20 min`, `5 h`; `a moment` when it is over or unknown. */
+export function durationWords(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds <= 0) return "a moment";
   if (seconds < 90) return `${seconds} s`;
   if (seconds < 5400) return `${Math.ceil(seconds / 60)} min`;

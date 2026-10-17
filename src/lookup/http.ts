@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { KeyAnswer } from "~/domain/api-key";
 import type { Outcome } from "~/domain/outcome";
 import type { KeyStore, Verification, VerifiedKey } from "~/index-store/keys";
 import type { IndexedLookup, LookupRequest } from "./lookup";
@@ -157,6 +158,45 @@ export async function answerLookup(
   return { status: 200, body: await lookup(request), headers: quotaHeaders };
 }
 
+/** The body of `GET /api/key`'s 400, when no bearer is sent. */
+export const KEY_ROUTE_NEEDS_BEARER = {
+  error: "Send the key as Authorization: Bearer <key>.",
+};
+
+/**
+ * Handles `GET /api/key`, the CLI's `login` and `key` (Slice 8): 429 when
+ * the client IP is over its rate limit; 400 without a bearer; else the
+ * bearer verified at cost 0 as `authenticate` does, so a key that isn't
+ * live is the usual 401 and a key store outage the usual 503; 200 with the
+ * key's id and today's figures, never cached. `getApp` is called only once
+ * a bearer is there to check.
+ */
+export async function handleKeyRequest(
+  request: Request,
+  getApp: () => Pick<LookupApp, "keys">,
+  gate: Pick<Gate, "rateLimiter" | "clientIpHeader">,
+): Promise<Response> {
+  const limited = rateLimited(request, gate);
+  if (limited) return limited;
+  const secret = bearerOf(request);
+  if (secret === undefined)
+    return Response.json(KEY_ROUTE_NEEDS_BEARER, { status: 400 });
+
+  const auth = await verifyBearer(secret, getApp().keys);
+  if ("response" in auth) return auth.response;
+  const { id, remaining, limit, resetsAt } = auth.key;
+  const body: KeyAnswer = {
+    id,
+    ...(remaining === undefined ? {} : { remaining }),
+    ...(limit === undefined ? {} : { limit }),
+    ...(resetsAt === undefined ? {} : { resetsAt }),
+  };
+  return Response.json(body, {
+    status: 200,
+    headers: { "cache-control": "private, no-store" },
+  });
+}
+
 /**
  * The live key a request names in `Authorization: Bearer`, verified at cost
  * 0, with its secret; no key when the header isn't sent (the key store is
@@ -173,6 +213,17 @@ export async function authenticate(
 > {
   const secret = bearerOf(request);
   if (secret === undefined) return { key: undefined };
+  return verifyBearer(secret, keys);
+}
+
+/**
+ * A sent bearer verified at cost 0: the live key it names, with the secret;
+ * or `{ response }` as `authenticate` answers it.
+ */
+async function verifyBearer(
+  secret: string,
+  keys: Pick<KeyStore, "verify">,
+): Promise<{ key: VerifiedKey; secret: string } | { response: Response }> {
   // A header that isn't a Bearer names no key: not worth asking the store.
   const verified: Verification = secret
     ? await keys.verify(secret, { cost: 0 })

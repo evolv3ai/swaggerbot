@@ -1,14 +1,18 @@
 import type { Outcome } from "../domain/outcome";
-import type { CliHttpError } from "./http";
+import { type CliHttpError, durationWords } from "./http";
 
-/** Where a command writes, and what it may assume about the terminal. */
+/** Where a command reads and writes, and what it may assume about the terminal. */
 export type Io = {
   stdout: { write(text: string): unknown };
   stderr: { write(text: string): unknown };
+  /** Where `login` reads a key it wasn't given: the terminal, hidden, or a pipe. None when there is no stdin to read. */
+  stdin?: NodeJS.ReadableStream & { isTTY?: boolean };
   /** Whether stdout, and separately stderr, is a terminal: colour is only ever used on one. */
   isTTY: boolean;
   stderrIsTTY: boolean;
   env: NodeJS.ProcessEnv;
+  /** The clock, for "in 5 h"; now unless a test says otherwise. */
+  now?: () => Date;
 };
 
 /**
@@ -158,12 +162,34 @@ export function renderOutcome(
   return `${lines.join("\n")}\n`;
 }
 
+/** `87 credits left today`; `1 credit`; `no credits left today`. */
+export function creditsWords(remaining: number): string {
+  if (remaining <= 0) return "no credits left today";
+  return `${remaining} credit${remaining === 1 ? "" : "s"} left today`;
+}
+
+/** `resets at 00:00 UTC, in 5 h`, from when the credits are next refilled. */
+export function resetWords(resetsAt: string, now: Date): string {
+  const at = new Date(resetsAt);
+  if (Number.isNaN(at.getTime())) return "";
+  const hh = String(at.getUTCHours()).padStart(2, "0");
+  const mm = String(at.getUTCMinutes()).padStart(2, "0");
+  const seconds = Math.ceil((at.getTime() - now.getTime()) / 1000);
+  return `resets at ${hh}:${mm} UTC, in ${durationWords(seconds)}`;
+}
+
 /** A failed request, for stderr: what went wrong, then what fixes it. */
 export function renderError(error: CliHttpError, color: boolean): string {
   const p = palette(color);
   const lines = [`${p.red(p.bold("error"))}  ${error.error}`];
   if (error.hint) lines.push(`  ${error.hint}`);
   return `${lines.join("\n")}\n`;
+}
+
+/** A warning, for stderr: something the command went on past. */
+export function renderWarning(message: string, color: boolean): string {
+  const p = palette(color);
+  return `${p.yellow(p.bold("warning"))}  ${message}\n`;
 }
 
 /** A usage error, for stderr, with where to read the usage. */

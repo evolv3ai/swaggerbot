@@ -107,6 +107,14 @@ describe("parseCliArgs", () => {
       ["--fresh", "frobnicate"],
       "--fresh only goes with lookup",
     ],
+    [
+      "a lookup flag on login",
+      ["login", "--fresh"],
+      "--fresh only goes with lookup",
+    ],
+    ["login with an argument", ["login", "sb_x"], "unexpected argument: sb_x"],
+    ["logout with an argument", ["logout", "now"], "unexpected argument: now"],
+    ["key with an argument", ["key", "sb_x"], "unexpected argument: sb_x"],
   ])("refuses %s with exit 2", (_, args, error) => {
     const parsed = parseCliArgs(args);
     expect(parsed.ok).toBe(false);
@@ -115,9 +123,28 @@ describe("parseCliArgs", () => {
     expect(parsed.error).toContain(error);
   });
 
-  it("documents lookup and every global flag in the usage", () => {
+  it.each(["login", "logout", "key"] as const)(
+    "parses %s with the global flags and nothing else",
+    (command) => {
+      expect(parseCliArgs([command])).toEqual({
+        ok: true,
+        command: { command },
+        globals: NO_GLOBALS,
+      });
+      expect(parseCliArgs([command, "--key", "sb_x", "--json"])).toEqual({
+        ok: true,
+        command: { command },
+        globals: { ...NO_GLOBALS, key: "sb_x", json: true },
+      });
+    },
+  );
+
+  it("documents every command and every global flag in the usage", () => {
     for (const word of [
       "lookup <name>",
+      "login [--key K]",
+      "logout",
+      "key ",
       "--api-version",
       "--community",
       "--fresh",
