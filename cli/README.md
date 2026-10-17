@@ -87,6 +87,28 @@ POST    /v1/customers                                     PostCustomers         
 
 `--json` prints the service's answer unchanged (one line a page for `outline --all`), its error body too on a failed request.
 
+## `vendors` and `vendor`
+
+```sh
+swaggerbot vendors [<query>] [--all] [--json]
+swaggerbot vendor <vendor> [--json]
+```
+
+What the Index holds, from the terminal. Neither runs a Lookup: they list only what is already in the Index.
+
+`vendors` lists the Vendors with at least one API in the Index, ordered by name: a table of `id  name  N APIs`, 50 a page, then how many of how many there are and the `--cursor C` that gives the next page. `<query>` keeps those whose id or name holds it, ignoring case; `--all` follows every page.
+
+```
+$ swaggerbot vendors str
+stripe.com  stripe.com  1 API
+
+1 of 1 Vendors matching "str"
+```
+
+`vendor` lists one Vendor's APIs, by its id (`stripe.com`), a domain or URL, its name, or the name of one of its APIs: each API's id, its Current Spec (API Version, format, Provenance and when it was verified) and both download URLs, or "no confirmed Spec in the Index yet". When the name could mean several Vendors it lists them to retry with, exit `3` as Ambiguous; when the Index holds no such Vendor it says so, exit `6` as Unknown: `swaggerbot lookup <name>` finds an API and adds it, with its Vendor, to the Index.
+
+`--json` prints the service's answer unchanged (one line a page for `vendors --all`), with the same exit codes.
+
 ## `login`, `logout` and `key`
 
 ```sh
