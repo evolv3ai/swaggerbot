@@ -1,4 +1,5 @@
 import type { Outcome } from "../domain/outcome";
+import type { SpecOutline } from "../domain/spec-forms";
 import { type CliHttpError, durationWords } from "./http";
 
 /** Where a command reads and writes, and what it may assume about the terminal. */
@@ -227,4 +228,237 @@ export function renderWarning(message: string, color: boolean): string {
 export function renderUsageError(message: string, color: boolean): string {
   const p = palette(color);
   return `${p.red(p.bold("usage error"))}  ${message}\n  Run \`swaggerbot --help\` for the usage.\n`;
+}
+
+/** One page of `GET /api/apis/{apiId}/outline`, as the CLI reads it. */
+export type OutlinePageBody = {
+  apiId: string;
+  specId: string;
+  title: string | null;
+  apiVersion: string | null;
+  servers: string[];
+  securitySchemes: SpecOutline["securitySchemes"];
+  tags: SpecOutline["tags"];
+  /** The server kept only its largest tags. */
+  tagsCut?: true;
+  operations: SpecOutline["operations"];
+  totalOperations: number;
+  matchedOperations: number;
+  nextCursor: string | null;
+};
+
+/** How many tags the outline view lists without `--all`. */
+export const SHOWN_TAGS = 20;
+
+/** The widest the method, path and operationId columns are padded to. */
+const OUTLINE_COLUMN_CAPS = [7, 48, 36];
+
+/**
+ * The Spec Outline as a person reads it: the title and API Version, the
+ * servers and security schemes, the tags with their operation counts (the
+ * `SHOWN_TAGS` largest unless `allTags`), then the operations as a table,
+ * `METHOD path  operationId  summary`, and how many of how many there are,
+ * with the cursor of the next page when there is one.
+ */
+export function renderOutline(
+  page: OutlinePageBody,
+  { allTags, color }: { allTags: boolean; color: boolean },
+): string {
+  const p = palette(color);
+  const lines: string[] = [];
+  lines.push(
+    [
+      p.bold(clean(page.title ?? page.apiId)),
+      page.apiVersion === null ? "" : `API Version ${clean(page.apiVersion)}`,
+      p.dim(page.apiId),
+    ]
+      .filter(Boolean)
+      .join("  "),
+  );
+  const field = (name: string, value: string) =>
+    lines.push(`${p.dim(name.padEnd(9))} ${value}`);
+  field(
+    "servers",
+    page.servers.length > 0 ? page.servers.map(clean).join("  ") : "none",
+  );
+  field(
+    "security",
+    page.securitySchemes.length > 0
+      ? page.securitySchemes
+          .map(
+            (s) =>
+              `${clean(s.name)} (${[s.type, s.scheme, s.in && `in ${s.in}`]
+                .filter(Boolean)
+                .map((w) => clean(w as string))
+                .join(" ")})`,
+          )
+          .join(", ")
+      : "none",
+  );
+  // A stable sort: tags with the same count keep the outline's order.
+  const tags = [...page.tags].sort(
+    (a, b) => b.operationCount - a.operationCount,
+  );
+  const shown = allTags ? tags : tags.slice(0, SHOWN_TAGS);
+  const more = [
+    tags.length > shown.length
+      ? `+${tags.length - shown.length} more: --all lists them`
+      : "",
+    page.tagsCut ? "the service sent only the largest" : "",
+  ].filter(Boolean);
+  field(
+    "tags",
+    shown.length > 0
+      ? `${shown.map((t) => `${clean(t.name)} ${t.operationCount}`).join(", ")}${more.length > 0 ? p.dim(`  (${more.join("; ")})`) : ""}`
+      : "none",
+  );
+
+  if (page.operations.length > 0) {
+    lines.push("");
+    const rows = page.operations.map((op) => [
+      op.method.toUpperCase(),
+      clean(op.path),
+      clean(op.operationId ?? ""),
+      `${clean(op.summary ?? "")}${op.deprecated ? p.dim(" (deprecated)") : ""}`,
+    ]);
+    // A column is as wide as its widest cell up to its cap; a longer cell
+    // runs past it on its own row rather than pushing every row right.
+    const widths = OUTLINE_COLUMN_CAPS.map((cap, i) =>
+      Math.min(cap, Math.max(...rows.map((row) => row[i]?.length ?? 0))),
+    );
+    for (const [method = "", path = "", operationId = "", summary = ""] of rows)
+      lines.push(
+        [
+          p.bold(method.padEnd(widths[0] ?? 0)),
+          path.padEnd(widths[1] ?? 0),
+          p.dim(operationId.padEnd(widths[2] ?? 0)),
+          summary,
+        ]
+          .join("  ")
+          .trimEnd(),
+      );
+  }
+
+  lines.push("");
+  const { totalOperations: total, matchedOperations: matched } = page;
+  const count =
+    matched === total
+      ? `${page.operations.length} of ${total} operations`
+      : `${page.operations.length} of ${matched} matching operations (${total} in all)`;
+  lines.push(
+    page.nextCursor === null
+      ? count
+      : `${count}; next page: --cursor ${page.nextCursor}`,
+  );
+  return `${lines.join("\n")}\n`;
+}
+
+/** One operation of `GET /api/apis/{apiId}/operation`, as the CLI reads it. */
+export type OperationBody = {
+  apiId: string;
+  specId: string;
+  method: string;
+  path: string;
+  operation: { operationId?: unknown; summary?: unknown } & Record<
+    string,
+    unknown
+  >;
+  circular: Record<string, unknown>;
+  securitySchemes: Record<string, unknown>;
+  truncated: boolean;
+};
+
+/**
+ * One operation: a heading, `METHOD path · operationId · summary`, then
+ * the operation as pretty JSON (it is a JSON object; a prose view would
+ * invent structure), then the security schemes it names and the schemas
+ * that recur within themselves, each as JSON; `truncated` and `circular`
+ * are said under the heading.
+ */
+export function renderOperation(body: OperationBody, color: boolean): string {
+  const p = palette(color);
+  const { operationId, summary } = body.operation;
+  const lines = [
+    [
+      p.bold(`${body.method.toUpperCase()} ${clean(body.path)}`),
+      typeof operationId === "string" ? clean(operationId) : "",
+      typeof summary === "string" ? clean(summary) : "",
+    ]
+      .filter(Boolean)
+      .join(" · "),
+    ...expansionNotes(body, p),
+    prettyJson(body.operation),
+  ];
+  if (Object.keys(body.securitySchemes).length > 0)
+    lines.push(p.dim("security schemes"), prettyJson(body.securitySchemes));
+  if (Object.keys(body.circular).length > 0)
+    lines.push(p.dim("circular"), prettyJson(body.circular));
+  return `${lines.join("\n")}\n`;
+}
+
+/** One schema of `GET /api/apis/{apiId}/schema`, as the CLI reads it. */
+export type SchemaBody = {
+  apiId: string;
+  specId: string;
+  name: string;
+  schema: unknown;
+  circular: Record<string, unknown>;
+  truncated: boolean;
+};
+
+/** One schema: a heading, its name and API, then the schema as pretty JSON, as `renderOperation`. */
+export function renderSchema(body: SchemaBody, color: boolean): string {
+  const p = palette(color);
+  const lines = [
+    `${p.bold(clean(body.name))} · ${p.dim(`components.schemas of ${body.apiId}`)}`,
+    ...expansionNotes(body, p),
+    prettyJson(body.schema),
+  ];
+  if (Object.keys(body.circular).length > 0)
+    lines.push(p.dim("circular"), prettyJson(body.circular));
+  return `${lines.join("\n")}\n`;
+}
+
+/** What `truncated` and `circular` mean, said only when they apply. */
+function expansionNotes(
+  { truncated, circular }: Pick<OperationBody, "truncated" | "circular">,
+  p: ReturnType<typeof palette>,
+): string[] {
+  const notes: string[] = [];
+  if (truncated)
+    notes.push(
+      p.yellow(
+        'truncated: inlining stopped at the size cap; each reference left is {"$ref", "x-truncated": true}',
+      ),
+    );
+  const names = Object.keys(circular);
+  if (names.length > 0)
+    notes.push(
+      p.dim(
+        `circular: ${names.map(clean).join(", ")} ${names.length === 1 ? "recurs within itself" : "recur within themselves"}; each is under "circular" once, and {"$ref", "x-circular": true} where it recurs`,
+      ),
+    );
+  return notes;
+}
+
+/**
+ * `value` as JSON indented by two, safe on a terminal: `JSON.stringify`
+ * escapes C0 controls itself, and DEL and the C1 controls are escaped too.
+ */
+function prettyJson(value: unknown): string {
+  return JSON.stringify(value, null, 2).replace(
+    /[\u007f-\u009f]/g,
+    (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`,
+  );
+}
+
+/** A Spec's text for one line of a terminal: runs of whitespace as one space, control characters gone. */
+function clean(text: string): string {
+  return (
+    text
+      .replace(/\s+/g, " ")
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: removing them is the point.
+      .replace(/[\u0000-\u001f\u007f-\u009f]/g, "")
+      .trim()
+  );
 }

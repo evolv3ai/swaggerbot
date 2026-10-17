@@ -113,6 +113,82 @@ describe("parseCliArgs", () => {
     });
   });
 
+  it("parses every outline flag, and an apiId or a name", () => {
+    expect(
+      parseCliArgs([
+        "outline",
+        "stripe.com/stripe-api",
+        "--tag",
+        "Customers",
+        "--query",
+        " customers ",
+        "--spec-id",
+        "A".repeat(64),
+        "--limit",
+        "500",
+        "--all",
+        "--cursor",
+        "100",
+        "--json",
+      ]),
+    ).toEqual({
+      ok: true,
+      command: {
+        command: "outline",
+        target: { kind: "apiId", apiId: "stripe.com/stripe-api" },
+        tag: "Customers",
+        query: "customers",
+        specId: "a".repeat(64),
+        limit: 500,
+        all: true,
+        cursor: "100",
+      },
+      globals: { ...NO_GLOBALS, json: true },
+    });
+    expect(parseCliArgs(["outline", "Stripe"])).toEqual({
+      ok: true,
+      command: {
+        command: "outline",
+        target: { kind: "name", name: "Stripe" },
+        all: false,
+      },
+      globals: NO_GLOBALS,
+    });
+  });
+
+  it("parses operation and schema", () => {
+    expect(
+      parseCliArgs(["operation", "Stripe", "POST", "/v1/customers/{customer}"]),
+    ).toEqual({
+      ok: true,
+      command: {
+        command: "operation",
+        target: { kind: "name", name: "Stripe" },
+        method: "post",
+        path: "/v1/customers/{customer}",
+      },
+      globals: NO_GLOBALS,
+    });
+    expect(
+      parseCliArgs([
+        "schema",
+        "stripe.com/stripe-api",
+        "customer",
+        "--spec-id",
+        "b".repeat(64),
+      ]),
+    ).toEqual({
+      ok: true,
+      command: {
+        command: "schema",
+        target: { kind: "apiId", apiId: "stripe.com/stripe-api" },
+        name: "customer",
+        specId: "b".repeat(64),
+      },
+      globals: NO_GLOBALS,
+    });
+  });
+
   it.each([
     ["--version", ["--version"]],
     ["-V", ["-V"]],
@@ -195,6 +271,44 @@ describe("parseCliArgs", () => {
     ["login with an argument", ["login", "sb_x"], "unexpected argument: sb_x"],
     ["logout with an argument", ["logout", "now"], "unexpected argument: now"],
     ["key with an argument", ["key", "sb_x"], "unexpected argument: sb_x"],
+    [
+      "outline without an argument",
+      ["outline"],
+      "outline needs a name or an apiId",
+    ],
+    ["outline with two", ["outline", "a", "b"], "unexpected argument: b"],
+    [
+      "a bad --spec-id",
+      ["outline", "a", "--spec-id", "abc"],
+      "--spec-id is a Spec id",
+    ],
+    ["a blank --tag", ["outline", "a", "--tag", " "], "--tag needs a value"],
+    [
+      "--tag on schema",
+      ["schema", "a", "b", "--tag", "x"],
+      "--tag only goes with outline",
+    ],
+    [
+      "--all on operation",
+      ["operation", "a", "get", "/", "--all"],
+      "--all only goes with outline",
+    ],
+    [
+      "operation without a path",
+      ["operation", "a", "get"],
+      "operation needs a name or an apiId, a method and a path",
+    ],
+    [
+      "operation with an unknown method",
+      ["operation", "a", "fetch", "/"],
+      'the method is one of get, put, post, delete, options, head, patch, trace (got "fetch")',
+    ],
+    [
+      "schema without a name",
+      ["schema", "a"],
+      "schema needs a name or an apiId and a schema name",
+    ],
+    ["schema with three", ["schema", "a", "b", "c"], "unexpected argument: c"],
   ])("refuses %s with exit 2", (_, args, error) => {
     const parsed = parseCliArgs(args);
     expect(parsed.ok).toBe(false);
@@ -230,6 +344,14 @@ describe("parseCliArgs", () => {
       "-o FILE",
       "--force",
       "--no-wait",
+      "outline <name | apiId>",
+      "--tag T",
+      "--query Q",
+      "--spec-id S",
+      "--limit N",
+      "--all",
+      "operation <name | apiId> <method> <path>",
+      "schema <name | apiId> <schemaName>",
       "--api-version",
       "--community",
       "--fresh",
