@@ -15,7 +15,7 @@ const NO_KEY_GIVEN = `No key given. Get one at ${KEYS_URL} and pass it with --ke
  * `GET /api/key` at no cost, then stored for this swagger.bot's origin and
  * no other's. A key that isn't live (401) is said so and stored nowhere;
  * a key store outage (503) is said with when to retry. The key is never
- * echoed. Exit 0 when signed in, 3 when the request failed, 2 without a
+ * echoed. Exit 0 when signed in, 1 when the request failed, 2 without a
  * key to check.
  */
 export async function runLogin(

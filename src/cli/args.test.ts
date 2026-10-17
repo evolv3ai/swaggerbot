@@ -58,6 +58,62 @@ describe("parseCliArgs", () => {
   });
 
   it.each([
+    [
+      "a Spec id, lowercased",
+      ["spec", "AB".repeat(32)],
+      { kind: "specId", specId: "ab".repeat(32) },
+    ],
+    [
+      "an apiId",
+      ["spec", "stripe.com/stripe-api"],
+      { kind: "apiId", apiId: "stripe.com/stripe-api" },
+    ],
+    ["a name", ["spec", "Val Town"], { kind: "name", name: "Val Town" }],
+  ])("parses spec with %s, Published by default", (_, args, target) => {
+    expect(parseCliArgs(args)).toEqual({
+      ok: true,
+      command: {
+        command: "spec",
+        target,
+        form: "published",
+        force: false,
+        noWait: false,
+      },
+      globals: NO_GLOBALS,
+    });
+  });
+
+  it("parses every spec flag", () => {
+    expect(
+      parseCliArgs([
+        "spec",
+        "Stripe",
+        "--form",
+        "normalized",
+        "--api-version",
+        "2024-06-20",
+        "-o",
+        "stripe.json",
+        "--force",
+        "--no-wait",
+        "--json",
+      ]),
+    ).toEqual({
+      ok: true,
+      command: {
+        command: "spec",
+        target: { kind: "name", name: "Stripe" },
+        form: "normalized",
+        apiVersion: "2024-06-20",
+        output: "stripe.json",
+        force: true,
+        noWait: true,
+      },
+      globals: { ...NO_GLOBALS, json: true },
+    });
+  });
+
+  it.each([
     ["--version", ["--version"]],
     ["-V", ["-V"]],
     ["--version before anything else", ["--version", "lookup"]],
@@ -112,6 +168,30 @@ describe("parseCliArgs", () => {
       ["login", "--fresh"],
       "--fresh only goes with lookup",
     ],
+    [
+      "--api-version on a command that takes none",
+      ["key", "--api-version", "1"],
+      "--api-version only goes with lookup or spec",
+    ],
+    ["-o on lookup", ["lookup", "a", "-o", "x"], "-o only goes with spec"],
+    ["spec without an argument", ["spec"], "spec needs a name"],
+    ["spec with two arguments", ["spec", "a", "b"], "unexpected argument: b"],
+    [
+      "spec with an unknown form",
+      ["spec", "a", "--form", "yaml"],
+      '--form is published or normalized (got "yaml")',
+    ],
+    [
+      "--api-version with a Spec id",
+      ["spec", "a".repeat(64), "--api-version", "1"],
+      "--api-version goes with a name",
+    ],
+    [
+      "--api-version with an apiId",
+      ["spec", "stripe.com/stripe-api", "--api-version", "1"],
+      "--api-version goes with a name",
+    ],
+    ["-o without a file", ["spec", "a", "-o", ""], "-o needs a file"],
     ["login with an argument", ["login", "sb_x"], "unexpected argument: sb_x"],
     ["logout with an argument", ["logout", "now"], "unexpected argument: now"],
     ["key with an argument", ["key", "sb_x"], "unexpected argument: sb_x"],
@@ -145,6 +225,11 @@ describe("parseCliArgs", () => {
       "login [--key K]",
       "logout",
       "key ",
+      "spec <name | apiId | specId>",
+      "--form published|normalized",
+      "-o FILE",
+      "--force",
+      "--no-wait",
       "--api-version",
       "--community",
       "--fresh",
