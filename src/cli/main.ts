@@ -4,6 +4,9 @@ import { runKey } from "./commands/key";
 import { runLogin } from "./commands/login";
 import { runLogout } from "./commands/logout";
 import { type CommandContext, runLookup } from "./commands/lookup";
+import { runOperation } from "./commands/operation";
+import { runOutline } from "./commands/outline";
+import { runSchema } from "./commands/schema";
 import { runSpec } from "./commands/spec";
 import { configPathOf } from "./config";
 import { baseUrlOf, keyOf } from "./http";
@@ -26,13 +29,16 @@ type Runner<K extends RunCommand> = (
   context: CommandContext,
 ) => Promise<number>;
 
-/** The command table, one line per command; a command missing here is a type error. Issues 4 and 5 add theirs. */
+/** The command table, one line per command; a command missing here is a type error. Issue 5 adds its own. */
 const COMMANDS: { [K in RunCommand]: Runner<K> } = {
   lookup: runLookup,
   login: runLogin,
   logout: runLogout,
   key: runKey,
   spec: runSpec,
+  outline: runOutline,
+  operation: runOperation,
+  schema: runSchema,
 };
 
 /**

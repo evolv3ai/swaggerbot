@@ -16,6 +16,15 @@ export const CLI_USAGE = `usage: swaggerbot <command> [options]
                       (--force to overwrite it). --no-wait: fail at once
                       while the Normalized Form is being built. --json
                       prints what was written, so it needs -o or a terminal
+  outline <name | apiId> [--tag T] [--query Q] [--spec-id S] [--limit N]
+          [--all]     its Spec Outline: title, servers, security schemes,
+                      tags, then the operations (100 a page, --limit up to
+                      500), by tag or a word of the path, operationId or
+                      summary; --all lists every tag and every page
+  operation <name | apiId> <method> <path> [--spec-id S]
+                      one operation, every reference inlined, as JSON
+  schema <name | apiId> <schemaName> [--spec-id S]
+                      one component schema, as JSON
 Options:
   --json              print the answer as the HTTP API gives it
   --key <key>         the API key (or SWAGGERBOT_API_KEY, or the one
@@ -38,7 +47,7 @@ export type CliGlobals = {
   noColor: boolean;
 };
 
-/** A `swaggerbot` command, once validated. Issues 4 and 5 add theirs here. */
+/** A `swaggerbot` command, once validated. Issue 5 adds its own here. */
 export type CliCommand =
   | {
       command: "lookup";
@@ -58,6 +67,36 @@ export type CliCommand =
       force: boolean;
       noWait: boolean;
     }
+  | {
+      command: "outline";
+      /** A name or an apiId (it has a `/`). */
+      target: ApiTarget;
+      tag?: string;
+      query?: string;
+      specId?: string;
+      /** Operations a page, 1 to `MAX_OUTLINE_LIMIT`. */
+      limit?: number;
+      /** Every tag, and every page from `cursor` on. */
+      all: boolean;
+      /** Where the page starts: a previous page's `nextCursor` (hidden from the usage). */
+      cursor?: string;
+    }
+  | {
+      command: "operation";
+      target: ApiTarget;
+      /** Lowercase. */
+      method: string;
+      /** Exactly as the Spec's paths have it. */
+      path: string;
+      specId?: string;
+    }
+  | {
+      command: "schema";
+      target: ApiTarget;
+      /** The bare name, or the whole `#/components/schemas/<name>` reference. */
+      name: string;
+      specId?: string;
+    }
   | { command: "login" }
   | { command: "logout" }
   | { command: "key" }
@@ -69,6 +108,26 @@ export type SpecTarget =
   | { kind: "specId"; specId: string }
   | { kind: "apiId"; apiId: string }
   | { kind: "name"; name: string };
+
+/** What `outline`, `operation` and `schema` read: an apiId as is, a name through a Lookup. */
+export type ApiTarget =
+  | { kind: "apiId"; apiId: string }
+  | { kind: "name"; name: string };
+
+/** The most operations `GET /api/apis/{apiId}/outline` puts on one page. */
+export const MAX_OUTLINE_LIMIT = 500;
+
+/** The methods an OpenAPI Path Item holds operations under. */
+const METHODS = [
+  "get",
+  "put",
+  "post",
+  "delete",
+  "options",
+  "head",
+  "patch",
+  "trace",
+];
 
 export type ParsedCliArgs =
   | { ok: true; command: CliCommand; globals: CliGlobals }
@@ -82,6 +141,9 @@ function fail(error: string): ParsedCliArgs {
 const COMMAND_FLAGS: Record<string, string[]> = {
   lookup: ["api-version", "community", "fresh"],
   spec: ["api-version", "form", "output", "force", "no-wait"],
+  outline: ["tag", "query", "spec-id", "limit", "all", "cursor"],
+  operation: ["spec-id"],
+  schema: ["spec-id"],
 };
 
 /** `-o` is `--output` to `parseArgs`; say it as it was given. */
@@ -106,6 +168,12 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
     output?: string;
     force?: boolean;
     "no-wait"?: boolean;
+    tag?: string;
+    query?: string;
+    "spec-id"?: string;
+    limit?: string;
+    all?: boolean;
+    cursor?: string;
   };
   let positionals: string[];
   try {
@@ -126,6 +194,12 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
         output: { type: "string", short: "o" },
         force: { type: "boolean" },
         "no-wait": { type: "boolean" },
+        tag: { type: "string" },
+        query: { type: "string" },
+        "spec-id": { type: "string" },
+        limit: { type: "string" },
+        all: { type: "boolean" },
+        cursor: { type: "string" },
       },
     }));
   } catch (err) {
@@ -225,6 +299,92 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
         globals,
       };
     }
+    case "outline": {
+      const [given, ...extra] = rest;
+      const target = apiTargetOf(given);
+      if (!target) return fail("outline needs a name or an apiId");
+      if (extra.length > 0) return fail(`unexpected argument: ${extra[0]}`);
+      const specId = specIdOf(values["spec-id"]);
+      if (specId === null) return fail(SPEC_ID_WORDS);
+      for (const flag of ["tag", "query", "cursor"] as const)
+        if (values[flag] !== undefined && !values[flag].trim())
+          return fail(`--${flag} needs a value`);
+      let limit: number | undefined;
+      if (values.limit !== undefined) {
+        limit = Number(values.limit);
+        if (
+          !/^\d+$/.test(values.limit.trim()) ||
+          limit < 1 ||
+          limit > MAX_OUTLINE_LIMIT
+        )
+          return fail(
+            `--limit is a whole number from 1 to ${MAX_OUTLINE_LIMIT} (got "${values.limit}")`,
+          );
+      }
+      return {
+        ok: true,
+        command: {
+          command,
+          target,
+          ...(values.tag === undefined ? {} : { tag: values.tag.trim() }),
+          ...(values.query === undefined ? {} : { query: values.query.trim() }),
+          ...(specId === undefined ? {} : { specId }),
+          ...(limit === undefined ? {} : { limit }),
+          all: values.all === true,
+          ...(values.cursor === undefined
+            ? {}
+            : { cursor: values.cursor.trim() }),
+        },
+        globals,
+      };
+    }
+    case "operation": {
+      const [given, method, path, ...extra] = rest;
+      const target = apiTargetOf(given);
+      if (!target || !method?.trim() || !path?.trim())
+        return fail(
+          "operation needs a name or an apiId, a method and a path, as in: operation stripe.com/stripe-api post /v1/customers",
+        );
+      if (extra.length > 0) return fail(`unexpected argument: ${extra[0]}`);
+      if (!METHODS.includes(method.trim().toLowerCase()))
+        return fail(
+          `the method is one of ${METHODS.join(", ")} (got "${method}")`,
+        );
+      const specId = specIdOf(values["spec-id"]);
+      if (specId === null) return fail(SPEC_ID_WORDS);
+      return {
+        ok: true,
+        command: {
+          command,
+          target,
+          method: method.trim().toLowerCase(),
+          path: path.trim(),
+          ...(specId === undefined ? {} : { specId }),
+        },
+        globals,
+      };
+    }
+    case "schema": {
+      const [given, name, ...extra] = rest;
+      const target = apiTargetOf(given);
+      if (!target || !name?.trim())
+        return fail(
+          "schema needs a name or an apiId and a schema name, as in: schema stripe.com/stripe-api customer",
+        );
+      if (extra.length > 0) return fail(`unexpected argument: ${extra[0]}`);
+      const specId = specIdOf(values["spec-id"]);
+      if (specId === null) return fail(SPEC_ID_WORDS);
+      return {
+        ok: true,
+        command: {
+          command,
+          target,
+          name: name.trim(),
+          ...(specId === undefined ? {} : { specId }),
+        },
+        globals,
+      };
+    }
     case "login":
     case "logout":
     case "key": {
@@ -236,4 +396,21 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
     default:
       return fail(`unknown command: ${command}`);
   }
+}
+
+const SPEC_ID_WORDS = "--spec-id is a Spec id: 64 hex characters";
+
+/** A name, or an apiId when it has a `/`; none when blank. */
+function apiTargetOf(given: string | undefined): ApiTarget | undefined {
+  const arg = given?.trim();
+  if (!arg) return undefined;
+  return arg.includes("/")
+    ? { kind: "apiId", apiId: arg }
+    : { kind: "name", name: arg };
+}
+
+/** `--spec-id` lowercased; `undefined` when not given, `null` when it isn't a Spec id. */
+function specIdOf(given: string | undefined): string | undefined | null {
+  if (given === undefined) return undefined;
+  return SPEC_ID.test(given.trim()) ? given.trim().toLowerCase() : null;
 }
