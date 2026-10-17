@@ -8,7 +8,7 @@ import { type CommandContext, failed } from "./lookup";
  * `swaggerbot key`: `GET /api/key` with the key in use (`--key`, else
  * `SWAGGERBOT_API_KEY`, else the one `login` stored for this origin), and
  * one line: its id, the credits left today and when they reset. Without a
- * key it says so. Exit 0, or 3 when there is no key or the request failed.
+ * key it says so. Exit 0, or 1 when there is no key or the request failed.
  */
 export async function runKey(
   _args: unknown,

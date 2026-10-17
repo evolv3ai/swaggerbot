@@ -3,7 +3,11 @@ import { type CliHttpError, durationWords } from "./http";
 
 /** Where a command reads and writes, and what it may assume about the terminal. */
 export type Io = {
-  stdout: { write(text: string): unknown };
+  /** Text, and the bytes `spec` downloads; `once("drain")` when a write says to wait. */
+  stdout: {
+    write(chunk: string | Uint8Array): unknown;
+    once?(event: "drain", listener: () => void): unknown;
+  };
   stderr: { write(text: string): unknown };
   /** Where `login` reads a key it wasn't given: the terminal, hidden, or a pipe. None when there is no stdin to read. */
   stdin?: NodeJS.ReadableStream & { isTTY?: boolean };
@@ -13,6 +17,10 @@ export type Io = {
   env: NodeJS.ProcessEnv;
   /** The clock, for "in 5 h"; now unless a test says otherwise. */
   now?: () => Date;
+  /** Waits `ms`, as `spec` does while a Normalized Form is built; a timer unless a test says otherwise. */
+  sleep?: (ms: number) => Promise<void>;
+  /** Where `spec` writes the file the server names; the process's unless a test says otherwise. */
+  cwd?: string;
 };
 
 /**
@@ -57,9 +65,25 @@ export function outcomeWords(outcome: Outcome["outcome"]): string {
   return outcome === "NoSpec" ? "No Spec" : outcome;
 }
 
-/** The exit code an Outcome earns: 0 for Resolved, 1 for every other. */
-export function outcomeExitCode(outcome: Outcome): 0 | 1 {
-  return outcome.outcome === "Resolved" ? 0 : 1;
+/**
+ * The CLI's exit codes (D4), the one mapping every command uses: 0 for
+ * Resolved or success, one code per other Outcome, 1 for a refusal or a
+ * failed request (401, 429, 503, no answer), 2 for a usage error. `--json`
+ * exits the same.
+ */
+export const EXIT = {
+  ok: 0,
+  failed: 1,
+  usage: 2,
+  Ambiguous: 3,
+  Unconfirmed: 4,
+  NoSpec: 5,
+  Unknown: 6,
+} as const;
+
+/** The exit code an Outcome earns: 0 for Resolved, 3 to 6 for the others. */
+export function outcomeExitCode(outcome: Outcome): number {
+  return outcome.outcome === "Resolved" ? EXIT.ok : EXIT[outcome.outcome];
 }
 
 /**
@@ -160,6 +184,13 @@ export function renderOutcome(
   if (outcome.diagnostics?.length)
     lines.push(p.dim(`  diagnostics: ${outcome.diagnostics.join(" | ")}`));
   return `${lines.join("\n")}\n`;
+}
+
+/** A size as a person reads it: `512 B`, `72.5 kB`, `6.1 MB`. */
+export function sizeWords(bytes: number): string {
+  if (bytes < 1000) return `${bytes} B`;
+  if (bytes < 1_000_000) return `${(bytes / 1000).toFixed(1)} kB`;
+  return `${(bytes / 1_000_000).toFixed(1)} MB`;
 }
 
 /** `87 credits left today`; `1 credit`; `no credits left today`. */

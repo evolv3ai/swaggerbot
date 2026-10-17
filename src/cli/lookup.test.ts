@@ -239,10 +239,10 @@ describe("swaggerbot lookup", () => {
     `);
   });
 
-  it("prints Ambiguous with its candidates, exit 1", async () => {
+  it("prints Ambiguous with its candidates, exit 3", async () => {
     const { code, stdout } = await cli(["lookup", "Jira"]);
 
-    expect(code).toBe(1);
+    expect(code).toBe(3);
     expect(stdout).toMatchInlineSnapshot(`
       "Ambiguous  2 APIs could be meant; say which
         Jira Cloud Platform REST API (Atlassian)  atlassian.com/jira-cloud-platform  55%
@@ -251,10 +251,10 @@ describe("swaggerbot lookup", () => {
     `);
   });
 
-  it("prints Unconfirmed with the Spec URL made absolute, its best Provenance and the reasons, exit 1", async () => {
+  it("prints Unconfirmed with the Spec URL made absolute, its best Provenance and the reasons, exit 4", async () => {
     const { code, stdout } = await cli(["lookup", "PayCo"]);
 
-    expect(code).toBe(1);
+    expect(code).toBe(4);
     expect(stdout).toMatchInlineSnapshot(`
       "Unconfirmed  Payments API (payco.example/payments)  Mirror  ${url}/api/specs/4b446f57c9327311b6b68ad0a0e53b19341971a436cd9f0fda2630e3445483df/published  verified 2026-09-24
         not confirmed to describe it: The Spec's title names a test fixture, not the API.
@@ -262,20 +262,20 @@ describe("swaggerbot lookup", () => {
     `);
   });
 
-  it("prints No Spec, saying when --community would help, exit 1", async () => {
+  it("prints No Spec, saying when --community would help, exit 5", async () => {
     const { code, stdout } = await cli(["lookup", "Widgets"]);
 
-    expect(code).toBe(1);
+    expect(code).toBe(5);
     expect(stdout).toMatchInlineSnapshot(`
       "No Spec  Widgets API (example.com/widgets)  a Community Spec exists: add --community to allow it
       "
     `);
   });
 
-  it("prints Unknown with the diagnostics, exit 1", async () => {
+  it("prints Unknown with the diagnostics, exit 6", async () => {
     const { code, stdout } = await cli(["lookup", "Not An API"]);
 
-    expect(code).toBe(1);
+    expect(code).toBe(6);
     expect(stdout).toMatchInlineSnapshot(`
       "Unknown  no API matches "Not An API"
         diagnostics: web search: no result named it
@@ -295,7 +295,14 @@ describe("swaggerbot lookup", () => {
       expect(stdout).toBe(`${answer.body}\n`);
       expect(stderr).toBe("");
       const outcome = answer.status === 200 && name !== "Not JSON";
-      expect(code).toBe(!outcome ? 3 : name === "Val Town" ? 0 : 1);
+      const exits: Record<string, number> = {
+        "Val Town": 0,
+        Jira: 3,
+        PayCo: 4,
+        Widgets: 5,
+        "Not An API": 6,
+      };
+      expect(code).toBe(outcome ? exits[name] : 1);
     }
   });
 
@@ -337,7 +344,7 @@ describe("swaggerbot lookup", () => {
     expect(seen[0]?.body).toEqual({ name: "Val Town", fresh: true });
   });
 
-  it("refuses --fresh without a key before sending anything, exit 3", async () => {
+  it("refuses --fresh without a key before sending anything, exit 1", async () => {
     const { code, stdout, stderr } = await cli([
       "lookup",
       "Val Town",
@@ -345,7 +352,7 @@ describe("swaggerbot lookup", () => {
     ]);
 
     expect(seen).toHaveLength(0);
-    expect(code).toBe(3);
+    expect(code).toBe(1);
     expect(stdout).toBe("");
     expect(stderr).toMatchInlineSnapshot(`
       "error  --fresh needs an API key.
@@ -354,7 +361,7 @@ describe("swaggerbot lookup", () => {
     `);
   });
 
-  it("sends --fresh without a key under --json and prints the server's 401 body byte for byte, exit 3", async () => {
+  it("sends --fresh without a key under --json and prints the server's 401 body byte for byte, exit 1", async () => {
     const { code, stdout, stderr } = await cli([
       "lookup",
       "Not Yet Indexed",
@@ -365,15 +372,15 @@ describe("swaggerbot lookup", () => {
     expect(seen).toHaveLength(1);
     expect(seen[0]?.body).toEqual({ name: "Not Yet Indexed", fresh: true });
     expect(seen[0]?.headers.authorization).toBeUndefined();
-    expect(code).toBe(3);
+    expect(code).toBe(1);
     expect(stderr).toBe("");
     expect(stdout).toBe(`${NEEDS_KEY_TEXT}\n`);
   });
 
-  it("explains a 401 for Discovery with where to get a key, exit 3", async () => {
+  it("explains a 401 for Discovery with where to get a key, exit 1", async () => {
     const { code, stdout, stderr } = await cli(["lookup", "Not Yet Indexed"]);
 
-    expect(code).toBe(3);
+    expect(code).toBe(1);
     expect(stdout).toBe("");
     expect(stderr).toMatchInlineSnapshot(`
       "error  Discovery needs an API key.
@@ -382,10 +389,10 @@ describe("swaggerbot lookup", () => {
     `);
   });
 
-  it("explains a 401 for a key that isn't live, exit 3", async () => {
+  it("explains a 401 for a key that isn't live, exit 1", async () => {
     const { code, stderr } = await cli(["lookup", "Bad Key", "--key", "sb_x"]);
 
-    expect(code).toBe(3);
+    expect(code).toBe(1);
     expect(stderr).toMatchInlineSnapshot(`
       "error  Unknown or revoked API key.
         Check the key, or get a new one at https://swaggerbot.dev/keys, then run \`swaggerbot login\`.
@@ -393,10 +400,10 @@ describe("swaggerbot lookup", () => {
     `);
   });
 
-  it("says when to retry after a 429, exit 3", async () => {
+  it("says when to retry after a 429, exit 1", async () => {
     const { code, stderr } = await cli(["lookup", "Quota", "--key", "sb_x"]);
 
-    expect(code).toBe(3);
+    expect(code).toBe(1);
     expect(stderr).toMatchInlineSnapshot(`
       "error  Daily quota used.
         Retry in 60 min.
@@ -404,10 +411,10 @@ describe("swaggerbot lookup", () => {
     `);
   });
 
-  it("says when to retry after a 503, exit 3", async () => {
+  it("says when to retry after a 503, exit 1", async () => {
     const { code, stderr } = await cli(["lookup", "Down", "--key", "sb_x"]);
 
-    expect(code).toBe(3);
+    expect(code).toBe(1);
     expect(stderr).toMatchInlineSnapshot(`
       "error  API keys can't be checked right now.
         Retry in 30 s.
@@ -415,12 +422,12 @@ describe("swaggerbot lookup", () => {
     `);
   });
 
-  it("says when the service refuses the connection, exit 3", async () => {
+  it("says when the service refuses the connection, exit 1", async () => {
     const { code, stderr } = await cli(["lookup", "Val Town"], {
       at: refusedUrl,
     });
 
-    expect(code).toBe(3);
+    expect(code).toBe(1);
     expect(stderr).toMatch(
       /^error {2}Could not reach http:\/\/127\.0\.0\.1:\d+: .*ECONNREFUSED/,
     );
@@ -446,14 +453,14 @@ describe("swaggerbot lookup", () => {
     expect(TIMEOUT_MS).toBeGreaterThan(500);
   });
 
-  it("refuses an answer that isn't JSON, exit 3", async () => {
+  it("refuses an answer that isn't JSON, exit 1", async () => {
     const { code, stderr } = await cli(["lookup", "Not JSON"]);
 
-    expect(code).toBe(3);
+    expect(code).toBe(1);
     expect(stderr).toContain("answered 200 but not with JSON");
   });
 
-  it("prints {status: 0, error} as JSON on stdout with --json when no answer came, exit 3", async () => {
+  it("prints {status: 0, error} as JSON on stdout with --json when no answer came, exit 1", async () => {
     const { code, stdout, stderr } = await cli(
       ["lookup", "Val Town", "--json"],
       {
@@ -461,7 +468,7 @@ describe("swaggerbot lookup", () => {
       },
     );
 
-    expect(code).toBe(3);
+    expect(code).toBe(1);
     expect(stderr).toBe("");
     const printed = JSON.parse(stdout) as Record<string, unknown>;
     expect(Object.keys(printed)).toEqual(["status", "error"]);

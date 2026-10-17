@@ -4,6 +4,7 @@ import { runKey } from "./commands/key";
 import { runLogin } from "./commands/login";
 import { runLogout } from "./commands/logout";
 import { type CommandContext, runLookup } from "./commands/lookup";
+import { runSpec } from "./commands/spec";
 import { configPathOf } from "./config";
 import { baseUrlOf, keyOf } from "./http";
 import {
@@ -25,18 +26,20 @@ type Runner<K extends RunCommand> = (
   context: CommandContext,
 ) => Promise<number>;
 
-/** The command table, one line per command; a command missing here is a type error. Issues 3 to 5 add theirs. */
+/** The command table, one line per command; a command missing here is a type error. Issues 4 and 5 add theirs. */
 const COMMANDS: { [K in RunCommand]: Runner<K> } = {
   lookup: runLookup,
   login: runLogin,
   logout: runLogout,
   key: runKey,
+  spec: runSpec,
 };
 
 /**
  * Runs `swaggerbot` for `argv` (without node and the script) and answers
- * with the exit code: 0 for Resolved, 1 for any other Outcome, 2 for a
- * usage error, 3 when the request failed. Nothing is written but to `io`.
+ * with the exit code (D4, `EXIT`): 0 for Resolved or success, 3 Ambiguous,
+ * 4 Unconfirmed, 5 No Spec, 6 Unknown, 1 for a refusal or a failed request,
+ * 2 for a usage error. Nothing is written but to `io`.
  */
 export async function runCli(argv: string[], io: Io): Promise<number> {
   const parsed = parseCliArgs(argv);
@@ -92,12 +95,18 @@ export async function main(): Promise<void> {
     stderrIsTTY: process.stderr.isTTY === true,
     env: process.env,
   };
+  // A reader that stops early (`swaggerbot spec … | head`) closes the pipe:
+  // that ends the command quietly, as it does for any Unix tool.
+  process.stdout.on("error", (err: NodeJS.ErrnoException) => {
+    if (err.code !== "EPIPE") throw err;
+    process.exit(process.exitCode ?? 0);
+  });
   try {
     process.exitCode = await runCli(process.argv.slice(2), io);
   } catch (err) {
     io.stderr.write(
       `error  ${err instanceof Error ? err.message : String(err)}\n`,
     );
-    process.exitCode = 3;
+    process.exitCode = 1;
   }
 }

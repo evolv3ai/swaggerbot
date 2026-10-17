@@ -245,10 +245,10 @@ describe("swaggerbot login", () => {
     expect(stored()).toEqual({ [url]: "sb_unkey" });
   });
 
-  it("says the key isn't live on a 401 and stores nothing, exit 3", async () => {
+  it("says the key isn't live on a 401 and stores nothing, exit 1", async () => {
     const { code, stdout, stderr } = await cli(["login", "--key", "sb_dead"]);
 
-    expect(code).toBe(3);
+    expect(code).toBe(1);
     expect(stdout).toBe("");
     expect(stderr).toMatchInlineSnapshot(`
       "error  That key isn't live.
@@ -258,10 +258,10 @@ describe("swaggerbot login", () => {
     expect(stored()).toBeUndefined();
   });
 
-  it("says when to retry on a 503 and stores nothing, exit 3", async () => {
+  it("says when to retry on a 503 and stores nothing, exit 1", async () => {
     const { code, stderr } = await cli(["login", "--key", "sb_down"]);
 
-    expect(code).toBe(3);
+    expect(code).toBe(1);
     expect(stderr).toMatchInlineSnapshot(`
       "error  API keys can't be checked right now.
         Retry in 30 s.
@@ -317,7 +317,7 @@ describe("swaggerbot login", () => {
     expect(stored()).toEqual({ [url]: "sb_live" });
 
     const dead = await cli(["login", "--key", "sb_dead", "--json"]);
-    expect(dead.code).toBe(3);
+    expect(dead.code).toBe(1);
     expect(dead.stdout).toBe(`${ANSWERS.sb_dead?.body}\n`);
     expect(dead.stderr).toBe("");
     expect(stored()).toEqual({ [url]: "sb_live" });
@@ -378,7 +378,7 @@ describe("swaggerbot key", () => {
     expect(seen[1]?.authorization).toBe("Bearer sb_bare");
   });
 
-  it("never sends the stored key to another origin: --url elsewhere has no key, exit 3", async () => {
+  it("never sends the stored key to another origin: --url elsewhere has no key, exit 1", async () => {
     storeKey(configPath, url, "sb_live", () => {});
     const { code, stderr } = await cli([
       "key",
@@ -387,7 +387,7 @@ describe("swaggerbot key", () => {
     ]);
 
     expect(seen).toHaveLength(0);
-    expect(code).toBe(3);
+    expect(code).toBe(1);
     expect(stderr).toMatchInlineSnapshot(`
       "error  No API key is configured for https://other.example.
         Get one at https://swaggerbot.dev/keys, then run \`swaggerbot login\`.
@@ -395,22 +395,22 @@ describe("swaggerbot key", () => {
     `);
   });
 
-  it("says when no key is configured, sending nothing, exit 3", async () => {
+  it("says when no key is configured, sending nothing, exit 1", async () => {
     const { code, stdout, stderr } = await cli(["key"]);
 
     expect(seen).toHaveLength(0);
-    expect(code).toBe(3);
+    expect(code).toBe(1);
     expect(stdout).toBe("");
     expect(stderr).toBe(
       `error  No API key is configured for ${url}.\n  Get one at https://swaggerbot.dev/keys, then run \`swaggerbot login\`.\n`,
     );
   });
 
-  it("explains a 401 for a stored key that is no longer live, exit 3", async () => {
+  it("explains a 401 for a stored key that is no longer live, exit 1", async () => {
     storeKey(configPath, url, "sb_dead", () => {});
     const { code, stderr } = await cli(["key"]);
 
-    expect(code).toBe(3);
+    expect(code).toBe(1);
     expect(stderr).toContain("Unknown or revoked API key.");
     expect(stored()).toEqual({ [url]: "sb_dead" });
   });
@@ -496,7 +496,7 @@ describe("the stored key and lookup", () => {
   it("explains the 401 for Discovery when no key is stored, sending once", async () => {
     const { code, stderr } = await cli(["lookup", "Not Yet Indexed"]);
 
-    expect(code).toBe(3);
+    expect(code).toBe(1);
     expect(seen).toHaveLength(1);
     expect(stderr).toContain("Discovery needs an API key.");
   });
@@ -525,7 +525,7 @@ describe("the stored key and lookup", () => {
     storeKey(configPath, url, "sb_live", () => {});
     const { code } = await cli(["lookup", "Not Yet Indexed", "--key", "sb_x"]);
 
-    expect(code).toBe(3);
+    expect(code).toBe(1);
     expect(seen.map((s) => s.authorization)).toEqual(["Bearer sb_x"]);
   });
 });
@@ -552,7 +552,7 @@ describe("a config file that isn't JSON", () => {
   it("is said once when a Discovery lookup looks for the stored key, then the 401 is explained", async () => {
     const { code, stderr } = await cli(["lookup", "Not Yet Indexed"]);
 
-    expect(code).toBe(3);
+    expect(code).toBe(1);
     expect(stderr).toBe(
       `${warning()}error  Discovery needs an API key.\n  Discovery needs an API key. Get one at https://swaggerbot.dev/keys, then run \`swaggerbot login\`.\n`,
     );
@@ -582,7 +582,7 @@ describe("a config file that isn't JSON", () => {
   it("leaves key saying no key is configured", async () => {
     const { code, stderr } = await cli(["key"]);
 
-    expect(code).toBe(3);
+    expect(code).toBe(1);
     expect(seen).toHaveLength(0);
     expect(stderr).toBe(
       `${warning()}error  No API key is configured for ${url}.\n  Get one at https://swaggerbot.dev/keys, then run \`swaggerbot login\`.\n`,
