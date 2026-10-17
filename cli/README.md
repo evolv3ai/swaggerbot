@@ -42,7 +42,7 @@ Downloads a Spec: the file itself, without copying a URL from `lookup`.
 
 - A Spec id (64 hex characters) is downloaded as is, with no Lookup.
 - An apiId (it has a `/`, like `stripe.com/stripe-api`) gives that API's Current Spec.
-- A name is looked up. Only a Resolved answer is downloaded: its Current Spec, or with `--api-version V` its Spec of that API Version (if it has none, `spec` says which API Versions it has). Any other Outcome is printed as `lookup` prints it, with its exit code, and nothing is downloaded.
+- A name is looked up. Only a Resolved answer is downloaded: its Current Spec, or with `--api-version V` the Spec a Lookup for that API Version resolves to, Preview and Superseded ones included (if there is none, `spec` says which API Versions it has). Any other Outcome is printed as `lookup` prints it, with its exit code, and nothing is downloaded.
 
 `--form published` (the default) is the Spec byte for byte as its Source published it; its sha256 must be its Spec id, or `spec` says so, keeps nothing and exits 1. `--form normalized` is the Normalized Form (OpenAPI 3.1 JSON). While it is being built `spec` waits, as the service asks, up to 2 minutes, saying "Normalized Form being built…"; `--no-wait` exits 1 at once instead. A Normalized Form that couldn't be built is said so, exit 1.
 

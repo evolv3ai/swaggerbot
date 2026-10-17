@@ -17,6 +17,7 @@ import { EXIT, palette, renderUsageError, sizeWords } from "../render";
 import {
   type CommandContext,
   failed,
+  type LookupBody,
   printOutcome,
   requestLookup,
 } from "./lookup";
@@ -47,8 +48,9 @@ type Attempt =
 /**
  * `swaggerbot spec <name | apiId | specId>`: downloads one form of a Spec.
  * A Spec id needs no Lookup; an apiId's Current Spec is read from its
- * outline; a name is looked up, and only a Resolved answer is downloaded
- * (its Current Spec, or with `--api-version` the Spec of that API Version);
+ * outline; a name is looked up, and only a Resolved answer is downloaded:
+ * its Current Spec, or with `--api-version` the Spec a Lookup for that API
+ * Version resolves to (else a plain Lookup says which API Versions it has);
  * any other Outcome is printed as `lookup` prints it, with its exit code.
  * The bytes go to `-o FILE`, else to stdout on a pipe, else to the file
  * the server names in the current directory (`--force` to overwrite it).
@@ -119,20 +121,32 @@ async function choose(
       };
     }
     case "name": {
-      const result = await requestLookup({ name: target.name }, http, {
-        retryWithStored: true,
-        stored: () => storedKeyOf(configPath, http.baseUrl, note),
-      });
+      const lookup = (body: LookupBody) =>
+        requestLookup(body, http, {
+          retryWithStored: true,
+          stored: () => storedKeyOf(configPath, http.baseUrl, note),
+        });
+      const { apiVersion } = args;
+      if (apiVersion !== undefined) {
+        const versioned = await lookup({ name: target.name, apiVersion });
+        if (!versioned.ok) return failed(versioned, globals, io, stderrColor);
+        const outcome = versioned.body;
+        if (
+          outcome.outcome === "Resolved" &&
+          outcome.currentSpec.apiVersion === apiVersion
+        )
+          return {
+            specId: outcome.currentSpec.id,
+            apiId: outcome.api.id,
+            url: outcome.currentSpec.downloads[form],
+          };
+      }
+      const result = await lookup({ name: target.name });
       if (!result.ok) return failed(result, globals, io, stderrColor);
       const outcome = result.body;
       if (outcome.outcome !== "Resolved") return printOutcome(result, context);
-      const specs = [outcome.currentSpec, ...outcome.alternateSpecs];
-      const spec =
-        args.apiVersion === undefined
-          ? outcome.currentSpec
-          : specs.find((s) => s.apiVersion === args.apiVersion);
-      if (!spec) {
-        const versions = specs.map(
+      if (apiVersion !== undefined) {
+        const versions = [outcome.currentSpec, ...outcome.alternateSpecs].map(
           (s) =>
             `${s.apiVersion ?? "none"}${s === outcome.currentSpec ? " (Current)" : ""}`,
         );
@@ -140,7 +154,7 @@ async function choose(
           {
             error: {
               status: 404,
-              error: `${outcome.api.name} (${outcome.api.id}) has no Spec for API Version ${args.apiVersion}.`,
+              error: `${outcome.api.name} (${outcome.api.id}) has no Spec for API Version ${apiVersion}.`,
               hint: `Its API Versions: ${versions.join(", ")}.`,
             },
           },
@@ -150,9 +164,9 @@ async function choose(
         );
       }
       return {
-        specId: spec.id,
+        specId: outcome.currentSpec.id,
         apiId: outcome.api.id,
-        url: spec.downloads[form],
+        url: outcome.currentSpec.downloads[form],
       };
     }
   }

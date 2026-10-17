@@ -25,8 +25,12 @@ const ALTERNATE =
   '{"openapi":"3.1.0","info":{"title":"Val API","version":"2"}}';
 const NORMALIZED =
   '{"openapi":"3.1.0","info":{"title":"Val API","version":"1"},"paths":{}}';
+/** A Preview Version's Published Form: not an Alternate, so only a Lookup for its API Version finds it. */
+const PREVIEW =
+  '{"openapi":"3.1.0","info":{"title":"Val API","version":"2025-01-preview"}}';
 const CURRENT_ID = sha256(CURRENT);
 const ALTERNATE_ID = sha256(ALTERNATE);
+const PREVIEW_ID = sha256(PREVIEW);
 /** A Spec whose bytes on the wire aren't its own: the server serves CURRENT for it. */
 const TAMPERED_ID = "b".repeat(64);
 /** A Spec whose Normalized Form couldn't be built. */
@@ -63,6 +67,36 @@ function resolved(url: string): Outcome {
       },
     ],
   };
+}
+
+/**
+ * What a Lookup for Val Town with `apiVersion` answers: Resolved with that
+ * API Version's Spec as its Current Spec when the fake knows it, else NoSpec.
+ */
+function resolvedAt(url: string, apiVersion: string): Outcome {
+  const plain = resolved(url) as Extract<Outcome, { outcome: "Resolved" }>;
+  const preview = {
+    ...plain.currentSpec,
+    id: PREVIEW_ID,
+    apiVersion: "2025-01-preview",
+    downloads: {
+      published: `/api/specs/${PREVIEW_ID}/published`,
+      normalized: `/api/specs/${PREVIEW_ID}/normalized`,
+    },
+  };
+  const spec = [plain.currentSpec, ...plain.alternateSpecs, preview].find(
+    (s) => s.apiVersion === apiVersion,
+  );
+  if (!spec)
+    return {
+      outcome: "NoSpec",
+      api: plain.api,
+      vendor: plain.vendor,
+      communityAvailable: false,
+      diagnostics: plain.diagnostics,
+      timings: plain.timings,
+    };
+  return { ...plain, currentSpec: spec, alternateSpecs: [] };
 }
 
 const AMBIGUOUS: Outcome = {
@@ -113,8 +147,17 @@ beforeAll(async () => {
         return true;
       };
       if (req.method === "POST" && path === "/api/lookup") {
-        const { name } = JSON.parse(raw) as { name: string };
-        if (name === "Val Town") return json(200, resolved(url));
+        const { name, apiVersion } = JSON.parse(raw) as {
+          name: string;
+          apiVersion?: string;
+        };
+        if (name === "Val Town")
+          return json(
+            200,
+            apiVersion === undefined
+              ? resolved(url)
+              : resolvedAt(url, apiVersion),
+          );
         if (name === "Jira") return json(200, AMBIGUOUS);
         return json(500, { error: `the fake knows no ${name}` });
       }
@@ -139,8 +182,18 @@ beforeAll(async () => {
       if (download) {
         const [, id, form] = download;
         if (form === "published") {
-          const bytes = id === ALTERNATE_ID ? ALTERNATE : CURRENT;
-          if (id !== CURRENT_ID && id !== ALTERNATE_ID && id !== TAMPERED_ID)
+          const bytes =
+            id === ALTERNATE_ID
+              ? ALTERNATE
+              : id === PREVIEW_ID
+                ? PREVIEW
+                : CURRENT;
+          if (
+            id !== CURRENT_ID &&
+            id !== ALTERNATE_ID &&
+            id !== PREVIEW_ID &&
+            id !== TAMPERED_ID
+          )
             return json(404, { error: "No such Spec." });
           res.writeHead(200, {
             "content-type": "application/json",
@@ -294,6 +347,22 @@ describe("swaggerbot spec", () => {
     ]);
   });
 
+  it("downloads a Preview Version of --api-version, which only a Lookup for it finds", async () => {
+    const { code, stdout } = await cli([
+      "spec",
+      "Val Town",
+      "--api-version",
+      "2025-01-preview",
+    ]);
+
+    expect(code).toBe(0);
+    expect(stdout).toBe(PREVIEW);
+    expect(seen).toEqual([
+      "POST /api/lookup",
+      `GET /api/specs/${PREVIEW_ID}/published`,
+    ]);
+  });
+
   it("names the API Versions there are when --api-version matches none, exit 1", async () => {
     const { code, stdout, stderr } = await cli([
       "spec",
@@ -309,7 +378,7 @@ describe("swaggerbot spec", () => {
         Its API Versions: 1 (Current), 2.
       "
     `);
-    expect(seen).toEqual(["POST /api/lookup"]);
+    expect(seen).toEqual(["POST /api/lookup", "POST /api/lookup"]);
   });
 
   it("prints an Ambiguous name's candidates as lookup does, downloads nothing, exit 3", async () => {
