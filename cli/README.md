@@ -74,3 +74,5 @@ Resolved  Val API (val.town/api)  Official  https://swaggerbot.dev/api/specs/4b4
 
 - The documentation: <https://swaggerbot.dev/docs#cli>
 - The repository: <https://github.com/evolv3ai/swaggerbot>
+
+License: MIT
