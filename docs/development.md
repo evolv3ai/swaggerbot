@@ -13,11 +13,12 @@ One TanStack Start app, TypeScript throughout, pnpm, Node 24 (the pnpm version i
 - `src/sources/`: APIs.guru, web search, portal finding, GitHub, the Developer Portal crawl.
 - `src/lookup/`: the Lookup pipeline, thresholds and the HTTP API (`http.ts`, wired in `app.ts`).
 - `src/spec-forms/`: the Normalized Form, Validity Issues and Spec Outline builder (the only place that may import Scalar, [ADR 0004](adr/0004-normalized-form-built-in-background-with-scalar.md); Biome enforces it).
+- `src/chat/`: "Ask this Spec" (Slice 9). `retrieve.ts` picks a question's grounding from the Normalized Form and the Spec Outline, pure code with no model and no Index; `words.ts` is the tokenizer and stop list it shares with the chat Benchmark.
 - `src/mcp/`: the MCP server over the same code ([ADR 0005](adr/0005-mcp-in-process-with-agent-sized-results.md)).
 - `src/chat/`: Ask this Spec (Slice 9): the `Model` seam, the Anthropic adapter (`anthropic.ts`, the only file that may import `@anthropic-ai/sdk`; Biome enforces it), `FakeModel` for tests and the system prompt.
 - `src/routes/`, `src/components/`, `src/styles/`, `src/lib/`: the web UI (TanStack Start routes, shadcn components, Tailwind 4 theme); `src/server/`: request middleware such as the security headers.
 - `src/benchmark/` and `benchmark/entries.json`: the Benchmark and its runner, plus the deployment checks' code.
-- `scripts/`: CLI entry points run with `pnpm tsx` (`bench.ts`, `keys.ts`, the `*check.ts` deployment checks, `lookup.ts`). The README documents each.
+- `scripts/`: CLI entry points run with `pnpm tsx` (`bench.ts`, `keys.ts`, the `*check.ts` deployment checks, `lookup.ts`). The README documents each. `pnpm tsx scripts/chat-retrieve.ts [--text] <normalized.json> "<question>"` prints what an "Ask this Spec" turn would send the model for that question, with each document's bytes, without calling one; `<normalized.json>` is a Normalized Form, for example a Spec's `normalized_bytes` copied out of a copy of the Index with `sqlite3 index.db "select writefile('normalized.json', normalized_bytes) from spec_forms where spec_id = '<specId>'"`.
 - `src/cli/`: the public `swaggerbot` CLI (Slice 8), a client of the HTTP API only: it may import types from `src/domain/` and nothing from the server (Biome enforces it).
 - `cli/`: the npm package around that CLI (`package.json`, `README.md`, `CHANGELOG.md`); `pnpm build:cli` bundles `src/cli/bin.ts` into `cli/dist/swaggerbot.mjs`, which is ignored by git.
 - `docker/` and `Dockerfile`: the production image and its Litestream entrypoint ([`docs/deploy.md`](deploy.md)).

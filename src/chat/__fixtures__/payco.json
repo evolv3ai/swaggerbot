@@ -1,0 +1,152 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "PayCo", "version": "2024-06-01" },
+  "servers": [{ "url": "https://api.payco.example/v1" }],
+  "security": [{ "bearerAuth": [] }],
+  "tags": [{ "name": "Customers" }, { "name": "Invoices" }],
+  "paths": {
+    "/customers": {
+      "get": {
+        "operationId": "listCustomers",
+        "summary": "List all customers",
+        "tags": ["Customers"],
+        "responses": {
+          "200": {
+            "description": "The customers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Customer" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createCustomer",
+        "summary": "Create a customer",
+        "tags": ["Customers"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CustomerInput" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The new customer",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Customer" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/customers/{customer}": {
+      "parameters": [
+        {
+          "name": "customer",
+          "in": "path",
+          "required": true,
+          "schema": { "type": "string" }
+        }
+      ],
+      "get": {
+        "operationId": "getCustomer",
+        "summary": "Retrieve a customer",
+        "tags": ["Customers"],
+        "responses": {
+          "200": {
+            "description": "The customer",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Customer" }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteCustomer",
+        "summary": "Delete a customer",
+        "tags": ["Customers"],
+        "responses": { "204": { "description": "Deleted" } }
+      }
+    },
+    "/customers/{customer}/sources": {
+      "post": {
+        "operationId": "createSource",
+        "summary": "Create a source for a customer",
+        "tags": ["Customers"],
+        "responses": { "201": { "description": "The new source" } }
+      }
+    },
+    "/invoices": {
+      "get": {
+        "operationId": "listInvoices",
+        "summary": "List all invoices",
+        "tags": ["Invoices"],
+        "responses": {
+          "200": {
+            "description": "The invoices",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Invoice" }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Your secret key."
+      }
+    },
+    "schemas": {
+      "Customer": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "email": { "type": "string" },
+          "address": { "$ref": "#/components/schemas/Address" }
+        }
+      },
+      "CustomerInput": {
+        "type": "object",
+        "properties": {
+          "email": { "type": "string" },
+          "address": { "$ref": "#/components/schemas/Address" }
+        }
+      },
+      "Address": {
+        "type": "object",
+        "properties": {
+          "line1": { "type": "string" },
+          "city": { "type": "string" },
+          "country": { "type": "string" }
+        }
+      },
+      "Invoice": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "customer": { "type": "string" },
+          "amount_due": { "type": "integer" }
+        }
+      }
+    }
+  }
+}

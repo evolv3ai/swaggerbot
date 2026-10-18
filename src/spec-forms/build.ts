@@ -581,7 +581,7 @@ function stripQueryOnlyParameterKeys(doc: Obj): void {
 }
 
 /** The Spec Outline of a Normalized Form (see `SpecOutline`). */
-function outlineOf(doc: Obj): SpecOutline {
+export function outlineOf(doc: Obj): SpecOutline {
   const info = isObj(doc.info) ? doc.info : {};
 
   const servers = Array.isArray(doc.servers)
