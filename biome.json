@@ -42,6 +42,10 @@
               {
                 "group": ["@scalar/**"],
                 "message": "Only src/spec-forms/ may import Scalar (ADR 0004)."
+              },
+              {
+                "group": ["@anthropic-ai/sdk", "@anthropic-ai/sdk/**"],
+                "message": "Only src/chat/anthropic.ts may import the Anthropic SDK (ADR 0007)."
               }
             ]
           }
@@ -63,7 +67,17 @@
       "linter": {
         "rules": {
           "style": {
-            "noRestrictedImports": "off"
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["@anthropic-ai/sdk", "@anthropic-ai/sdk/**"],
+                    "message": "Only src/chat/anthropic.ts may import the Anthropic SDK (ADR 0007)."
+                  }
+                ]
+              }
+            }
           }
         }
       }
@@ -80,6 +94,10 @@
                   {
                     "group": ["@scalar/**"],
                     "message": "Only src/spec-forms/ may import Scalar (ADR 0004)."
+                  },
+                  {
+                    "group": ["@anthropic-ai/sdk", "@anthropic-ai/sdk/**"],
+                    "message": "Only src/chat/anthropic.ts may import the Anthropic SDK (ADR 0007)."
                   },
                   {
                     "group": [
@@ -101,6 +119,26 @@
                       "**/sources/**"
                     ],
                     "message": "The public CLI (src/cli/) talks to swagger.bot over HTTP only: types from src/domain/, nothing from the server."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/chat/anthropic.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["@scalar/**"],
+                    "message": "Only src/spec-forms/ may import Scalar (ADR 0004)."
                   }
                 ]
               }
