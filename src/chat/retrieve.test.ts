@@ -89,7 +89,7 @@ describe("groundingFor", () => {
     expect(stats.bytes).toBe(stats.factsBytes);
   });
 
-  it("keeps what earlier turns cited, first", () => {
+  it("keeps what earlier turns cited, after the question's best matches", () => {
     const history: ChatTurn[] = [
       { role: "user", text: "How do I list invoices?" },
       {
@@ -110,17 +110,85 @@ describe("groundingFor", () => {
       paycoSpec,
     );
     const operations = documents.filter((d) => d.kind === "operation");
-    expect(operations.slice(0, 3).map((d) => d.title)).toEqual([
+    expect(operations.map((d) => d.title)).toEqual([
+      "POST /customers (operation)",
+      "POST /customers/{customer}/sources (operation)",
+      "GET /customers (operation)",
+      // Cited, and matched too: each once.
       "DELETE /customers/{customer} (operation)",
       "GET /invoices (operation)",
-      "POST /customers (operation)",
+      "GET /customers/{customer} (operation)",
     ]);
-    // Each once, though the question matches the cited DELETE too.
-    expect(new Set(operations.map((d) => d.title)).size).toBe(
-      operations.length,
-    );
-    expect(documents.find((d) => d.kind === "schema")?.title).toBe(
+    expect(
+      documents.filter((d) => d.kind === "schema").map((d) => d.title),
+    ).toEqual([
+      "Customer (schema)",
+      "CustomerInput (schema)",
       "Invoice (schema)",
+    ]);
+  });
+
+  it("keeps half the slots for the question's matches when earlier turns cited a full set", () => {
+    const op = (summary: string) => ({ summary, responses: {} });
+    const doc = {
+      openapi: "3.1.0",
+      info: { title: "Shop", version: "1" },
+      paths: {
+        ...Object.fromEntries(
+          Array.from({ length: 6 }, (_, i) => [
+            `/widgets-${i}`,
+            { get: op(`List widgets ${i}`) },
+          ]),
+        ),
+        "/charges/{charge}/refunds": { post: op("Refund a charge") },
+        "/refunds": { get: op("List refunds") },
+        "/charges": { get: op("List charges") },
+        "/charges/{charge}": { get: op("Get a charge") },
+      },
+      components: {
+        schemas: Object.fromEntries(
+          ["Widget", "Gadget", "Gizmo", "Sprocket", "Refund", "Charge"].map(
+            (name) => [name, { type: "object" }],
+          ),
+        ),
+      },
+    };
+    const history: ChatTurn[] = [
+      {
+        role: "assistant",
+        text: "",
+        cited: [
+          ...Array.from({ length: 6 }, (_, i) => ({
+            method: "get",
+            path: `/widgets-${i}`,
+          })),
+          { name: "Widget" },
+          { name: "Gadget" },
+          { name: "Gizmo" },
+          { name: "Sprocket" },
+        ],
+      },
+    ];
+    const { documents } = groundingFor(
+      "How do I refund a charge?",
+      history,
+      specOf(doc),
+    );
+    const titles = documents.map((d) => d.title);
+    expect(
+      documents.filter((d) => d.kind === "operation").map((d) => d.title),
+    ).toEqual([
+      "POST /charges/{charge}/refunds (operation)",
+      "GET /refunds (operation)",
+      "GET /charges (operation)",
+      "GET /widgets-0 (operation)",
+      "GET /widgets-1 (operation)",
+      "GET /widgets-2 (operation)",
+    ]);
+    expect(titles).toContain("Refund (schema)");
+    expect(titles).toContain("Charge (schema)");
+    expect(documents.filter((d) => d.kind === "schema")).toHaveLength(
+      MAX_SCHEMAS,
     );
   });
 

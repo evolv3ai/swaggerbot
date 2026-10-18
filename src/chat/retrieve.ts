@@ -118,20 +118,21 @@ type OutlineOperation = SpecOutline["operations"][number];
 
 /**
  * The grounding for `question` about one Spec, within `budget` bytes of
- * `text`. The facts come first, always. Then the operations and schemas
- * cited earlier in `history` (most recent turn first), then the outline's
- * operations that best match the question's words, then the schemas whose
- * names do, at most `MAX_OPERATIONS` and `MAX_SCHEMAS`, each expanded to
- * fit its own cap and what is left of the budget. An operation or schema
- * that can't fit even cut short is passed over.
+ * `text`. The facts come first, always. Then the operations, then the
+ * schemas, at most `MAX_OPERATIONS` and `MAX_SCHEMAS`, each expanded to fit
+ * its own cap and what is left of the budget. Of each, the question's best
+ * matches take the first half of the slots; those cited earlier in
+ * `history` (most recent turn first) are kept in the rest, and any slots
+ * still free go to further matches. An operation or schema that can't fit
+ * even cut short is passed over.
  *
  * An operation scores, for each word, the word's rarity across the
  * outline's operations, times 3 when the word is a whole literal segment of
  * the path, 2 when it is a word within one, and 1 when it hits the
  * `operationId`, summary, tags or (for a verb such as "create") the method.
  * Ties go to the shorter path, then to outline order. `apiId` and `specId`
- * are not read: they travel with the grounding so the caller can map
- * citations back to links.
+ * are accepted for the route (Slice 9, #5); retrieval itself doesn't read
+ * them.
  */
 export function groundingFor(
   question: string,
@@ -151,14 +152,16 @@ export function groundingFor(
   const matched = new Set([...ranked.matched, ...schemaRanked.matched]);
 
   const cited = citedRefs(history);
-  const operationRefs = uniqueRefs([
-    ...cited.filter(isOperationRef),
-    ...ranked.operations.map(({ method, path }) => ({ method, path })),
-  ]);
-  const schemaRefs = uniqueRefs([
-    ...cited.filter(isSchemaRef),
-    ...schemaRanked.names.map((name) => ({ name })),
-  ]);
+  const operationRefs = withCited(
+    cited.filter(isOperationRef),
+    ranked.operations.map(({ method, path }) => ({ method, path })),
+    MAX_OPERATIONS / 2,
+  );
+  const schemaRefs = withCited(
+    cited.filter(isSchemaRef),
+    schemaRanked.names.map((name) => ({ name })),
+    MAX_SCHEMAS / 2,
+  );
 
   let truncated = 0;
   const operations: GroundingDocument[] = [];
@@ -408,6 +411,22 @@ function rankSchemas(
 /** Every operation and schema cited in `history`, the most recent turn first. */
 function citedRefs(history: readonly ChatTurn[]): GroundingRef[] {
   return [...history].reverse().flatMap((turn) => turn.cited ?? []);
+}
+
+/**
+ * The refs to try, in order: the first `reserved` of `matched`, then
+ * `cited`, then the rest of `matched`, each once.
+ */
+function withCited<T extends GroundingRef>(
+  cited: readonly T[],
+  matched: readonly T[],
+  reserved: number,
+): T[] {
+  return uniqueRefs([
+    ...matched.slice(0, reserved),
+    ...cited,
+    ...matched.slice(reserved),
+  ]);
 }
 
 function uniqueRefs<T extends GroundingRef>(refs: readonly T[]): T[] {
