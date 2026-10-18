@@ -42,7 +42,6 @@ Never commit values; `.env.example` lists each with a comment, and `cp .env.exam
 - Lookup: `TYPESAFE_API_KEY`, `BRAVE_API_KEY`, `TAVILY_API_KEY`, `SEARCH_PROVIDER`, `DATABASE_PATH`, `GITHUB_SEARCH_TOKEN` (repo metadata works without it; GitHub code search does not; `GITHUB_TOKEN` is read as a fallback), `MAX_SPEC_BYTES`, `SPEC_STEP_BUDGET_MS`.
 - Serving: `PORT`, `FRESHNESS_DAYS`, `DAILY_QUOTA`, `RATE_LIMIT_PER_MINUTE`, `CLIENT_IP_HEADER`, `PUBLIC_BASE_URL`, `MAX_FORMS_BYTES`.
 - Backups, container only: the `LITESTREAM_*` settings read by `docker/entrypoint.sh` (the README's "Running in production" table).
-- Ask this Spec: `ANTHROPIC_API_KEY` (unset, the feature is off), `CHAT_MODEL`, `CHAT_EFFORT`, `CHAT_DAILY_TURNS`, `CHAT_LOG_TEXT`.
+- Ask this Spec: `ANTHROPIC_API_KEY` (unset, the feature is off), `CHAT_MODEL`, `CHAT_EFFORT`, `CHAT_DAILY_TURNS` (questions a signed-in person may ask a UTC day, default 30), `CHAT_LOG_TEXT=1` (keep each turn's question and answer for a tuning period).
 - Self-service keys ([ADR 0006](adr/0006-keys-in-unkey-accounts-in-workos.md)): `UNKEY_ROOT_KEY`, `UNKEY_API_ID`, `UNKEY_KEYSPACE_ID`, `UNKEY_MIGRATION_ID`, `WORKOS_API_KEY`, `WORKOS_CLIENT_ID`, `WORKOS_COOKIE_PASSWORD`, `WORKOS_REDIRECT_URI`.
-- Ask this Spec (Slice 9): `CHAT_DAILY_TURNS` (questions a signed-in person may ask a UTC day, default 30), `CHAT_LOG_TEXT=1` (keep each turn's question and answer for a tuning period).
 - Diagnostics and the deployment checks: `LOOKUP_TRACE=1` (per-step timings on every Lookup), `LOOKUP_FULL` (`scripts/lookup.ts` prints the whole Outcome), `LOADCHECK_KEY` and `KEYCHECK_KEY` (the bearer the `*check.ts` scripts send).
