@@ -1,6 +1,10 @@
 import { createAnthropicModel } from "~/chat/anthropic";
 import { chatConfigOf } from "~/chat/prompt";
-import { createChatStore } from "~/index-store/chat";
+import {
+  chatDailyTurnsOf,
+  chatLogTextOf,
+  createChatStore,
+} from "~/index-store/chat";
 import { defaultDailyQuota } from "~/index-store/keys";
 import { createApp } from "~/lookup/app";
 import { type Gate, rateLimited } from "~/lookup/http";
@@ -12,6 +16,12 @@ import {
 import { normalizedCache } from "~/spec-forms/operation-http";
 import { currentUser } from "./auth";
 import type { ChatDeps } from "./chat";
+import {
+  chatFakeOn,
+  createFakeChatModel,
+  FAKE_MODEL_NAME,
+  FAKE_PERSON,
+} from "./chat-fake";
 import { createChatGate } from "./chat-gate";
 
 export type App = ReturnType<typeof createApp>;
@@ -59,39 +69,69 @@ export async function openGet(
 export type Chat = NonNullable<ChatDeps["chat"]>;
 
 const CHAT = Symbol.for("swaggerbot.chat");
-const chatStore = globalThis as { [CHAT]?: { chat: Chat | undefined } };
+const chatStore = globalThis as {
+  [CHAT]?: { chat: Chat | undefined; fake: boolean };
+};
 
 /**
  * The server's one chat, built on the first call from `getApp().db` and
  * `chatConfigOf(process.env)`; `undefined` while the feature is off (no
- * `ANTHROPIC_API_KEY`). On `globalThis` for the reason `getApp` is.
+ * `ANTHROPIC_API_KEY`), unless `CHAT_FAKE=1` stands in a scripted model
+ * (`./chat-fake`). On `globalThis` for the reason `getApp` is.
  */
 export function getChat(): Chat | undefined {
-  chatStore[CHAT] ??= { chat: buildChat() };
-  return chatStore[CHAT].chat;
+  return heldChat().chat;
 }
 
-function buildChat(): Chat | undefined {
+function heldChat(): { chat: Chat | undefined; fake: boolean } {
+  chatStore[CHAT] ??= buildChat();
+  return chatStore[CHAT];
+}
+
+function buildChat(): { chat: Chat | undefined; fake: boolean } {
   const config = chatConfigOf(process.env);
-  if (!config) return undefined;
+  if (!config)
+    return chatFakeOn()
+      ? { chat: buildFakeChat(), fake: true }
+      : { chat: undefined, fake: false };
   const store = createChatStore(getApp().db, { logText: config.logText });
   return {
-    config,
-    model: createAnthropicModel(config),
+    chat: {
+      config,
+      model: createAnthropicModel(config),
+      store,
+      gate: createChatGate({ store, limit: config.dailyTurns }),
+    },
+    fake: false,
+  };
+}
+
+function buildFakeChat(): Chat {
+  console.warn(
+    "chat: CHAT_FAKE=1, so Ask this Spec answers with the chat Benchmark's scripted model, as one stand-in person. For local checks only.",
+  );
+  const store = createChatStore(getApp().db, {
+    logText: chatLogTextOf(process.env),
+  });
+  return {
+    config: { model: FAKE_MODEL_NAME, effort: "low" },
+    model: createFakeChatModel(),
     store,
-    gate: createChatGate({ store, limit: config.dailyTurns }),
+    gate: createChatGate({ store, limit: chatDailyTurnsOf(process.env) }),
   };
 }
 
 /** What `handleAsk` needs, from the server's one app and chat. */
 export function chatDeps(): ChatDeps {
   const { db, lookup } = getApp();
+  const { chat, fake } = heldChat();
   return {
     db,
     lookup,
     cache: normalizedCache,
     rateGate: gate,
-    currentUser,
-    chat: getChat(),
+    // Under CHAT_FAKE=1 sign-in is off, so no one else is ever signed in.
+    currentUser: fake ? () => FAKE_PERSON : currentUser,
+    chat,
   };
 }

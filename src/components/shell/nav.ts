@@ -23,6 +23,7 @@ export const NAV: NavGroup[] = [
       { to: "/", hash: "what-you-get-back", label: "What you get back" },
       { to: "/", hash: "answers", label: "How answers work" },
       { to: "/keys", label: "Get an API key" },
+      { to: "/docs", hash: "ask", label: "Ask this Spec" },
     ],
   },
   {

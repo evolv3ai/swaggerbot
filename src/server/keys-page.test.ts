@@ -94,6 +94,38 @@ describe("the key page's server functions, over the SQLite store", () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
+  it("shows the person's Ask this Spec questions today with their key, when the feature is on", async () => {
+    const meter = { used: 3, limit: 30, resetsAt: "2026-09-28T00:00:00.000Z" };
+    const questionsOf = vi.fn((userId: string) =>
+      userId === ADA.id ? meter : undefined,
+    );
+    const keyPage = page({ questionsOf });
+    expect(await keyPage.page(ADA, BASE)).not.toHaveProperty("questions");
+    issued(await keyPage.create(ADA, request()));
+    expect(await keyPage.page(ADA, BASE)).toMatchObject({
+      state: "key",
+      questions: meter,
+    });
+
+    // Off (the default): the page is as it was.
+    const off = await page().page(ADA, BASE);
+    expect(off).toMatchObject({ state: "key" });
+    expect(off).not.toHaveProperty("questions");
+    expect(warn).not.toHaveBeenCalled();
+
+    // A meter that can't be read leaves the line out, not the page.
+    const broken = await page({
+      questionsOf: () => {
+        throw new TypeError("no chat");
+      },
+    }).page(ADA, BASE);
+    expect(broken).toMatchObject({ state: "key", status: 200 });
+    expect(broken).not.toHaveProperty("questions");
+    expect(warn).toHaveBeenCalledWith(
+      "keys page: reading the questions failed (TypeError)",
+    );
+  });
+
   it("refuses a second key while the first is live (409)", async () => {
     const keyPage = page();
     issued(await keyPage.create(ADA, request()));

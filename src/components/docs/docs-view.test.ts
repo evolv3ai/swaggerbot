@@ -163,6 +163,21 @@ describe("DocsView", () => {
     expect(NAV.map((g) => g.title)).toContain("CLI");
   });
 
+  it("explains Ask this Spec at #ask: sign-in, the daily number, citations, not the HTTP API or MCP", () => {
+    expect(html).toContain('<h2 id="ask"');
+    expect(NAV.find((g) => g.title === "Get started")?.links).toContainEqual({
+      to: "/docs",
+      hash: "ask",
+      label: "Ask this Spec",
+    });
+    const ask = text.slice(text.lastIndexOf("Ask this Spec"));
+    expect(ask).toContain("needs sign-in");
+    expect(ask).toContain("30 questions a person a UTC day");
+    expect(ask).toContain("00:00 UTC");
+    expect(ask).toContain("cites the operation, schema or fact");
+    expect(ask).toContain("not part of the HTTP API or MCP");
+  });
+
   it("teaches the install, login with a key from /keys, --json, the exit codes and --url", () => {
     for (const line of [CLI_INSTALL, CLI_INSTALL_GLOBAL, CLI_LOGIN])
       expect(text).toContain(line);

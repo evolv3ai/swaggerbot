@@ -40,8 +40,18 @@ vi.mock("~/index-store/key-store", () => ({
   unkeyConfigOf: () => ({ rootKey: "unkey_root", apiId: "api_test" }),
 }));
 const unkey = vi.hoisted(() => ({ store: undefined as unknown }));
+/** Ask this Spec's meter, while it is on. */
+const chat = vi.hoisted(() => ({
+  on: false,
+  meter: (userId: string) => ({
+    used: userId === "user_ada" ? 3 : 0,
+    limit: 30,
+    resetsAt: "2026-09-28T00:00:00.000Z",
+  }),
+}));
 vi.mock("./app-instance", () => ({
   getApp: () => ({ keys: unkey.store }),
+  getChat: () => (chat.on ? { gate: { meter: chat.meter } } : undefined),
   gate: {
     dailyQuota: 100,
     rateLimiter: createRateLimiter({ perMinute: 1000 }),
@@ -49,7 +59,7 @@ vi.mock("./app-instance", () => ({
   },
 }));
 
-const { createOwnKey, rollOwnKey, revokeOwnKey } = await import(
+const { createOwnKey, getKeysPage, rollOwnKey, revokeOwnKey } = await import(
   "./keys-page-fns"
 );
 type Fn = () => Promise<{
@@ -68,6 +78,7 @@ beforeEach(() => {
   request.user = null;
   request.headers.clear();
   request.status = 200;
+  chat.on = false;
   unkey.store = createUnkeyKeys({
     client: fakeUnkey().client,
     apiId: "api_test",
@@ -114,6 +125,22 @@ describe("/keys server functions", () => {
     expect(again.key?.id).not.toBe(rolled.key?.id);
     expect(await call(revokeOwnKey)).toMatchObject({ ok: true });
     expect((await call(createOwnKey)).ok).toBe(true);
+  });
+
+  it("show the signed-in person's Ask this Spec questions with their key, only while it is on", async () => {
+    request.user = ada;
+    await call(createOwnKey);
+    const off = await (getKeysPage as unknown as () => Promise<object>)();
+    expect(off).toMatchObject({ state: "key" });
+    expect(off).not.toHaveProperty("questions");
+
+    chat.on = true;
+    expect(
+      await (getKeysPage as unknown as () => Promise<object>)(),
+    ).toMatchObject({
+      state: "key",
+      questions: { used: 3, limit: 30 },
+    });
   });
 
   it("mark every answer private and uncacheable", async () => {
