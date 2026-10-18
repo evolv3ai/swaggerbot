@@ -6,6 +6,13 @@ import { describe, expect, it } from "vitest";
 import { NAV } from "~/components/shell/nav";
 import { splitRoute } from "~/components/ui/method-badge";
 import { MCP_TOOLS, type McpDeps } from "~/mcp/server";
+import {
+  CLI_COMMANDS,
+  CLI_EXIT_CODES,
+  CLI_INSTALL,
+  CLI_INSTALL_GLOBAL,
+  CLI_LOGIN,
+} from "./cli-reference";
 import { DocsView } from "./docs-view";
 import {
   BASE_URL,
@@ -80,10 +87,11 @@ describe("DocsView", () => {
       expect(example.curl).toContain(`${BASE_URL}/api/`);
       expect(example.answer.length).toBeGreaterThan(0);
     }
-    // Each code block (a call, its answer, the three MCP lines) has its own
-    // Copy and a polite live region.
+    // Each code block (a call, its answer, the three MCP lines, the CLI's
+    // install, login and command lines) has its own Copy and a polite live
+    // region.
     const copies = (html.match(/>Copy<\/button>/g) ?? []).length;
-    expect(copies).toBe(EXAMPLES.length * 2 + 3);
+    expect(copies).toBe(EXAMPLES.length * 2 + 3 + 3 + CLI_COMMANDS.length);
     expect((html.match(/aria-live="polite"/g) ?? []).length).toBe(copies);
   });
 
@@ -124,7 +132,10 @@ describe("DocsView", () => {
     expect(anchors).toEqual(
       expect.arrayContaining(["lookup", "vendors", "outline", "published"]),
     );
-    for (const id of [...anchors, "mcp-add", "tools", "access", "keys"])
+    expect(anchors).toEqual(
+      expect.arrayContaining(["cli-install", "cli-commands"]),
+    );
+    for (const id of [...anchors, "mcp-add", "tools", "cli", "access", "keys"])
       expect(html).toContain(`id="${id}"`);
     const ids = [...html.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]);
     expect(new Set(ids).size).toBe(ids.length);
@@ -141,6 +152,56 @@ describe("DocsView", () => {
     );
     expect((html.match(/role="tab"[^>]*>Answer</g) ?? []).length).toBe(
       EXAMPLES.length,
+    );
+  });
+
+  it("has the CLI section after MCP and before the key rules", () => {
+    const at = (id: string) => html.indexOf(`<h2 id="${id}"`);
+    expect(at("mcp")).toBeLessThan(at("cli"));
+    expect(at("cli")).toBeLessThan(at("access"));
+    expect(NAV.map((g) => g.title)).toContain("CLI");
+  });
+
+  it("teaches the install, login with a key from /keys, --json, the exit codes and --url", () => {
+    for (const line of [CLI_INSTALL, CLI_INSTALL_GLOBAL, CLI_LOGIN])
+      expect(text).toContain(line);
+    const cli = html.slice(
+      html.indexOf('<h2 id="cli"'),
+      html.indexOf('<h2 id="access"'),
+    );
+    expect(cli).toContain('href="/keys"');
+    expect(text).toContain(
+      "it prints the same JSON as the HTTP API, so the answers above apply",
+    );
+    for (const row of CLI_EXIT_CODES)
+      expect(cli).toMatch(
+        new RegExp(`<th scope="row"[^>]*>${row.code}</th><td[^>]*>`),
+      );
+    expect(text).toContain("--url <origin>");
+    expect(text).toContain("~/.config/swaggerbot/config.json");
+  });
+
+  it("lists every command once, each with its example", () => {
+    for (const row of CLI_COMMANDS) {
+      const heading = `>swaggerbot ${row.command}</span>`;
+      expect(html.split(heading).length - 1, row.command).toBe(1);
+      expect(row.example.startsWith(`swaggerbot ${row.command}`)).toBe(true);
+      expect(text).toContain(row.example);
+    }
+  });
+
+  it("documents exactly the commands the CLI runs, in --help's order", () => {
+    const usage = readFileSync("src/cli/args.ts", "utf8");
+    const helpOrder = [...usage.matchAll(/^ {2}([a-z]+) /gm)]
+      .map((m) => m[1])
+      .filter((c) => CLI_COMMANDS.some((r) => r.command === c));
+    expect(CLI_COMMANDS.map((r) => r.command)).toEqual(helpOrder);
+    const main = readFileSync("src/cli/main.ts", "utf8");
+    const table = main.slice(main.indexOf("const COMMANDS"));
+    for (const row of CLI_COMMANDS)
+      expect(table, row.command).toContain(`  ${row.command}: run`);
+    expect([...table.matchAll(/^ {2}[a-z]+: run/gm)]).toHaveLength(
+      CLI_COMMANDS.length,
     );
   });
 

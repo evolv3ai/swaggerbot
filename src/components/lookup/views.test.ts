@@ -131,6 +131,26 @@ describe("the Resolved view", () => {
     );
   });
 
+  it("has the four tabs in order: curl, CLI, MCP, JSON", () => {
+    const tabs = [...markup.matchAll(/role="tab"[^>]*>([^<]+)</g)].map(
+      (m) => m[1],
+    );
+    expect(tabs).toEqual(["curl", "CLI", "MCP", "JSON"]);
+  });
+
+  it("gives the CLI line for the name looked up, with no --url on the public origin", () => {
+    expect(text(markup)).toContain("swaggerbot lookup stripe");
+    expect(text(markup)).not.toContain("--url");
+    const other = html({
+      ...outcomePage(resolved, "Jira Cloud"),
+      baseUrl: "http://localhost:3000",
+      request: { name: "Jira Cloud", apiVersion: "v2", allowCommunity: true },
+    } as LookupPage);
+    expect(text(other)).toContain(
+      'swaggerbot lookup "Jira Cloud" --api-version v2 --community --url http://localhost:3000',
+    );
+  });
+
   it("gives curl, MCP and the JSON with the answer's real values", () => {
     expect(text(markup)).toContain(
       `curl -o openapi.yaml ${base}/api/specs/${specId}/published`,
@@ -268,6 +288,16 @@ describe("the other views", () => {
     expect(markup).toMatch(/<h1[^>]*>Not in the Index yet<\/h1>/);
     expect(text(markup)).toContain(`curl -X POST ${base}/api/lookup`);
     expect(text(markup)).toContain(`${base}/mcp --header`);
+    expect(text(markup)).toContain(
+      'swaggerbot lookup "Val Town" Copy After swaggerbot login',
+    );
+    // HTTP, then the CLI, then MCP.
+    const order = ["Over HTTP", "From the CLI", "Over MCP"].map((h) =>
+      markup.indexOf(`>${h}</h3>`),
+    );
+    expect(order.every((at) => at > 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(markup).not.toContain("mailto:");
     expect(markup).toContain('href="/keys"');
     expect(markup).not.toContain('href="/docs#keys"');
     expect(markup).toContain('action="/lookup"');

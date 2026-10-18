@@ -54,6 +54,13 @@ export const NAV: NavGroup[] = [
       { to: "/docs", hash: "access", label: "Keys and limits" },
     ],
   },
+  {
+    title: "CLI",
+    links: [
+      { to: "/docs", hash: "cli-install", label: "Install" },
+      { to: "/docs", hash: "cli-commands", label: "Commands" },
+    ],
+  },
 ];
 
 /**

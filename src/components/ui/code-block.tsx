@@ -10,7 +10,7 @@ import { pathBreakable } from "./path";
  * (the same text with parts picked out). Line breaks and indentation are
  * kept; long lines wrap unless `scroll`, between a URL's parts (`pathBreakable`)
  * rather than inside a word. A shell command's first word (`curl`,
- * `claude`) is picked out in the code keyword colour.
+ * `claude`, `swaggerbot`, `npx`, `npm`) is picked out in the code keyword colour.
  *
  * `elided` opts in to a display form: `children` is a shortened stand-in
  * for `code` (a part elided, as `SpecDownloadCurl` does), kept on one line
@@ -123,7 +123,7 @@ export function CodeBlock({
 
 /** `code` with its command word (`curl`, `claude`) picked out, if any. */
 function commandWord(code: string): ReactNode {
-  const match = /^(curl|claude)(?=\s)/.exec(code);
+  const match = /^(curl|claude|swaggerbot|npx|npm)(?=\s)/.exec(code);
   if (!match?.[1]) return code;
   return (
     <>

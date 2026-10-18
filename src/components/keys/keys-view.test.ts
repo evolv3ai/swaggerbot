@@ -114,6 +114,19 @@ describe("NewSecret", () => {
     );
   });
 
+  it("says to paste the key into swaggerbot login, never putting it on a shell line", () => {
+    const shown = html(false);
+    expect(shown).toMatch(
+      /In a terminal: run <code[^>]*>swaggerbot login<\/code> and paste the key\./,
+    );
+    // The key is in the box to copy and the curl and MCP lines, never in a CLI line.
+    expect(shown).not.toMatch(
+      new RegExp(`swaggerbot(</span>)? (login|lookup|key)[^\n]*${secret}`),
+    );
+    expect(shown).not.toContain("--key");
+    expect(shown).not.toContain("mailto:");
+  });
+
   it("says a rolled key kept its credits", () => {
     const shown = html(true);
     expect(shown).toContain(">Your rolled key</h2>");

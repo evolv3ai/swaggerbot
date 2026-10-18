@@ -1,5 +1,7 @@
 import { Download, FileCode } from "lucide-react";
 import type { ReactNode } from "react";
+import { CLI_LOGIN, cliLookup } from "~/components/docs/cli-reference";
+import { BASE_URL } from "~/components/docs/reference";
 import { SearchForm } from "~/components/search/search-form";
 import { WithOnThisPage } from "~/components/shell/on-this-page";
 import { LEAD, PAGE, PageTitle } from "~/components/shell/page";
@@ -371,6 +373,7 @@ function NotInIndex({
   const { request, baseUrl } = page;
   const body = requestBody(request);
   const curl = `curl -X POST ${baseUrl}/api/lookup -H "Authorization: Bearer <key>" -H "Content-Type: application/json" -d ${shellQuote(body)}`;
+  const cli = cliLookup(request, baseUrl, BASE_URL);
   const mcpAdd = `claude mcp add --transport http swaggerbot ${baseUrl}/mcp --header "Authorization: Bearer <key>"`;
   const mcpCall = `lookup_api ${body}`;
   return (
@@ -400,6 +403,14 @@ function NotInIndex({
           <div className="grid gap-2">
             <h3 className="text-sm font-semibold">Over HTTP</h3>
             <CodeBlock code={curl} className="overflow-hidden rounded-md" />
+          </div>
+          <div className="grid gap-2">
+            <h3 className="text-sm font-semibold">From the CLI</h3>
+            <CodeBlock code={cli} className="overflow-hidden rounded-md" />
+            <p className={cn("text-[13px]", MUTED)}>
+              After <code className="font-mono">{CLI_LOGIN}</code>, which asks
+              for your key and stores it.
+            </p>
           </div>
           <div className="grid gap-2">
             <h3 className="text-sm font-semibold">Over MCP</h3>
@@ -464,7 +475,7 @@ function NameRequired() {
  * The answer, leading with the Spec (like Search's "What you get back"):
  * the API, its answer and Provenance, the Vendor and when it was verified,
  * then the three actions (the Spec viewer, the download, the URL to copy)
- * and the ways to take it from code: curl, MCP, the JSON.
+ * and the ways to take it from code: curl, the CLI, MCP, the JSON.
  */
 function AnswerCard({
   page,
@@ -494,6 +505,19 @@ function AnswerCard({
           <CodeBlock
             code={`curl -X POST ${page.baseUrl}/api/lookup -H "Content-Type: application/json" -d ${shellQuote(body)}`}
           />
+        </>
+      ),
+    },
+    {
+      id: "cli",
+      label: "CLI",
+      content: (
+        <>
+          <CodeBlock code={cliLookup(page.request, page.baseUrl, BASE_URL)} />
+          <p className="border-t border-sb-border px-4 py-2.5 text-[13px] text-sb-text-muted">
+            The same answer in a line; <code className="font-mono">--json</code>{" "}
+            prints it whole. An Index answer needs no key.
+          </p>
         </>
       ),
     },
