@@ -363,7 +363,7 @@ The artefact is always one step away. Code on the ink ground in both themes (`--
 URLs and paths shown as text (outside code blocks: the Sources lists, the docs routes) go through `Path` (`src/components/ui/path.tsx`), which lets a long one break only after a `/` (never inside `//`) or before `?`, `&` or `[`, and never in the middle of a word.
 
 ### Answer card (signature)
-An answer is a content card: a header row (the API name as a title link, its AnswerBadge, its Provenance, the time it took in 13px muted, pushed right from `sm`), then tabs (curl, MCP, JSON) over code blocks. A Lookup states its answer once: the page heading names it and the card carries the badge.
+An answer is a content card: a header row (the API name as a title link, its AnswerBadge, its Provenance, the time it took in 13px muted, pushed right from `sm`), then tabs (curl, CLI, MCP, JSON) over code blocks. A Lookup states its answer once: the page heading names it and the card carries the badge.
 
 ### Key page (`/keys`)
 - **A secret shown once** is the view's one outlined box (2px blue, the box lift, 12px): a headline, "Store it now: it won't be shown again." in semibold, the secret in a `CodeBlock`, then the `curl` and `claude mcp add` lines with it filled in. Focus moves to its heading when it appears; "I've stored it: hide the key" (secondary, `sm`) removes it.
