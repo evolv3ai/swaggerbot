@@ -226,12 +226,12 @@ On a Spec's page (`/specs/{specId}#ask`), a signed-in person can ask questions a
 
 | Variable | Meaning |
 |---|---|
-| `ANTHROPIC_API_KEY` | Turns the feature on. Without it the panel says it is off and the route answers 404. |
+| `ANTHROPIC_API_KEY` | Turns the feature on (with WorkOS sign-in). Without it the Spec page has no Ask this Spec section and the route answers 404. |
 | `CHAT_MODEL` | The model that answers (default `claude-opus-5-5`). |
 | `CHAT_EFFORT` | Its effort: `low` (the default), `medium`, `high`, `xhigh` or `max`. |
 | `CHAT_DAILY_TURNS` | Questions a signed-in person may ask a UTC day (default 30). |
 | `CHAT_LOG_TEXT` | `1` keeps each turn's question and answer, for a tuning period; unset, only its figures are kept. |
-| `CHAT_FAKE` | `1`, for local checks only: with no `ANTHROPIC_API_KEY` and no WorkOS sign-in, turns are answered by a model scripted from the chat Benchmark and asked as one stand-in person, so `chatcheck` can run against a built server without a real model. |
+| `CHAT_FAKE` | `1`, for local checks only: with no `ANTHROPIC_API_KEY` and no WorkOS sign-in, turns are answered by a model scripted from the chat Benchmark and asked as one stand-in person, so `chatcheck` can run against a built server without a real model. With sign-in and no key, development only (refused under `NODE_ENV=production`): turns are answered by a scripted model, so the panel can be tried without a key. |
 
 Each turn is logged in `chat_turns` with its model, tokens, latency, what was sent and how it ended, never the question or the answer unless `CHAT_LOG_TEXT=1`. The Verification worker deletes turns older than 90 days once a day. To see them:
 
