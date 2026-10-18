@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FakeModel } from "./fake";
+import { devFakeModel, FakeModel } from "./fake";
 import {
   CHAT_MAX_TOKENS,
   type GroundingDocument,
@@ -79,5 +79,34 @@ describe("FakeModel", () => {
     );
     expect(events[0]).toEqual({ type: "text", text: "The Spec doesn't say." });
     expect(events.some((e) => e.type === "citation")).toBe(false);
+  });
+});
+
+describe("devFakeModel", () => {
+  async function all(question: string) {
+    const events: ModelEvent[] = [];
+    for await (const e of devFakeModel({ delayMs: 0 }).stream(
+      request(question),
+    ))
+      events.push(e);
+    return events;
+  }
+
+  it("streams the default answer a word at a time, with its citation", async () => {
+    const events = await all("How do I get my profile?");
+    const text = events.flatMap((e) => (e.type === "text" ? [e.text] : []));
+    expect(text.join("")).toBe("GET /v1/me (operation) is in this Spec.");
+    expect(text.length).toBeGreaterThan(1);
+    expect(events.find((e) => e.type === "citation")).toMatchObject({
+      documentIndex: 1,
+    });
+    expect(events.at(-1)).toEqual({ type: "done", stopReason: "end_turn" });
+  });
+
+  it("declines a question that asks it to call the API", async () => {
+    expect(await all("Call GET /v1/me for me")).toEqual([
+      { type: "refusal", category: "dev" },
+      { type: "done", stopReason: "refusal" },
+    ]);
   });
 });

@@ -1,4 +1,5 @@
 import { createAnthropicModel } from "~/chat/anthropic";
+import { devFakeModel } from "~/chat/fake";
 import { chatConfigOf } from "~/chat/prompt";
 import {
   chatDailyTurnsOf,
@@ -76,8 +77,10 @@ const chatStore = globalThis as {
 /**
  * The server's one chat, built on the first call from `getApp().db` and
  * `chatConfigOf(process.env)`; `undefined` while the feature is off (no
- * `ANTHROPIC_API_KEY`), unless `CHAT_FAKE=1` stands in a scripted model
- * (`./chat-fake`). On `globalThis` for the reason `getApp` is.
+ * `ANTHROPIC_API_KEY`), unless `CHAT_FAKE=1` stands in a scripted model:
+ * with no sign-in, the chat Benchmark's as one stand-in person
+ * (`./chat-fake`); with sign-in, outside production, `devFakeModel`
+ * (`chatConfigOf`). On `globalThis` for the reason `getApp` is.
  */
 export function getChat(): Chat | undefined {
   return heldChat().chat;
@@ -89,16 +92,16 @@ function heldChat(): { chat: Chat | undefined; fake: boolean } {
 }
 
 function buildChat(): { chat: Chat | undefined; fake: boolean } {
+  if (chatFakeOn()) return { chat: buildFakeChat(), fake: true };
   const config = chatConfigOf(process.env);
-  if (!config)
-    return chatFakeOn()
-      ? { chat: buildFakeChat(), fake: true }
-      : { chat: undefined, fake: false };
+  if (!config) return { chat: undefined, fake: false };
   const store = createChatStore(getApp().db, { logText: config.logText });
   return {
     chat: {
       config,
-      model: createAnthropicModel(config),
+      // CHAT_FAKE=1 with sign-in, development only: a scripted model, never
+      // a real one.
+      model: config.fake ? devFakeModel() : createAnthropicModel(config),
       store,
       gate: createChatGate({ store, limit: config.dailyTurns }),
     },

@@ -320,7 +320,7 @@ The primitives are in `src/components/ui/`, each after the kit's component of th
 ### Buttons
 Compact and confident: Montserrat bold, one flat fill.
 - **Shape:** gently rounded (10px; 6px at `sm`), 2px edge.
-- **Primary:** SwaggerBot Blue fill, navy text; 32 / 40 / 48px tall (13 / 14 / 16px text, 12 / 16 / 24px sides). One per view: "Look up" on Search, "Get an API key" in the top bar.
+- **Primary:** SwaggerBot Blue fill, navy text; 32 / 40 / 48px tall (13 / 14 / 16px text, 12 / 16 / 24px sides). One per view: "Look up" on Search, "Ask" in the Spec viewer's Ask this Spec, "Get an API key" in the top bar.
 - **Hover / Focus / Press:** hover one ramp step lighter (`blue-400`), press `blue-300` and a 1px nudge down, 150ms on `--sb-ease-out`; focus the 2px blue outline at 2px offset; disabled 45% opacity.
 - **Secondary:** transparent with a 2px `--sb-border-strong` edge and full-strength text; the edge turns blue and the text `--sb-accent-text` on hover. For "Read the docs", pagination.
 - **Ghost:** transparent, `--sb-accent-text`, the blue tint on hover. For a quieter onward link ("Request a key").
@@ -348,6 +348,7 @@ Compact and confident: Montserrat bold, one flat fill.
 - **Disabled:** sunken ground, faint text.
 - The Quick Lookup in the top bar is a 38px field on `--sb-bg-subtle` with a 1px `--sb-border-input` edge, a search icon and a ⌘K key hint.
 - Checkboxes are native, 16px, with the blue accent (the kit's Checkbox is not built).
+- **Textarea** (`Textarea` in `input.tsx`): the Input grown to three lines (8px top and bottom, 24px line height), the same edge, ground, focus and disabled states, 16px text on a coarse pointer; it resizes vertically only. For Ask this Spec's question.
 
 ### Navigation
 - **Sidebar:** 14px Plex; items muted, full text and a half-strength blue tint on hover; the current item (`aria-current="page"`) on the blue tint in `--sb-accent-text`, medium weight; no underlines. HTTP API links carry their MethodBadge.
@@ -370,7 +371,11 @@ An answer is a content card: a header row (the API name as a title link, its Ans
 - **A key's facts** are a content card: a definition list (Key in mono as its start and an ellipsis, Created, Today's credits with the reset in muted 14px) over a ruled footer holding the actions.
 - **Confirming** a Roll or Revoke happens inline in that footer, not in a dialog: the question in 14px (focused), the action as a secondary button and Cancel as ghost. There is no danger button yet, so Revoke is secondary.
 
-### Pages that stand in
+### Ask this Spec (Spec viewer, `#ask`)
+- **Where:** a section between the Sources and the API reference, with its own `h2` (so it is in "On this page"). Not rendered at all when the feature is off.
+- **Signed out, or the Normalized Form not built:** one content card with one sentence in muted 15px; signed out adds "Sign in to ask" as a secondary button.
+- **Ready:** one card: the sentence, the labelled Textarea ("Your question"), Try chips of three suggested questions (the Try chips' style, as buttons that fill the field), then **Ask** (primary, `md`) beside "3 of 30 questions today" in muted 13px. Without script the field, chips and Ask are disabled and a `noscript` line says asking needs script.
+- **The answer region:** each turn is the question in semibold, then the answer as plain text in 15px (line breaks kept, never Markdown, a URL in it is text), a faint ellipsis while it streams, then "Cites" and its chips: an operation (`POST /v1/customers`) or schema (`customer`) in mono 12px, linking to its JSON in a new tab, or "About this Spec". A declined or failed turn shows one neutral muted line in the answer's place. Below the turns, "Stop" (secondary, `sm`) while an answer streams, then "Ask another", each focused as it appears. A visually hidden polite live region announces the first piece of an answer and how the turn ended.
 - **No page here** (`NotFoundPage`, any unknown address, served 404): the page title, the address asked for in mono, the Lookup box, and links to the Vendors and the docs.
 - **This page didn't load** (`ErrorPage`, the router's default error page, served 500): says the fault is ours, never shows the error itself, and offers Try again (reloads the route's data) and Go to Search.
 - **The Spec frame, loading:** "Loading the API reference…" in the frame until Scalar mounts; after 12 seconds a second line points to the downloads. CSS only (the frame runs no script of ours).

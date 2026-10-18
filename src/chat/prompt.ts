@@ -18,27 +18,49 @@ export type ChatConfig = {
   dailyTurns: number;
   /** `CHAT_LOG_TEXT=1`: a turn's question and answer are stored, for tuning. */
   logText: boolean;
+  /**
+   * `CHAT_FAKE=1`, outside production only: turns are answered by a scripted
+   * `FakeModel` (`devFakeModel`), never a real one, so the panel can be tried
+   * signed in without `ANTHROPIC_API_KEY` or spending anything.
+   */
+  fake?: true;
 };
 
 /**
- * The chat's settings, or `undefined` without `ANTHROPIC_API_KEY`: the
- * feature is off. A `CHAT_EFFORT` that is not one of the model's levels, or a
- * `CHAT_DAILY_TURNS` that is not a positive integer, is warned about and
- * defaulted.
+ * The chat's settings, or `undefined` without `ANTHROPIC_API_KEY` (and
+ * without `CHAT_FAKE=1`): the feature is off. A `CHAT_EFFORT` that is not one
+ * of the model's levels, or a `CHAT_DAILY_TURNS` that is not a positive
+ * integer, is warned about and defaulted. `CHAT_FAKE=1` is a development
+ * switch: under `NODE_ENV=production` (the production image) it is warned
+ * about and refused.
  */
 export function chatConfigOf(
   env: Record<string, string | undefined> = process.env,
   warn: (message: string) => void = console.warn,
 ): ChatConfig | undefined {
   const apiKey = env.ANTHROPIC_API_KEY?.trim();
-  if (!apiKey) return undefined;
+  const fake = fakeOf(env, warn);
+  if (!apiKey && !fake) return undefined;
   return {
-    apiKey,
+    apiKey: apiKey ?? "",
     model: env.CHAT_MODEL?.trim() || DEFAULT_CHAT_MODEL,
     effort: effortOf(env.CHAT_EFFORT?.trim(), warn),
     dailyTurns: dailyTurnsOf(env.CHAT_DAILY_TURNS?.trim(), warn),
     logText: env.CHAT_LOG_TEXT?.trim() === "1",
+    ...(fake ? { fake: true as const } : {}),
   };
+}
+
+function fakeOf(
+  env: Record<string, string | undefined>,
+  warn: (message: string) => void,
+): boolean {
+  if (env.CHAT_FAKE?.trim() !== "1") return false;
+  if (env.NODE_ENV === "production") {
+    warn("CHAT_FAKE=1 is refused in production; the scripted model is off.");
+    return false;
+  }
+  return true;
 }
 
 function effortOf(

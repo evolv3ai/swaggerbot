@@ -51,3 +51,40 @@ export function defaultAnswer(request: ModelRequest): ModelEvent[] {
     done,
   ];
 }
+
+/** A question `devFakeModel` declines, to show the declined state. */
+export const DEV_DECLINED_QUESTION = /^\s*(call|fetch|run)\b/i;
+
+/**
+ * The model `CHAT_FAKE=1` wires in (development only, `chatConfigOf`):
+ * `defaultAnswer`'s cited sentence, sent a word at a time `delayMs` apart so
+ * the panel can be seen streaming; a question starting "Call", "Fetch" or
+ * "Run" is declined, as the real model declines calling the API.
+ */
+export function devFakeModel({ delayMs = 120 } = {}): Model {
+  return {
+    async *stream(request) {
+      const pause = () =>
+        new Promise<void>((resolve, reject) => {
+          if (request.signal?.aborted) return reject(request.signal.reason);
+          setTimeout(resolve, delayMs);
+        });
+      if (DEV_DECLINED_QUESTION.test(request.question)) {
+        await pause();
+        yield { type: "refusal", category: "dev" };
+        yield { type: "done", stopReason: "refusal" };
+        return;
+      }
+      for (const event of defaultAnswer(request)) {
+        if (event.type !== "text") {
+          yield event;
+          continue;
+        }
+        for (const word of event.text.match(/\S+\s*/g) ?? []) {
+          await pause();
+          yield { type: "text", text: word };
+        }
+      }
+    },
+  };
+}
