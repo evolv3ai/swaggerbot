@@ -5,6 +5,7 @@ import { WithOnThisPage } from "~/components/shell/on-this-page";
 import { LEAD, PAGE, PageTitle } from "~/components/shell/page";
 import { Badge } from "~/components/ui/badge";
 import { Card } from "~/components/ui/card";
+import { AskThisSpec } from "~/components/viewer/ask";
 import { sizeOf } from "~/components/viewer/size";
 import { Sources } from "~/components/viewer/sources";
 import { SpecFrame } from "~/components/viewer/spec-frame";
@@ -21,6 +22,7 @@ import type { SpecView } from "~/server/spec-view";
 /**
  * The Spec viewer (Slice 6 backlog, D6), a docs page: the Spec's facts,
  * downloads, Validity Issues and Sources, every Spec string as text; then
+ * "Ask this Spec" for signed-in people (`#ask`, when the feature is on); then
  * Scalar's API reference, in a sandboxed frame under its own CSP
  * (`/embed/specs/{specId}`), in the site's theme; then the Alternate Specs.
  */
@@ -68,6 +70,12 @@ function SpecViewer() {
         {view.sources.length > 0 ? (
           <Sources sources={view.sources} headingClassName={H2} />
         ) : null}
+        <AskThisSpec
+          ask={view.ask}
+          apiId={view.api.id}
+          specId={view.spec.id}
+          headingClassName={H2}
+        />
         <section aria-labelledby="reference">
           <div className="mt-10 mb-3.5 flex flex-wrap items-center justify-between gap-3">
             <h2

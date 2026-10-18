@@ -37,7 +37,8 @@ swagger.bot turns the name of an API into a verified Spec with its Provenance, o
 - **All Spec content is untrusted:** rendered sanitised, as text in our own frame, and inside a sandboxed frame under a strict Content Security Policy for Scalar. No Spec may run script, load remote content or call a server.
 - Specs can be very large (Cloudflare's is 26 MB). Validity Issues never block a Spec from being shown or downloaded.
 - Stack is fixed by the codebase: TanStack Start (React 19) on Nitro, one instance; Tailwind v4 and shadcn for the UI (`docs/slices/slice-6-backlog.md`, D3).
-- Not in v1: accounts, billing, self-service keys, AI-written summaries, "ask this Spec" chat.
+- Ask this Spec, on the Spec viewer, for signed-in people: a question about that one Spec, answered from its Normalized Form with the operations and schemas the answer cites (ADR 0007), a few a day each.
+- Not in v1: accounts, billing, self-service keys, AI-written summaries.
 
 ## Brand Commitments
 

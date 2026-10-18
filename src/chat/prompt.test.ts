@@ -43,6 +43,33 @@ describe("chatConfigOf", () => {
     expect(warnings).toEqual([]);
   });
 
+  it("turns the feature on with CHAT_FAKE=1 alone, outside production", () => {
+    const { config: c, warnings } = config({ CHAT_FAKE: "1" });
+    expect(c).toMatchObject({
+      apiKey: "",
+      fake: true,
+      model: "claude-opus-5-5",
+    });
+    expect(warnings).toEqual([]);
+    expect(config({ CHAT_FAKE: "true" }).config).toBeUndefined();
+    expect(config({ ANTHROPIC_API_KEY: "k" }).config?.fake).toBeUndefined();
+  });
+
+  it("refuses CHAT_FAKE=1 in production", () => {
+    const off = config({ CHAT_FAKE: "1", NODE_ENV: "production" });
+    expect(off.config).toBeUndefined();
+    expect(off.warnings).toEqual([
+      "CHAT_FAKE=1 is refused in production; the scripted model is off.",
+    ]);
+    const real = config({
+      CHAT_FAKE: "1",
+      NODE_ENV: "production",
+      ANTHROPIC_API_KEY: "k",
+    });
+    expect(real.config?.apiKey).toBe("k");
+    expect(real.config?.fake).toBeUndefined();
+  });
+
   it("logs text only for CHAT_LOG_TEXT=1", () => {
     for (const value of ["0", "true", "yes", ""])
       expect(

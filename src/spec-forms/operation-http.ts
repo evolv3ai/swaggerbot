@@ -26,10 +26,12 @@ export type NormalizedParser = (
  * The parsed Normalized Form of one Spec at a time. Parsing a 13 MB one
  * costs hundreds of megabytes, so only the last Spec asked for is kept;
  * asking for another replaces it. Concurrent requests for the same Spec
- * share one parse.
+ * share one parse. `peek` reads what is held for `specId` without loading,
+ * parsing or replacing anything.
  */
 export type NormalizedCache = {
   get(specId: string, load: () => Uint8Array | undefined): Promise<unknown>;
+  peek(specId: string): Promise<unknown> | undefined;
 };
 
 export function createNormalizedCache(
@@ -52,6 +54,9 @@ export function createNormalizedCache(
         });
       held = { specId, doc };
       return doc;
+    },
+    peek(specId) {
+      return held?.specId === specId ? held.doc : undefined;
     },
   };
 }
