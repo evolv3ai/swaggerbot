@@ -1,6 +1,7 @@
 {
   "name": "swaggerbot",
   "version": "0.1.0",
+  "license": "MIT",
   "description": "The swagger.bot CLI: the name of an API in, its verified OpenAPI/Swagger Spec with its Provenance out.",
   "type": "module",
   "bin": {
