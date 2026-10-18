@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { CLI_LOGIN } from "~/components/docs/cli-reference";
+import { cliLogin } from "~/components/docs/cli-reference";
 import {
+  BASE_URL,
   KEY_REQUEST_EMAIL,
   KEY_REQUEST_HREF,
 } from "~/components/docs/reference";
@@ -354,7 +355,8 @@ export function NewSecret({
         <CodeBlock code={usage.mcp} className="rounded-md" />
       </div>
       <p className="text-sm text-sb-text-muted">
-        In a terminal: run <Code>{CLI_LOGIN}</Code> and paste the key.
+        In a terminal: run <Code>{cliLogin(baseUrl, BASE_URL)}</Code> and paste
+        the key.
       </p>
       <p>
         <Button variant="secondary" size="sm" onClick={onDone}>

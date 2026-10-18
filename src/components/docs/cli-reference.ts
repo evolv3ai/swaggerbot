@@ -144,6 +144,11 @@ export function cliLookup(
     .join(" ");
 }
 
+/** `swaggerbot login`, with `--url` when `baseUrl` isn't the default, so the key is stored for that origin. */
+export function cliLogin(baseUrl: string, defaultUrl: string): string {
+  return baseUrl === defaultUrl ? CLI_LOGIN : `${CLI_LOGIN} --url ${baseUrl}`;
+}
+
 /** `text` as one shell word: as is when it is safe bare, else in double quotes (or single, when it holds `$`, `` ` ``, `"` or `\`). */
 function shellWord(text: string): string {
   if (/^[\w./:@%+-]+$/.test(text)) return text;

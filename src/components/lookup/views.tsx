@@ -1,6 +1,6 @@
 import { Download, FileCode } from "lucide-react";
 import type { ReactNode } from "react";
-import { CLI_LOGIN, cliLookup } from "~/components/docs/cli-reference";
+import { cliLogin, cliLookup } from "~/components/docs/cli-reference";
 import { BASE_URL } from "~/components/docs/reference";
 import { SearchForm } from "~/components/search/search-form";
 import { WithOnThisPage } from "~/components/shell/on-this-page";
@@ -408,8 +408,9 @@ function NotInIndex({
             <h3 className="text-sm font-semibold">From the CLI</h3>
             <CodeBlock code={cli} className="overflow-hidden rounded-md" />
             <p className={cn("text-[13px]", MUTED)}>
-              After <code className="font-mono">{CLI_LOGIN}</code>, which asks
-              for your key and stores it.
+              After{" "}
+              <code className="font-mono">{cliLogin(baseUrl, BASE_URL)}</code>,
+              which asks for your key and stores it.
             </p>
           </div>
           <div className="grid gap-2">

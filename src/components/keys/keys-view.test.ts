@@ -91,12 +91,12 @@ describe("KeysView", () => {
 
 describe("NewSecret", () => {
   const secret = "sb_s3cr3tValue";
-  const html = (rolled: boolean) =>
+  const html = (rolled: boolean, baseUrl = BASE) =>
     renderToStaticMarkup(
       createElement(NewSecret, {
         secret,
         rolled,
-        baseUrl: BASE,
+        baseUrl,
         onDone: () => {},
       }),
       // A URL in a code block may break after a slash.
@@ -125,6 +125,12 @@ describe("NewSecret", () => {
     );
     expect(shown).not.toContain("--key");
     expect(shown).not.toContain("mailto:");
+  });
+
+  it("logs in to the origin it is served from when that isn't the public one", () => {
+    expect(html(false, "http://localhost:3000")).toMatch(
+      /In a terminal: run <code[^>]*>swaggerbot login --url http:\/\/localhost:3000<\/code> and paste the key\./,
+    );
   });
 
   it("says a rolled key kept its credits", () => {

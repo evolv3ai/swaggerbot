@@ -291,6 +291,17 @@ describe("the other views", () => {
     expect(text(markup)).toContain(
       'swaggerbot lookup "Val Town" Copy After swaggerbot login',
     );
+    expect(
+      text(
+        html({
+          view: "not-in-index",
+          request: { name: "Val Town" },
+          baseUrl: "http://localhost:3000",
+        }),
+      ),
+    ).toContain(
+      'swaggerbot lookup "Val Town" --url http://localhost:3000 Copy After swaggerbot login --url http://localhost:3000 ',
+    );
     // HTTP, then the CLI, then MCP.
     const order = ["Over HTTP", "From the CLI", "Over MCP"].map((h) =>
       markup.indexOf(`>${h}</h3>`),
