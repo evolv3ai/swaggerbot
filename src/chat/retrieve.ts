@@ -121,7 +121,8 @@ type OutlineOperation = SpecOutline["operations"][number];
  * `text`. The facts come first, always. Then the operations, then the
  * schemas, at most `MAX_OPERATIONS` and `MAX_SCHEMAS`, each expanded to fit
  * its own cap and what is left of the budget. Of each, the question's best
- * matches take the first half of the slots; those cited earlier in
+ * matches take the first half of the slots (for operations, only those a
+ * word other than a verb such as "list" hits); those cited earlier in
  * `history` (most recent turn first) are kept in the rest, and any slots
  * still free go to further matches. An operation or schema that can't fit
  * even cut short is passed over.
@@ -152,15 +153,19 @@ export function groundingFor(
   const matched = new Set([...ranked.matched, ...schemaRanked.matched]);
 
   const cited = citedRefs(history);
+  const operationRef = ({ method, path }: OutlineOperation) => ({
+    method,
+    path,
+  });
   const operationRefs = withCited(
     cited.filter(isOperationRef),
-    ranked.operations.map(({ method, path }) => ({ method, path })),
-    MAX_OPERATIONS / 2,
+    ranked.operations.map(operationRef),
+    ranked.named.slice(0, MAX_OPERATIONS / 2).map(operationRef),
   );
   const schemaRefs = withCited(
     cited.filter(isSchemaRef),
     schemaRanked.names.map((name) => ({ name })),
-    MAX_SCHEMAS / 2,
+    schemaRanked.names.slice(0, MAX_SCHEMAS / 2).map((name) => ({ name })),
   );
 
   let truncated = 0;
@@ -292,14 +297,19 @@ function securitySchemesOf(doc: unknown): Record<string, unknown> | undefined {
 }
 
 /**
- * The outline's operations that some word hits, best first, and the words
- * that hit at least one.
+ * The outline's operations that some word hits, best first; those of them
+ * a word other than a verb (`VERB_METHODS`) hits; and the words that hit
+ * at least one.
  */
 function rankOperations(
   operations: readonly OutlineOperation[],
   words: readonly string[],
   stems: readonly string[],
-): { operations: OutlineOperation[]; matched: Set<string> } {
+): {
+  operations: OutlineOperation[];
+  named: OutlineOperation[];
+  matched: Set<string>;
+} {
   const indexed = operations.map((op, index) => {
     const literal = op.path
       .split("/")
@@ -343,7 +353,16 @@ function rankOperations(
       (a, b) =>
         b.score - a.score || a.segments - b.segments || a.index - b.index,
     );
-  return { operations: scored.map((x) => x.op), matched };
+  const named = scored.filter((x) =>
+    x.hits.some(
+      (h, i) => h > 0 && !Object.hasOwn(VERB_METHODS, words[i] as string),
+    ),
+  );
+  return {
+    operations: scored.map((x) => x.op),
+    named: named.map((x) => x.op),
+    matched,
+  };
 }
 
 /**
@@ -414,19 +433,15 @@ function citedRefs(history: readonly ChatTurn[]): GroundingRef[] {
 }
 
 /**
- * The refs to try, in order: the first `reserved` of `matched`, then
- * `cited`, then the rest of `matched`, each once.
+ * The refs to try, in order: `reserved`, then `cited`, then the rest of
+ * `matched`, each once.
  */
 function withCited<T extends GroundingRef>(
   cited: readonly T[],
   matched: readonly T[],
-  reserved: number,
+  reserved: readonly T[],
 ): T[] {
-  return uniqueRefs([
-    ...matched.slice(0, reserved),
-    ...cited,
-    ...matched.slice(reserved),
-  ]);
+  return uniqueRefs([...reserved, ...cited, ...matched]);
 }
 
 function uniqueRefs<T extends GroundingRef>(refs: readonly T[]): T[] {

@@ -192,6 +192,45 @@ describe("groundingFor", () => {
     );
   });
 
+  it("reserves no slots for a question that only a verb matches", () => {
+    const op = (summary: string) => ({ summary, responses: {} });
+    const doc = {
+      openapi: "3.1.0",
+      info: { title: "Billing", version: "1" },
+      paths: {
+        "/charges": { get: op("List charges") },
+        "/refunds": { get: op("List refunds") },
+        "/customers": { get: op("List customers") },
+        "/invoices": {
+          get: op("List invoices"),
+          post: op("Create an invoice"),
+        },
+        "/invoices/{invoice}": {
+          get: op("Get an invoice"),
+          delete: op("Delete an invoice"),
+        },
+        "/invoices/{invoice}/pay": { post: op("Pay an invoice") },
+        "/invoices/{invoice}/void": { post: op("Void an invoice") },
+      },
+    };
+    const cited = [
+      { method: "get", path: "/invoices" },
+      { method: "post", path: "/invoices" },
+      { method: "get", path: "/invoices/{invoice}" },
+      { method: "delete", path: "/invoices/{invoice}" },
+      { method: "post", path: "/invoices/{invoice}/pay" },
+      { method: "post", path: "/invoices/{invoice}/void" },
+    ];
+    const { documents } = groundingFor(
+      "Can I list them?",
+      [{ role: "assistant", text: "", cited }],
+      specOf(doc),
+    );
+    expect(
+      documents.filter((d) => d.kind === "operation").map((d) => d.ref),
+    ).toEqual(cited);
+  });
+
   it("passes over a cited operation or schema the Spec doesn't have", () => {
     const { documents } = groundingFor(
       "zebras",
