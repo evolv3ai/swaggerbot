@@ -1,3 +1,6 @@
+import { createAnthropicModel } from "~/chat/anthropic";
+import { chatConfigOf } from "~/chat/prompt";
+import { createChatStore } from "~/index-store/chat";
 import { defaultDailyQuota } from "~/index-store/keys";
 import { createApp } from "~/lookup/app";
 import { type Gate, rateLimited } from "~/lookup/http";
@@ -6,6 +9,10 @@ import {
   createRateLimiter,
   rateLimitPerMinute,
 } from "~/lookup/rate-limit";
+import { normalizedCache } from "~/spec-forms/operation-http";
+import { currentUser } from "./auth";
+import type { ChatDeps } from "./chat";
+import { createChatGate } from "./chat-gate";
 
 export type App = ReturnType<typeof createApp>;
 
@@ -46,4 +53,45 @@ export async function openGet(
   handler: () => Response | Promise<Response>,
 ): Promise<Response> {
   return rateLimited(request, gate) ?? handler();
+}
+
+/** Ask this Spec's model, meter and turn log, when the feature is on. */
+export type Chat = NonNullable<ChatDeps["chat"]>;
+
+const CHAT = Symbol.for("swaggerbot.chat");
+const chatStore = globalThis as { [CHAT]?: { chat: Chat | undefined } };
+
+/**
+ * The server's one chat, built on the first call from `getApp().db` and
+ * `chatConfigOf(process.env)`; `undefined` while the feature is off (no
+ * `ANTHROPIC_API_KEY`). On `globalThis` for the reason `getApp` is.
+ */
+export function getChat(): Chat | undefined {
+  chatStore[CHAT] ??= { chat: buildChat() };
+  return chatStore[CHAT].chat;
+}
+
+function buildChat(): Chat | undefined {
+  const config = chatConfigOf(process.env);
+  if (!config) return undefined;
+  const store = createChatStore(getApp().db, { logText: config.logText });
+  return {
+    config,
+    model: createAnthropicModel(config),
+    store,
+    gate: createChatGate({ store, limit: config.dailyTurns }),
+  };
+}
+
+/** What `handleAsk` needs, from the server's one app and chat. */
+export function chatDeps(): ChatDeps {
+  const { db, lookup } = getApp();
+  return {
+    db,
+    lookup,
+    cache: normalizedCache,
+    rateGate: gate,
+    currentUser,
+    chat: getChat(),
+  };
 }

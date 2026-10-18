@@ -10,14 +10,14 @@ import {
 const FACTS: GroundingDocument = {
   kind: "facts",
   title: "About this Spec",
+  ref: null,
   text: "Title: Val Town API",
 };
 const OPERATION: GroundingDocument = {
   kind: "operation",
   title: "GET /v1/me (operation)",
   text: "GET /v1/me\nGet profile information for the current user.",
-  method: "get",
-  path: "/v1/me",
+  ref: { method: "get", path: "/v1/me" },
 };
 
 function request(question: string, documents = [FACTS, OPERATION]) {

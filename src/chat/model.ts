@@ -4,36 +4,17 @@
  * imports the SDK) and by `FakeModel` (`fake.ts`) in tests, so no test calls
  * a real model and the provider can change in one file.
  */
+import type { ChatTurn, GroundingDocument } from "./retrieve";
 
 /** A turn's `max_tokens`: a chat answer over supplied documents is short. */
 export const CHAT_MAX_TOKENS = 1_500;
 
 /**
- * One document a turn is grounded in, cut from the Spec's Normalized Form:
- * the Spec's facts, an operation or a schema. The model may cite it.
- *
- * Retrieval (`src/chat/retrieve*`) produces these; this is the minimal shape
- * the model needs, to be reconciled with retrieval's when the two are wired.
+ * A turn's documents and history are retrieval's (`retrieve.ts`): the model
+ * reads a document's `kind`, `title` and `text`, and a turn's `role` and
+ * `text`; what an answer cited stays with retrieval.
  */
-export type GroundingDocument = {
-  kind: "facts" | "operation" | "schema";
-  /** What it is: `GET /v1/customers (operation)`, `customer (schema)`, `About this Spec`. */
-  title: string;
-  /** Its text, as the model reads it. */
-  text: string;
-  /** An operation's method, lowercase as in the Spec Outline. */
-  method?: string;
-  /** An operation's path. */
-  path?: string;
-  /** A schema's name in `components.schemas`. */
-  name?: string;
-};
-
-/** An earlier turn of the conversation, sent back by the browser. */
-export type ChatTurn = {
-  role: "user" | "assistant";
-  text: string;
-};
+export type { ChatTurn, GroundingDocument };
 
 export type ModelRequest = {
   /** The system prompt (`systemPrompt` in `prompt.ts`). */

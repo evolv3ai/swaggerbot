@@ -22,20 +22,20 @@ import {
 const FACTS: GroundingDocument = {
   kind: "facts",
   title: "About this Spec",
+  ref: null,
   text: "Title: Stripe API\nAPI Version: 2024-06-20",
 };
 const OPERATION: GroundingDocument = {
   kind: "operation",
   title: "GET /v1/customers (operation)",
   text: "GET /v1/customers\nList all customers.",
-  method: "get",
-  path: "/v1/customers",
+  ref: { method: "get", path: "/v1/customers" },
 };
 const SCHEMA: GroundingDocument = {
   kind: "schema",
   title: "customer (schema)",
   text: "customer: object",
-  name: "customer",
+  ref: { name: "customer" },
 };
 
 function request(overrides: Partial<ModelRequest> = {}): ModelRequest {

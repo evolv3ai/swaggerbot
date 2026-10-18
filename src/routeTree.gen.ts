@@ -28,6 +28,7 @@ import { Route as ApiApisSplatRouteImport } from './routes/api/apis/$'
 import { Route as ApiVendorsIndexRouteImport } from './routes/api/vendors/index'
 import { Route as AuthOauthProviderRouteImport } from './routes/auth/oauth.$provider'
 import { Route as EmbedSpecsSpecIdRouteImport } from './routes/embed/specs/$specId'
+import { Route as SpecsSpecIdAskRouteImport } from './routes/specs/$specId/ask'
 import { Route as ApiSpecsSpecIdNormalizedRouteImport } from './routes/api/specs/$specId/normalized'
 import { Route as ApiSpecsSpecIdPublishedRouteImport } from './routes/api/specs/$specId/published'
 import { Route as ApiVendorsVendorApisRouteImport } from './routes/api/vendors/$vendor/apis'
@@ -127,6 +128,11 @@ const EmbedSpecsSpecIdRoute = EmbedSpecsSpecIdRouteImport.update({
   path: '/embed/specs/$specId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SpecsSpecIdAskRoute = SpecsSpecIdAskRouteImport.update({
+  id: '/ask',
+  path: '/ask',
+  getParentRoute: () => SpecsSpecIdRoute,
+} as any)
 const ApiSpecsSpecIdNormalizedRoute =
   ApiSpecsSpecIdNormalizedRouteImport.update({
     id: '/api/specs/$specId/normalized',
@@ -157,12 +163,13 @@ export interface FileRoutesByFullPath {
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/sign-in': typeof AuthSignInRoute
   '/auth/sign-out': typeof AuthSignOutRoute
-  '/specs/$specId': typeof SpecsSpecIdRoute
+  '/specs/$specId': typeof SpecsSpecIdRouteWithChildren
   '/vendors/$vendorId': typeof VendorsVendorIdRoute
   '/vendors/': typeof VendorsIndexRoute
   '/api/apis/$': typeof ApiApisSplatRoute
   '/auth/oauth/$provider': typeof AuthOauthProviderRoute
   '/embed/specs/$specId': typeof EmbedSpecsSpecIdRoute
+  '/specs/$specId/ask': typeof SpecsSpecIdAskRoute
   '/api/vendors/': typeof ApiVendorsIndexRoute
   '/api/specs/$specId/normalized': typeof ApiSpecsSpecIdNormalizedRoute
   '/api/specs/$specId/published': typeof ApiSpecsSpecIdPublishedRoute
@@ -181,12 +188,13 @@ export interface FileRoutesByTo {
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/sign-in': typeof AuthSignInRoute
   '/auth/sign-out': typeof AuthSignOutRoute
-  '/specs/$specId': typeof SpecsSpecIdRoute
+  '/specs/$specId': typeof SpecsSpecIdRouteWithChildren
   '/vendors/$vendorId': typeof VendorsVendorIdRoute
   '/vendors': typeof VendorsIndexRoute
   '/api/apis/$': typeof ApiApisSplatRoute
   '/auth/oauth/$provider': typeof AuthOauthProviderRoute
   '/embed/specs/$specId': typeof EmbedSpecsSpecIdRoute
+  '/specs/$specId/ask': typeof SpecsSpecIdAskRoute
   '/api/vendors': typeof ApiVendorsIndexRoute
   '/api/specs/$specId/normalized': typeof ApiSpecsSpecIdNormalizedRoute
   '/api/specs/$specId/published': typeof ApiSpecsSpecIdPublishedRoute
@@ -206,12 +214,13 @@ export interface FileRoutesById {
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/sign-in': typeof AuthSignInRoute
   '/auth/sign-out': typeof AuthSignOutRoute
-  '/specs/$specId': typeof SpecsSpecIdRoute
+  '/specs/$specId': typeof SpecsSpecIdRouteWithChildren
   '/vendors/$vendorId': typeof VendorsVendorIdRoute
   '/vendors/': typeof VendorsIndexRoute
   '/api/apis/$': typeof ApiApisSplatRoute
   '/auth/oauth/$provider': typeof AuthOauthProviderRoute
   '/embed/specs/$specId': typeof EmbedSpecsSpecIdRoute
+  '/specs/$specId/ask': typeof SpecsSpecIdAskRoute
   '/api/vendors/': typeof ApiVendorsIndexRoute
   '/api/specs/$specId/normalized': typeof ApiSpecsSpecIdNormalizedRoute
   '/api/specs/$specId/published': typeof ApiSpecsSpecIdPublishedRoute
@@ -238,6 +247,7 @@ export interface FileRouteTypes {
     | '/api/apis/$'
     | '/auth/oauth/$provider'
     | '/embed/specs/$specId'
+    | '/specs/$specId/ask'
     | '/api/vendors/'
     | '/api/specs/$specId/normalized'
     | '/api/specs/$specId/published'
@@ -262,6 +272,7 @@ export interface FileRouteTypes {
     | '/api/apis/$'
     | '/auth/oauth/$provider'
     | '/embed/specs/$specId'
+    | '/specs/$specId/ask'
     | '/api/vendors'
     | '/api/specs/$specId/normalized'
     | '/api/specs/$specId/published'
@@ -286,6 +297,7 @@ export interface FileRouteTypes {
     | '/api/apis/$'
     | '/auth/oauth/$provider'
     | '/embed/specs/$specId'
+    | '/specs/$specId/ask'
     | '/api/vendors/'
     | '/api/specs/$specId/normalized'
     | '/api/specs/$specId/published'
@@ -305,7 +317,7 @@ export interface RootRouteChildren {
   AuthCallbackRoute: typeof AuthCallbackRoute
   AuthSignInRoute: typeof AuthSignInRoute
   AuthSignOutRoute: typeof AuthSignOutRoute
-  SpecsSpecIdRoute: typeof SpecsSpecIdRoute
+  SpecsSpecIdRoute: typeof SpecsSpecIdRouteWithChildren
   VendorsVendorIdRoute: typeof VendorsVendorIdRoute
   VendorsIndexRoute: typeof VendorsIndexRoute
   ApiApisSplatRoute: typeof ApiApisSplatRoute
@@ -452,6 +464,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EmbedSpecsSpecIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/specs/$specId/ask': {
+      id: '/specs/$specId/ask'
+      path: '/ask'
+      fullPath: '/specs/$specId/ask'
+      preLoaderRoute: typeof SpecsSpecIdAskRouteImport
+      parentRoute: typeof SpecsSpecIdRoute
+    }
     '/api/specs/$specId/normalized': {
       id: '/api/specs/$specId/normalized'
       path: '/api/specs/$specId/normalized'
@@ -476,6 +495,18 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface SpecsSpecIdRouteChildren {
+  SpecsSpecIdAskRoute: typeof SpecsSpecIdAskRoute
+}
+
+const SpecsSpecIdRouteChildren: SpecsSpecIdRouteChildren = {
+  SpecsSpecIdAskRoute: SpecsSpecIdAskRoute,
+}
+
+const SpecsSpecIdRouteWithChildren = SpecsSpecIdRoute._addFileChildren(
+  SpecsSpecIdRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DocsRoute: DocsRoute,
@@ -489,7 +520,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthCallbackRoute: AuthCallbackRoute,
   AuthSignInRoute: AuthSignInRoute,
   AuthSignOutRoute: AuthSignOutRoute,
-  SpecsSpecIdRoute: SpecsSpecIdRoute,
+  SpecsSpecIdRoute: SpecsSpecIdRouteWithChildren,
   VendorsVendorIdRoute: VendorsVendorIdRoute,
   VendorsIndexRoute: VendorsIndexRoute,
   ApiApisSplatRoute: ApiApisSplatRoute,
