@@ -23,9 +23,9 @@ export const getSpecView = createServerFn({ method: "GET" })
       { specView },
       { freshnessDaysOf },
       { currentUser, signInConfigured },
-      { askViewOf, schemaNamesOf },
+      { askViewOf, heldSchemaNames },
       { createSpecForms },
-      { normalizedCache, openNormalized },
+      { normalizedCache },
       { setResponseHeader },
     ] = await Promise.all([
       import("./app-instance"),
@@ -57,16 +57,7 @@ export const getSpecView = createServerFn({ method: "GET" })
         const stored = createSpecForms(db).getOutline(view.spec.id);
         return stored.status === "ready" ? stored.outline : undefined;
       },
-      // Read through the cache the turn itself reads, so the first question
-      // finds the Normalized Form parsed.
-      schemaNames: async () => {
-        const opened = await openNormalized(view.api.id, view.spec.id, {
-          db,
-          lookup,
-          cache: normalizedCache,
-        });
-        return "doc" in opened ? schemaNamesOf(opened.doc) : [];
-      },
+      schemaNames: () => heldSchemaNames(normalizedCache, view.spec.id),
     });
     return { ...view, ask };
   });

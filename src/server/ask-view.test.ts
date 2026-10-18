@@ -1,8 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { SpecOutline } from "~/domain/spec-forms";
+import { createNormalizedCache } from "~/spec-forms/operation-http";
 import {
   type AskViewDeps,
   askViewOf,
+  heldSchemaNames,
   schemaNamesOf,
   suggestedQuestions,
 } from "./ask-view";
@@ -112,5 +114,63 @@ describe("schemaNamesOf", () => {
     expect(schemaNamesOf({})).toEqual([]);
     expect(schemaNamesOf(null)).toEqual([]);
     expect(schemaNamesOf({ components: { schemas: [] } })).toEqual([]);
+  });
+});
+
+describe("heldSchemaNames", () => {
+  const bytes = (doc: unknown) => new TextEncoder().encode(JSON.stringify(doc));
+  const DOC = { components: { schemas: { account: {}, customer: {} } } };
+
+  it("suggests a schema when the cache already holds this Spec", async () => {
+    const cache = createNormalizedCache();
+    await cache.get("spec_1", () => bytes(DOC));
+    const view = await askViewOf(
+      deps({ schemaNames: () => heldSchemaNames(cache, "spec_1") }),
+    );
+    expect(view).toMatchObject({
+      suggestions: [
+        "How do I authenticate?",
+        "List the Customers operations",
+        "What does customer look like?",
+      ],
+    });
+  });
+
+  it("suggests no schema, and loads nothing, when the cache is empty", async () => {
+    const parse = vi.fn((_bytes: Uint8Array) => ({}));
+    const cache = createNormalizedCache(parse);
+    const view = await askViewOf(
+      deps({ schemaNames: () => heldSchemaNames(cache, "spec_1") }),
+    );
+    expect(view).toMatchObject({
+      suggestions: ["How do I authenticate?", "List the Customers operations"],
+    });
+    expect(parse).not.toHaveBeenCalled();
+    expect(cache.peek("spec_1")).toBeUndefined();
+  });
+
+  it("suggests no schema, and keeps the other Spec held, when the cache holds another", async () => {
+    const cache = createNormalizedCache();
+    const held = cache.get("spec_2", () => bytes(DOC));
+    await held;
+    const view = await askViewOf(
+      deps({ schemaNames: () => heldSchemaNames(cache, "spec_1") }),
+    );
+    expect(view).toMatchObject({
+      suggestions: ["How do I authenticate?", "List the Customers operations"],
+    });
+    expect(cache.peek("spec_2")).toBe(held);
+    const load = vi.fn(() => bytes({}));
+    expect(await cache.get("spec_2", load)).toEqual(DOC);
+    expect(load).not.toHaveBeenCalled();
+  });
+
+  it("is empty when the held parse fails", async () => {
+    const cache = createNormalizedCache(() => {
+      throw new Error("bad bytes");
+    });
+    const failing = cache.get("spec_1", () => bytes(DOC));
+    expect(await heldSchemaNames(cache, "spec_1")).toEqual([]);
+    await expect(failing).rejects.toThrow("bad bytes");
   });
 });

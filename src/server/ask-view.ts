@@ -1,4 +1,5 @@
 import type { SpecOutline } from "~/domain/spec-forms";
+import type { NormalizedCache } from "~/spec-forms/operation-http";
 import type { SignedInUser } from "./auth";
 import type { ChatMeter } from "./chat-gate";
 import type { SpecView } from "./spec-view";
@@ -90,4 +91,21 @@ export function schemaNamesOf(doc: unknown): string[] {
   return schemas && typeof schemas === "object" && !Array.isArray(schemas)
     ? Object.keys(schemas)
     : [];
+}
+
+/**
+ * The schema names of Spec `specId`'s Normalized Form when `cache` already
+ * holds it parsed, else none: the Spec viewer never loads or parses it just
+ * to suggest a question, and a failed parse suggests nothing.
+ */
+export async function heldSchemaNames(
+  cache: Pick<NormalizedCache, "peek">,
+  specId: string,
+): Promise<string[]> {
+  try {
+    const held = cache.peek(specId);
+    return held ? schemaNamesOf(await held) : [];
+  } catch {
+    return [];
+  }
 }
