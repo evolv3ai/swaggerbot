@@ -1,4 +1,6 @@
-import type { Outcome } from "../domain/outcome";
+import type { Api, Vendor } from "../domain/catalog";
+import type { Outcome, SpecAnswer } from "../domain/outcome";
+import type { Provenance } from "../domain/provenance";
 import type { SpecOutline } from "../domain/spec-forms";
 import { type CliHttpError, durationWords } from "./http";
 
@@ -439,6 +441,154 @@ function expansionNotes(
       ),
     );
   return notes;
+}
+
+/** One page of `GET /api/vendors`, as the CLI reads it. */
+export type VendorsPageBody = {
+  vendors: { id: string; name: string; apiCount: number }[];
+  /** How many Vendors match the query, on every page. */
+  total: number;
+  nextCursor: string | null;
+};
+
+/** The widest the id and name columns of the Vendor list are padded to. */
+const VENDOR_COLUMN_CAPS = [32, 32];
+
+/**
+ * The Vendor list as a person reads it: a table of `id  name  N APIs`, then
+ * how many of how many there are, with the cursor of the next page when
+ * there is one.
+ */
+export function renderVendors(
+  page: VendorsPageBody,
+  { query, color }: { query?: string; color: boolean },
+): string {
+  const p = palette(color);
+  const lines: string[] = [];
+  const rows = page.vendors.map((v) => [
+    clean(v.id),
+    clean(v.name),
+    `${v.apiCount} API${v.apiCount === 1 ? "" : "s"}`,
+  ]);
+  const widths = VENDOR_COLUMN_CAPS.map((cap, i) =>
+    Math.min(cap, Math.max(...rows.map((row) => row[i]?.length ?? 0))),
+  );
+  for (const [id = "", name = "", count = ""] of rows)
+    lines.push(
+      [
+        p.bold(id.padEnd(widths[0] ?? 0)),
+        name.padEnd(widths[1] ?? 0),
+        p.dim(count),
+      ].join("  "),
+    );
+  if (lines.length > 0) lines.push("");
+  const count = `${page.vendors.length} of ${page.total} Vendors${query === undefined ? "" : ` matching "${clean(query)}"`}`;
+  lines.push(
+    page.nextCursor === null
+      ? count
+      : `${count}; --cursor ${page.nextCursor} for the next page`,
+  );
+  return `${lines.join("\n")}\n`;
+}
+
+/** The 200 of `GET /api/vendors/{vendor}/apis`, as the CLI reads it. */
+export type VendorApisBody = {
+  vendor: Vendor;
+  apis: {
+    api: Api;
+    /** null when the Index holds no confirmed Official, Endorsed or Mirror Spec of it. */
+    currentSpec: SpecAnswer | null;
+    alternateSpecs: SpecAnswer[];
+    provenance: Provenance | null;
+    verifiedAt: string | null;
+  }[];
+};
+
+/** The 300 of `GET /api/vendors/{vendor}/apis`: the Vendors it could mean. */
+export type VendorMatchesBody = { vendors: Pick<Vendor, "id" | "name">[] };
+
+/**
+ * A Vendor's APIs as a person reads them: the Vendor, then each API with its
+ * id, its Current Spec (API Version, format, Provenance, when it was
+ * verified) and both download URLs, or that the Index has no confirmed Spec
+ * of it yet.
+ */
+export function renderVendorApis(
+  body: VendorApisBody,
+  { baseUrl, color }: { baseUrl: string; color: boolean },
+): string {
+  const p = palette(color);
+  const lines = [
+    `${p.bold(clean(body.vendor.name))}  ${p.dim(clean(body.vendor.id))}`,
+  ];
+  for (const { api, currentSpec, provenance, verifiedAt } of body.apis) {
+    lines.push("", `${p.bold(clean(api.name))}  ${clean(api.id)}`);
+    if (!currentSpec) {
+      lines.push(p.dim("  no confirmed Spec in the Index yet"));
+      continue;
+    }
+    lines.push(
+      `  ${[
+        currentSpec.apiVersion === null
+          ? "no API Version"
+          : `API Version ${clean(currentSpec.apiVersion)}`,
+        currentSpec.format,
+        provenance ?? "",
+        verifiedAt ? p.dim(`verified ${day(verifiedAt)}`) : "",
+      ]
+        .filter(Boolean)
+        .join("  ")}`,
+      `  ${p.dim("published ")}  ${absolute(currentSpec.downloads.published, baseUrl)}`,
+      `  ${p.dim("normalized")}  ${absolute(currentSpec.downloads.normalized, baseUrl)}${
+        currentSpec.normalized === "ready"
+          ? ""
+          : p.dim(
+              currentSpec.normalized === "pending"
+                ? "  (being built)"
+                : "  (couldn't be built)",
+            )
+      }`,
+    );
+  }
+  lines.push(
+    "",
+    `${body.apis.length} API${body.apis.length === 1 ? "" : "s"} in the Index`,
+  );
+  return `${lines.join("\n")}\n`;
+}
+
+/** The Vendors a name could mean, as `lookup` shows an Ambiguous Outcome. */
+export function renderVendorMatches(
+  body: VendorMatchesBody,
+  { vendor, color }: { vendor: string; color: boolean },
+): string {
+  const p = palette(color);
+  const width = Math.max(...body.vendors.map((v) => clean(v.id).length));
+  const lines = [
+    [
+      p.yellow(p.bold("Ambiguous")),
+      `${body.vendors.length} Vendors match "${clean(vendor)}"; say which`,
+    ].join("  "),
+    ...body.vendors.map((v) =>
+      p.dim(`  ${clean(v.id).padEnd(width)}  ${clean(v.name)}`),
+    ),
+    p.dim("  `swaggerbot vendor <id>` lists one"),
+  ];
+  return `${lines.join("\n")}\n`;
+}
+
+/** A Vendor the Index doesn't hold, as `lookup` shows an Unknown Outcome, and how to add one. */
+export function renderUnknownVendor(vendor: string, color: boolean): string {
+  const p = palette(color);
+  return `${[
+    [
+      p.red(p.bold("Unknown")),
+      `no Vendor "${clean(vendor)}" in the Index`,
+    ].join("  "),
+    p.dim(
+      "  Only APIs already in the Index are listed: `swaggerbot lookup <name>` finds an API and adds it, with its Vendor, to the Index.",
+    ),
+  ].join("\n")}\n`;
 }
 
 /**

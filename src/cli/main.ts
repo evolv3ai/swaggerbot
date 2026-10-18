@@ -8,6 +8,7 @@ import { runOperation } from "./commands/operation";
 import { runOutline } from "./commands/outline";
 import { runSchema } from "./commands/schema";
 import { runSpec } from "./commands/spec";
+import { runVendor, runVendors } from "./commands/vendors";
 import { configPathOf } from "./config";
 import { baseUrlOf, keyOf } from "./http";
 import {
@@ -29,7 +30,7 @@ type Runner<K extends RunCommand> = (
   context: CommandContext,
 ) => Promise<number>;
 
-/** The command table, one line per command; a command missing here is a type error. Issue 5 adds its own. */
+/** The command table, one line per command; a command missing here is a type error. */
 const COMMANDS: { [K in RunCommand]: Runner<K> } = {
   lookup: runLookup,
   login: runLogin,
@@ -39,6 +40,8 @@ const COMMANDS: { [K in RunCommand]: Runner<K> } = {
   outline: runOutline,
   operation: runOperation,
   schema: runSchema,
+  vendors: runVendors,
+  vendor: runVendor,
 };
 
 /**

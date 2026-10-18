@@ -25,6 +25,12 @@ export const CLI_USAGE = `usage: swaggerbot <command> [options]
                       one operation, every reference inlined, as JSON
   schema <name | apiId> <schemaName> [--spec-id S]
                       one component schema, as JSON
+  vendors [<query>] [--all]
+                      the Vendors in the Index, 50 a page, their id, name
+                      and API count; those whose id or name holds <query>;
+                      --all lists every page
+  vendor <vendor>     a Vendor's APIs in the Index, each with its Current
+                      Spec, Provenance and download URLs
 Options:
   --json              print the answer as the HTTP API gives it
   --key <key>         the API key (or SWAGGERBOT_API_KEY, or the one
@@ -47,7 +53,7 @@ export type CliGlobals = {
   noColor: boolean;
 };
 
-/** A `swaggerbot` command, once validated. Issue 5 adds its own here. */
+/** A `swaggerbot` command, once validated. */
 export type CliCommand =
   | {
       command: "lookup";
@@ -97,6 +103,20 @@ export type CliCommand =
       name: string;
       specId?: string;
     }
+  | {
+      command: "vendors";
+      /** A word of the Vendor's id or name, ignoring case. */
+      query?: string;
+      /** Every page from `cursor` on. */
+      all: boolean;
+      /** Where the page starts: a previous page's `nextCursor` (hidden from the usage). */
+      cursor?: string;
+    }
+  | {
+      command: "vendor";
+      /** A Vendor id, domain, name, or the name of one of its APIs, as the server matches it. */
+      vendor: string;
+    }
   | { command: "login" }
   | { command: "logout" }
   | { command: "key" }
@@ -144,6 +164,7 @@ const COMMAND_FLAGS: Record<string, string[]> = {
   outline: ["tag", "query", "spec-id", "limit", "all", "cursor"],
   operation: ["spec-id"],
   schema: ["spec-id"],
+  vendors: ["all", "cursor"],
 };
 
 /** `-o` is `--output` to `parseArgs`; say it as it was given. */
@@ -382,6 +403,37 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
           name: name.trim(),
           ...(specId === undefined ? {} : { specId }),
         },
+        globals,
+      };
+    }
+    case "vendors": {
+      const [query, ...extra] = rest;
+      if (extra.length > 0) return fail(`unexpected argument: ${extra[0]}`);
+      if (values.cursor !== undefined && !values.cursor.trim())
+        return fail("--cursor needs a value");
+      return {
+        ok: true,
+        command: {
+          command,
+          ...(query?.trim() ? { query: query.trim() } : {}),
+          all: values.all === true,
+          ...(values.cursor === undefined
+            ? {}
+            : { cursor: values.cursor.trim() }),
+        },
+        globals,
+      };
+    }
+    case "vendor": {
+      const [vendor, ...extra] = rest;
+      if (!vendor?.trim())
+        return fail(
+          "vendor needs a Vendor: its id, domain or name, as in: vendor stripe.com",
+        );
+      if (extra.length > 0) return fail(`unexpected argument: ${extra[0]}`);
+      return {
+        ok: true,
+        command: { command, vendor: vendor.trim() },
         globals,
       };
     }

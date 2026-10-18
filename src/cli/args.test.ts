@@ -291,8 +291,21 @@ describe("parseCliArgs", () => {
     [
       "--all on operation",
       ["operation", "a", "get", "/", "--all"],
-      "--all only goes with outline",
+      "--all only goes with outline or vendors",
     ],
+    [
+      "--cursor on vendor",
+      ["vendor", "stripe.com", "--cursor", "50"],
+      "--cursor only goes with outline or vendors",
+    ],
+    ["vendors with two", ["vendors", "a", "b"], "unexpected argument: b"],
+    [
+      "a blank --cursor on vendors",
+      ["vendors", "--cursor", " "],
+      "--cursor needs a value",
+    ],
+    ["vendor without a Vendor", ["vendor"], "vendor needs a Vendor"],
+    ["vendor with two", ["vendor", "a", "b"], "unexpected argument: b"],
     [
       "operation without a path",
       ["operation", "a", "get"],
@@ -315,6 +328,29 @@ describe("parseCliArgs", () => {
     if (parsed.ok) return;
     expect(parsed.exitCode).toBe(2);
     expect(parsed.error).toContain(error);
+  });
+
+  it("parses vendors with an optional query, --all and the hidden --cursor", () => {
+    expect(parseCliArgs(["vendors"])).toEqual({
+      ok: true,
+      command: { command: "vendors", all: false },
+      globals: NO_GLOBALS,
+    });
+    expect(
+      parseCliArgs(["vendors", " str ", "--all", "--cursor", "50", "--json"]),
+    ).toEqual({
+      ok: true,
+      command: { command: "vendors", query: "str", all: true, cursor: "50" },
+      globals: { ...NO_GLOBALS, json: true },
+    });
+  });
+
+  it("parses vendor with its Vendor", () => {
+    expect(parseCliArgs(["vendor", " Jira "])).toEqual({
+      ok: true,
+      command: { command: "vendor", vendor: "Jira" },
+      globals: NO_GLOBALS,
+    });
   });
 
   it.each(["login", "logout", "key"] as const)(
@@ -352,6 +388,8 @@ describe("parseCliArgs", () => {
       "--all",
       "operation <name | apiId> <method> <path>",
       "schema <name | apiId> <schemaName>",
+      "vendors [<query>] [--all]",
+      "vendor <vendor>",
       "--api-version",
       "--community",
       "--fresh",
