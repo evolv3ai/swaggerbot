@@ -185,3 +185,54 @@ export const specForms = sqliteTable("spec_forms", {
    */
   builderVersion: integer("builder_version"),
 });
+
+/** Questions a signed-in person asked Ask this Spec, per UTC day (Slice 9, D4). */
+export const chatUsage = sqliteTable(
+  "chat_usage",
+  {
+    /** The person's WorkOS user id. */
+    userId: text("user_id").notNull(),
+    /** A UTC day, `YYYY-MM-DD`. */
+    day: text("day").notNull(),
+    count: integer("count").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.day] })],
+);
+
+/**
+ * One row per Ask this Spec turn (Slice 9, D8): what it cost and how it
+ * ended. `question` and `answer` stay null unless `CHAT_LOG_TEXT=1`; never
+ * a key or a secret. Rows older than 90 days are deleted.
+ */
+export const chatTurns = sqliteTable(
+  "chat_turns",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    at: text("at").notNull().default(now),
+    specId: text("spec_id").notNull(),
+    apiId: text("api_id").notNull(),
+    /** The person's WorkOS user id. */
+    userId: text("user_id").notNull(),
+    model: text("model").notNull(),
+    effort: text("effort").notNull(),
+    /** Input tokens not read from the cache. */
+    inputTokens: integer("input_tokens").notNull().default(0),
+    /** Input tokens read from the cache. */
+    cachedTokens: integer("cached_tokens").notNull().default(0),
+    outputTokens: integer("output_tokens").notNull().default(0),
+    latencyMs: integer("latency_ms").notNull(),
+    operationsSent: integer("operations_sent").notNull().default(0),
+    schemasSent: integer("schemas_sent").notNull().default(0),
+    bytesSent: integer("bytes_sent").notNull().default(0),
+    citations: integer("citations").notNull().default(0),
+    /** The model's `stop_reason`; null when the turn ended in an error first. */
+    stopReason: text("stop_reason"),
+    /** With a `refusal` stop reason, its category when one was given. */
+    refusalCategory: text("refusal_category"),
+    /** The error's class, when the turn failed; never its message. */
+    error: text("error"),
+    question: text("question"),
+    answer: text("answer"),
+  },
+  (t) => [index("chat_turns_at_idx").on(t.at)],
+);

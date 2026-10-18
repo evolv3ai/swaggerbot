@@ -6,6 +6,7 @@ import {
 import type { Gate } from "~/lookup/http";
 import { clientIpOf, type RateLimiter } from "~/lookup/rate-limit";
 import type { SignedInUser } from "./auth";
+import { createPerPersonQueue } from "./per-person-queue";
 
 /**
  * `/keys` (Slice 7 #3, D6): one key per signed-in person, created on
@@ -113,19 +114,7 @@ export function createKeyPage({
   now = () => new Date(),
   warn = console.warn,
 }: KeyPageDeps) {
-  const queues = new Map<string, Promise<unknown>>();
-
-  /** Runs `action` after any earlier action of `userId`'s has settled. */
-  function oneAtATime<T>(userId: string, action: () => Promise<T>) {
-    const prior = queues.get(userId) ?? Promise.resolve();
-    const run = prior.then(action, action);
-    const settled = run.catch(() => undefined);
-    queues.set(userId, settled);
-    void settled.then(() => {
-      if (queues.get(userId) === settled) queues.delete(userId);
-    });
-    return run;
-  }
+  const oneAtATime = createPerPersonQueue().run;
 
   function viewOf(key: LiveKey): KeyView {
     return { ...key, asOf: now().toISOString() };

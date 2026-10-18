@@ -1,5 +1,6 @@
 import { and, asc, eq, isNotNull, isNull, lt } from "drizzle-orm";
 import type { Db } from "~/index-store/db";
+import { utcDay } from "~/index-store/keys";
 import { normalizeName } from "~/index-store/repo";
 import { verifications } from "~/index-store/schema";
 import type { Lookup } from "./lookup";
@@ -82,14 +83,33 @@ export function createVerifier({
   lookup,
   now = () => new Date(),
   freshnessDays = DEFAULT_FRESHNESS_DAYS,
+  daily,
 }: {
   db: Db;
   lookup: Lookup;
   now?: () => Date;
   freshnessDays?: number;
+  /**
+   * Housekeeping the worker's tick runs once a UTC day, first on its first
+   * tick, such as deleting old Ask this Spec turns.
+   */
+  daily?: () => void;
 }): Verifier {
   let running = false;
   let timer: NodeJS.Timeout | undefined;
+  let lastDaily: string | undefined;
+
+  function runDaily() {
+    const day = utcDay(now());
+    if (!daily || lastDaily === day) return;
+    lastDaily = day;
+    try {
+      daily();
+    } catch (error) {
+      const name = error instanceof Error ? error.name : "unknown error";
+      console.warn(`verification worker: daily housekeeping failed (${name})`);
+    }
+  }
 
   function claim(): { nameNormalized: string; name: string } | undefined {
     const next = db
@@ -148,6 +168,7 @@ export function createVerifier({
 
   async function tick() {
     timer = undefined;
+    runDaily();
     let ran = false;
     try {
       ran = await runOnce();
