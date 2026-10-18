@@ -1,3 +1,4 @@
+import { DEFAULT_CHAT_DAILY_TURNS } from "~/chat/prompt";
 import { WithOnThisPage } from "~/components/shell/on-this-page";
 import { PAGE, PageTitle } from "~/components/shell/page";
 import { buttonClass } from "~/components/ui/button";
@@ -61,6 +62,7 @@ const SECTIONS = [
   { id: "cli", label: "CLI" },
   { id: "access", label: "Keys and limits" },
   { id: "keys", label: "Get a key" },
+  { id: "ask", label: "Ask this Spec" },
 ] as const;
 
 /** What `get_spec_outline`, `get_operation` and `get_schema` keep results to. */
@@ -85,6 +87,15 @@ const KEY_FACTS = [
   "One key per person. Creating a second while the first is live is refused.",
   "A daily quota of 100 Discovery Lookups, refilled at midnight UTC; the keys page shows what is left today.",
   "Roll gives the key a new secret and keeps today's quota; Revoke ends it at once, and you can create a new one.",
+];
+
+/** What Ask this Spec is and isn't, in the "Ask this Spec" section. */
+const ASK_FACTS = [
+  "It needs sign-in, the same as the keys page. Signed out, the panel offers the sign-in.",
+  `${DEFAULT_CHAT_DAILY_TURNS} questions a day by default for each person, counted on the keys page and reset at 00:00 UTC. A question spends none of your key's credits, and you need no key to ask.`,
+  "Every statement about the API cites the operation, schema or fact of the Spec it comes from; when the Spec doesn't say, the answer says so rather than guess.",
+  "It answers questions about that one Spec only. It never calls the API, fetches a URL or asks for credentials.",
+  "It is not part of the HTTP API or MCP: it lives on the Spec's page only. An agent reads the same Spec with `get_spec_outline`, `get_operation` and `get_schema`.",
 ];
 
 /** Inline code in running text: mono on a sunken chip. */
@@ -136,7 +147,8 @@ function Route({ route }: { route: string }) {
 
 /**
  * `/docs`: the HTTP API (the route table, then each route with a `curl` and
- * the answer it gave), MCP, the CLI, the key rules, and how to get a key.
+ * the answer it gave), MCP, the CLI, the key rules, how to get a key, and
+ * Ask this Spec.
  */
 export function DocsView() {
   return (
@@ -179,6 +191,7 @@ export function DocsView() {
         <Cli />
         <Access />
         <Keys />
+        <Ask />
       </div>
     </WithOnThisPage>
   );
@@ -619,6 +632,41 @@ function Keys() {
           </a>{" "}
           to ask for a larger quota.
         </p>
+      </Card>
+    </section>
+  );
+}
+
+function Ask() {
+  return (
+    <section aria-labelledby="ask" className={SECTION}>
+      <div className="grid gap-3">
+        <h2 id="ask" className={H2}>
+          Ask this Spec
+        </h2>
+        <p className={PROSE}>
+          On a Spec's page, Ask this Spec answers your questions about that Spec
+          in plain words, from the Spec itself: what an operation takes, which
+          schema it returns, how requests authenticate.
+        </p>
+      </div>
+      <Card className="max-w-[38rem] rounded-[12px]">
+        <ul className="divide-y divide-sb-border">
+          {ASK_FACTS.map((item) => (
+            <li
+              key={item}
+              className="flex gap-3 px-4 py-3.5 leading-relaxed text-sb-text sm:px-5"
+            >
+              <span
+                aria-hidden="true"
+                className="mt-[0.6em] size-1.5 shrink-0 rounded-full bg-sb-accent"
+              />
+              <span>
+                <Inline text={item} />
+              </span>
+            </li>
+          ))}
+        </ul>
       </Card>
     </section>
   );

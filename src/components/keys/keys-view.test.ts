@@ -7,6 +7,7 @@ import {
   type KeyActions,
   KeysView,
   NewSecret,
+  questionWords,
   resetWords,
   usageOf,
 } from "./keys-view";
@@ -72,6 +73,33 @@ describe("KeysView", () => {
     expect(html).not.toContain("Create your key");
     // The key's id isn't shown; the page never takes one back.
     expect(html).not.toContain("key_abcdefgh");
+  });
+
+  it("with a key and Ask this Spec on: today's questions and their reset", () => {
+    const html = view({
+      state: "key",
+      status: 200,
+      key: KEY,
+      quota: 100,
+      baseUrl: BASE,
+      questions: { used: 3, limit: 30, resetsAt: "2026-09-28T00:00:00.000Z" },
+    });
+    expect(html).toContain(">Questions today</dt>");
+    expect(html).toContain("3 of 30 (Ask this Spec)");
+    expect(html).toContain("Resets at 00:00 UTC");
+    expect(questionWords({ used: 0, limit: 30 })).toBe(
+      "0 of 30 (Ask this Spec)",
+    );
+  });
+
+  it("with a key and Ask this Spec off, signed out and by hand: no questions line", () => {
+    const pages: KeysPage[] = [
+      { state: "key", status: 200, key: KEY, quota: 100, baseUrl: BASE },
+      { state: "signed-out", status: 200, quota: 100 },
+      { state: "by-hand", status: 200, quota: 100 },
+    ];
+    for (const page of pages)
+      expect(view(page), page.state).not.toContain("Questions today");
   });
 
   it("without Unkey or WorkOS: issued by hand, with the email", () => {

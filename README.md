@@ -160,15 +160,6 @@ docker exec <container> node .output/cli/keys.mjs migrate
 
 A secret is shown only when it is made: neither store keeps it (the Index keeps its sha256). The id (`key_…`) is safe to show and is what `list` and `revoke` use. A key without `--quota` gets the default, 100 a day, or `DAILY_QUOTA` when that is set.
 
-Ask this Spec's turns are counted in the Index: each signed-in person may ask `CHAT_DAILY_TURNS` questions a UTC day (default 30), and each turn is logged in `chat_turns` with its model, tokens, latency, what was sent and how it ended, never the question or the answer unless `CHAT_LOG_TEXT=1`. The Verification worker deletes turns older than 90 days once a day. To see them:
-
-```sh
-pnpm tsx scripts/chatstats.ts [--since YYYY-MM-DD] [--json]   # turns, people, tokens, refusals, errors, estimated cost
-docker exec <container> node .output/cli/chatstats.mjs [--since YYYY-MM-DD] [--json]
-```
-
-The cost is estimated from a price table in `src/index-store/chatstats-cli.ts` (per model, per million tokens, with the day the prices were read); a model missing from it is listed as unpriced.
-
 To check keys on a deployment, run `KEYCHECK_KEY=<secret> pnpm tsx scripts/keycheck.ts https://swaggerbot.dev` (`--name "Val Town"` by default, a name already in the Index; `--json` for the whole report, `--help` for the rest). It checks that a keyless Index Lookup is 200; that the same with the key is 200 and doesn't change the key's credits; that a Discovery (`fresh: true`) with the key is 200 and spends one credit; and that a made-up `sb_` key is 401. With `UNKEY_ROOT_KEY` set it reads the key's credits before and after through Unkey's admin API (`keys.whoami`); without it the credit checks are skipped. It uses one of the key's credits, prints each Lookup with PASS/FAIL and exits 1 when a check fails.
 
 ## MCP
@@ -228,6 +219,30 @@ The stored keys live in a config file readable only by you (`0600`): `$XDG_CONFI
 Exit codes, the same with `--json`: `0` Resolved, or the command did what it was asked; `3` Ambiguous; `4` Unconfirmed; `5` No Spec; `6` Unknown; `1` refused or failed (no key, quota used, the service unreachable, a download that isn't its Spec); `2` usage error.
 
 `pnpm build` bundles it into `cli/dist/swaggerbot.mjs` (`pnpm build:cli` alone); `node cli/dist/swaggerbot.mjs --url http://localhost:3000 lookup stripe` runs it against `pnpm dev`.
+
+## Ask this Spec
+
+On a Spec's page (`/specs/{specId}#ask`), a signed-in person can ask questions about that one Spec and get answers in plain text, each statement citing the operation, schema or fact of the Spec it comes from; when the Spec doesn't say, the answer says so ([ADR 0007](docs/adr/0007-ask-this-spec-answers-from-the-normalized-form.md)). Code picks the parts of the Normalized Form a question is about and a Claude model answers from them in one call; the model is never in the Lookup, Discovery or Verification path and writes nothing into the Index. Asking needs sign-in and is counted per person, `CHAT_DAILY_TURNS` questions a UTC day (default 30, reset at 00:00 UTC, shown on `/keys`); it spends no API key credits. It is not part of the HTTP API or MCP: `POST /specs/{specId}/ask` serves the Spec page's panel only, and an agent reads the same Spec with `get_spec_outline`, `get_operation` and `get_schema`.
+
+| Variable | Meaning |
+|---|---|
+| `ANTHROPIC_API_KEY` | Turns the feature on. Without it the panel says it is off and the route answers 404. |
+| `CHAT_MODEL` | The model that answers (default `claude-opus-5-5`). |
+| `CHAT_EFFORT` | Its effort: `low` (the default), `medium`, `high`, `xhigh` or `max`. |
+| `CHAT_DAILY_TURNS` | Questions a signed-in person may ask a UTC day (default 30). |
+| `CHAT_LOG_TEXT` | `1` keeps each turn's question and answer, for a tuning period; unset, only its figures are kept. |
+| `CHAT_FAKE` | `1`, for local checks only: with no `ANTHROPIC_API_KEY` and no WorkOS sign-in, turns are answered by a model scripted from the chat Benchmark and asked as one stand-in person, so `chatcheck` can run against a built server without a real model. |
+
+Each turn is logged in `chat_turns` with its model, tokens, latency, what was sent and how it ended, never the question or the answer unless `CHAT_LOG_TEXT=1`. The Verification worker deletes turns older than 90 days once a day. To see them:
+
+```sh
+pnpm tsx scripts/chatstats.ts [--since YYYY-MM-DD] [--json]   # turns, people, tokens, refusals, errors, estimated cost
+docker exec <container> node .output/cli/chatstats.mjs [--since YYYY-MM-DD] [--json]
+```
+
+The cost is estimated from a price table in `src/index-store/chatstats-cli.ts` (per model, per million tokens, with the day the prices were read); a model missing from it is listed as unpriced.
+
+The chat Benchmark, `benchmark/chat.json`, holds 30 labelled questions about Val Town, Stripe and the GitHub REST API: `answerable` ones with the operations or schemas an answer must cite, `not-in-spec` ones the Spec can't answer, and `off-topic` and `action` ones it must decline. To check Ask this Spec against it, sign in to the deployment in a browser, copy the request's `Cookie` header, and run `CHATCHECK_COOKIE='<cookie>' pnpm tsx scripts/chatcheck.ts https://swaggerbot.dev` (`--names "Val Town,Stripe"` for some of them, `--json` for the whole report, `--help` for the rest). It looks each name up from the Index, asks each question on its Current Spec and reads the answer's stream; an `answerable` answer must cite every expected operation and schema, an `off-topic` one must decline (no citation, and the decline phrasing), an `action` one must decline (the decline phrasing; it may cite the Spec explaining how the call works), and a `not-in-spec` one is reported if it says the Spec doesn't say. It prints each answer, the time to first byte and to done, and the tokens, and exits 0 when expected citations are present for at least 90% of the answerable questions, nothing was answered that should have been declined, no turn failed and the p90 to done is under 15 s; otherwise 1. Every question spends one of that person's questions for the day, and with a real model it costs money; the run stops at the first 429 and says how many questions ran. Against a local build: `CHAT_FAKE=1 TYPESAFE_API_KEY=unused pnpm start` with an Index that holds the three Specs, then `CHATCHECK_COOKIE=unused pnpm tsx scripts/chatcheck.ts http://localhost:3000`.
 
 ## Crawling etiquette
 

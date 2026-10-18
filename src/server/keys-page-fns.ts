@@ -22,7 +22,7 @@ async function server() {
   const [
     { getRequest, setResponseStatus, setResponseHeader },
     { currentUser, signInConfigured },
-    { gate, getApp },
+    { gate, getApp, getChat },
     { unkeyConfigOf },
     { createWindowLimiter },
     { createKeyPage, KEY_ACTIONS_PER_HOUR },
@@ -44,6 +44,7 @@ async function server() {
       windowMs: 3_600_000,
     }),
     gate,
+    questionsOf: (userId) => getChat()?.gate.meter(userId),
   });
   // Every answer here is one person's, and create and roll carry a secret:
   // no cache may keep any of them.

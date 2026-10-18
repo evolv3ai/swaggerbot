@@ -6,6 +6,7 @@ import {
 import type { Gate } from "~/lookup/http";
 import { clientIpOf, type RateLimiter } from "~/lookup/rate-limit";
 import type { SignedInUser } from "./auth";
+import type { ChatMeter } from "./chat-gate";
 import { createPerPersonQueue } from "./per-person-queue";
 
 /**
@@ -37,6 +38,8 @@ export type KeysPage =
       key: KeyView;
       quota: number;
       baseUrl: string;
+      /** Ask this Spec's questions today, when the feature is on. */
+      questions?: ChatMeter;
     }
   /** The key store didn't answer. */
   | { state: "unavailable"; status: 503 };
@@ -96,6 +99,8 @@ export type KeyPageDeps = {
   perUser: RateLimiter;
   /** The per-IP limit every route shares. */
   gate: Pick<Gate, "rateLimiter" | "clientIpHeader">;
+  /** A person's Ask this Spec questions today; `undefined` while it is off. */
+  questionsOf?: (userId: string) => ChatMeter | undefined;
   now?: () => Date;
   /** Where a store's failure is reported: the error's name, never a secret. */
   warn?: (message: string) => void;
@@ -111,10 +116,23 @@ export function createKeyPage({
   quota,
   perUser,
   gate,
+  questionsOf = () => undefined,
   now = () => new Date(),
   warn = console.warn,
 }: KeyPageDeps) {
   const oneAtATime = createPerPersonQueue().run;
+
+  /** The meter, or nothing: the key page never fails over it. */
+  function questionsToday(userId: string): ChatMeter | undefined {
+    try {
+      return questionsOf(userId);
+    } catch (err) {
+      warn(
+        `keys page: reading the questions failed (${err instanceof Error ? err.name : "unknown error"})`,
+      );
+      return undefined;
+    }
+  }
 
   function viewOf(key: LiveKey): KeyView {
     return { ...key, asOf: now().toISOString() };
@@ -163,9 +181,16 @@ export function createKeyPage({
       if (!user) return { state: "signed-out", status: 200, quota };
       try {
         const key = await keys.liveKeyOf(user.id);
-        return key
-          ? { state: "key", status: 200, key: viewOf(key), quota, baseUrl }
-          : { state: "no-key", status: 200, quota, baseUrl };
+        if (!key) return { state: "no-key", status: 200, quota, baseUrl };
+        const questions = questionsToday(user.id);
+        return {
+          state: "key",
+          status: 200,
+          key: viewOf(key),
+          quota,
+          baseUrl,
+          ...(questions ? { questions } : {}),
+        };
       } catch (err) {
         failed("reading the key", err);
         return { state: "unavailable", status: 503 };

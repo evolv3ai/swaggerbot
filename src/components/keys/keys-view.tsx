@@ -11,6 +11,7 @@ import { Button, buttonClass } from "~/components/ui/button";
 import { CodeBlock } from "~/components/ui/code-block";
 import { dayOf } from "~/lib/dates";
 import { cn } from "~/lib/utils";
+import type { ChatMeter } from "~/server/chat-gate";
 import type {
   KeyIssued,
   KeyRefusal,
@@ -59,6 +60,14 @@ export function creditWords(key: Pick<KeyView, "remaining" | "limit">) {
   return key.limit === undefined
     ? `${key.remaining} left today`
     : `${key.remaining} of ${key.limit} left today`;
+}
+
+/**
+ * Ask this Spec's meter as the key's facts say it: "3 of 30 (Ask this
+ * Spec)". It counts per person, not per key, and spends no credits.
+ */
+export function questionWords(meter: Pick<ChatMeter, "used" | "limit">) {
+  return `${meter.used} of ${meter.limit} (Ask this Spec)`;
 }
 
 /** The two lines to use a key with, the key filled in. */
@@ -156,6 +165,7 @@ export function KeysView({
       {key ? (
         <YourKey
           keyView={key}
+          questions={page.state === "key" ? page.questions : undefined}
           busy={busy}
           onRoll={() => run(actions.roll, issued(true))}
           onRevoke={() =>
@@ -369,15 +379,18 @@ export function NewSecret({
 
 /**
  * The person's live key: its start, when it was created, today's credits
- * and when they reset, and Roll and Revoke, each asked to be confirmed.
+ * and when they reset, their Ask this Spec questions today when it is on,
+ * and Roll and Revoke, each asked to be confirmed.
  */
 export function YourKey({
   keyView,
+  questions,
   busy,
   onRoll,
   onRevoke,
 }: {
   keyView: KeyView;
+  questions?: ChatMeter;
   busy: boolean;
   onRoll: () => void;
   onRevoke: () => void;
@@ -407,6 +420,16 @@ export function YourKey({
             {capitalised(resetWords(keyView.resetsAt, keyView.asOf))}
           </span>
         ) : null}
+      </>,
+    ]);
+  if (questions)
+    rows.push([
+      "Questions today",
+      <>
+        {questionWords(questions)}
+        <span className="block text-sm text-sb-text-muted">
+          Resets at 00:00 UTC
+        </span>
       </>,
     ]);
   return (
