@@ -9,6 +9,14 @@ import { Tabs } from "~/components/ui/tabs";
 import { dayOf } from "~/lib/dates";
 import { cn } from "~/lib/utils";
 import {
+  CLI_COMMANDS,
+  CLI_EXIT_CODES,
+  CLI_INSTALL,
+  CLI_INSTALL_GLOBAL,
+  CLI_LOGIN,
+  CLI_NODE,
+} from "./cli-reference";
+import {
   BASE_URL,
   EXAMPLES,
   type Example,
@@ -50,6 +58,7 @@ const CELL_LABEL = "text-xs font-semibold text-sb-text-muted sm:hidden";
 const SECTIONS = [
   { id: "http-api", label: "HTTP API" },
   { id: "mcp", label: "MCP" },
+  { id: "cli", label: "CLI" },
   { id: "access", label: "Keys and limits" },
   { id: "keys", label: "Get a key" },
 ] as const;
@@ -127,18 +136,18 @@ function Route({ route }: { route: string }) {
 
 /**
  * `/docs`: the HTTP API (the route table, then each route with a `curl` and
- * the answer it gave), MCP, the key rules, and how to get a key.
+ * the answer it gave), MCP, the CLI, the key rules, and how to get a key.
  */
 export function DocsView() {
   return (
     <WithOnThisPage>
       <div className={cn(PAGE, "grid gap-10")}>
         <header className="grid gap-4">
-          <PageTitle className="mb-0">HTTP API and MCP</PageTitle>
+          <PageTitle className="mb-0">HTTP API, MCP and CLI</PageTitle>
           <p className="max-w-[34rem] text-[17px] leading-relaxed text-sb-text-muted">
-            Everything this site shows, programs get over HTTP and agents over
-            MCP, in the same words. Answers from the Index are open to anyone;
-            Discovery needs a key.
+            Everything this site shows, programs get over HTTP, agents over MCP
+            and people at a terminal from the CLI, in the same words. Answers
+            from the Index are open to anyone; Discovery needs a key.
           </p>
           <nav
             aria-labelledby="contents"
@@ -167,6 +176,7 @@ export function DocsView() {
         </header>
         <HttpApi />
         <Mcp />
+        <Cli />
         <Access />
         <Keys />
       </div>
@@ -401,6 +411,138 @@ function Mcp() {
             </li>
           ))}
         </ul>
+      </div>
+    </section>
+  );
+}
+
+function Cli() {
+  return (
+    <section aria-labelledby="cli" className={SECTION}>
+      <div className="grid gap-3">
+        <h2 id="cli" className={H2}>
+          CLI
+        </h2>
+        <p className={PROSE}>
+          <Inline
+            text={`For people at a terminal: \`swaggerbot\`, a client of the HTTP API above. It needs ${CLI_NODE}.`}
+          />
+        </p>
+      </div>
+      <div className="grid gap-3">
+        <h3 id="cli-install" className={H3}>
+          Install
+        </h3>
+        <CodeBlock
+          code={CLI_INSTALL}
+          className="overflow-hidden rounded-[12px] border border-sb-border"
+        />
+        <p className={NOTE}>
+          Or install it, to run it as plain <Code>swaggerbot</Code>:
+        </p>
+        <CodeBlock
+          code={CLI_INSTALL_GLOBAL}
+          className="overflow-hidden rounded-[12px] border border-sb-border"
+        />
+      </div>
+      <div className="grid gap-3">
+        <h3 id="cli-login" className={H3}>
+          Sign in
+        </h3>
+        <p className={PROSE}>
+          A name the Index answers needs no key. For Discovery and{" "}
+          <Code>--fresh</Code>,{" "}
+          <a href="/keys" className="text-sb-accent-text">
+            get a key on the keys page
+          </a>
+          , then store it:
+        </p>
+        <CodeBlock
+          code={CLI_LOGIN}
+          className="overflow-hidden rounded-[12px] border border-sb-border"
+        />
+        <p className={NOTE}>
+          <Inline text="It asks for the key, hidden, checks it at no cost to its credits and keeps it in a file only you can read: `~/.config/swaggerbot/config.json`, or `%APPDATA%\swaggerbot\config.json` on Windows. `--key` or `SWAGGERBOT_API_KEY` sends another key for one command." />
+        </p>
+      </div>
+      <div className="grid gap-3">
+        <h3 id="cli-commands" className={H3}>
+          The commands
+        </h3>
+        <Card className="overflow-hidden rounded-[12px]">
+          <ul
+            aria-labelledby="cli-commands"
+            className="divide-y divide-sb-border"
+          >
+            {CLI_COMMANDS.map((row) => (
+              <li key={row.command} className="grid gap-2.5 px-4 py-4 sm:px-5">
+                <p className="font-mono text-[13px] text-sb-text [overflow-wrap:break-word]">
+                  <span className="font-semibold">
+                    swaggerbot {row.command}
+                  </span>
+                  {row.usage ? (
+                    <span className="text-sb-text-muted"> {row.usage}</span>
+                  ) : null}
+                </p>
+                <p className="leading-relaxed text-sb-text">
+                  <Inline text={row.gives} />
+                </p>
+                <CodeBlock
+                  code={row.example}
+                  className="overflow-hidden rounded-md border border-sb-border"
+                />
+              </li>
+            ))}
+          </ul>
+        </Card>
+      </div>
+      <div className="grid gap-3">
+        <h3 id="cli-json" className={H3}>
+          JSON
+        </h3>
+        <p className={PROSE}>
+          <Inline text="Every command takes `--json`: it prints the same JSON as the HTTP API, so the answers above apply. On a failed request it prints the error body too." />
+        </p>
+      </div>
+      <div className="grid gap-3">
+        <h3 id="cli-exit-codes" className={H3}>
+          Exit codes
+        </h3>
+        <Card className="max-w-[38rem] overflow-hidden rounded-[12px]">
+          <table aria-labelledby="cli-exit-codes" className={TABLE}>
+            <thead className="sr-only">
+              <tr>
+                <th scope="col">Code</th>
+                <th scope="col">When</th>
+              </tr>
+            </thead>
+            <tbody>
+              {CLI_EXIT_CODES.map((row) => (
+                <tr key={row.code} className="first:[&>*]:border-t-0">
+                  <th
+                    scope="row"
+                    className="w-14 border-t border-sb-border px-4 py-2.5 text-left align-top font-mono text-[13px] font-semibold text-sb-text"
+                  >
+                    {row.code}
+                  </th>
+                  <td className="border-t border-sb-border px-4 py-2.5 text-sb-text">
+                    {row.means}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      </div>
+      <div className="grid gap-3">
+        <h3 id="cli-url" className={H3}>
+          A self-hosted swagger.bot
+        </h3>
+        <p className={PROSE}>
+          <Inline
+            text={`\`--url <origin>\` (or \`SWAGGERBOT_URL\`) points the CLI at another swagger.bot than \`${BASE_URL}\`. A key \`login\` stored is sent only to the origin it was checked with.`}
+          />
+        </p>
       </div>
     </section>
   );

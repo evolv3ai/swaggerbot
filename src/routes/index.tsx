@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useLoaderData } from "@tanstack/react-router";
 import { ArrowRight } from "lucide-react";
+import { CLI_INSTALL } from "~/components/docs/cli-reference";
 import { MCP_ADD } from "~/components/docs/reference";
 import { SearchForm } from "~/components/search/search-form";
 import { BENCHMARK } from "~/components/shell/benchmark";
@@ -96,9 +97,14 @@ function Search() {
           <Card className="grid gap-4 rounded-[12px] p-5">
             <p className="max-w-[40em]">
               For agents and programs: the same answers over MCP and the HTTP
-              API. From the Index, anyone. Past it, Discovery, with an API key.
+              API, and for people at a terminal, the CLI. From the Index,
+              anyone. Past it, Discovery, with an API key.
             </p>
             <CodeBlock code={MCP_ADD} className="overflow-hidden rounded-md" />
+            <CodeBlock
+              code={CLI_INSTALL}
+              className="overflow-hidden rounded-md"
+            />
             <p className="flex flex-wrap gap-3">
               <Link
                 to="/docs"

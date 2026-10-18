@@ -27,6 +27,7 @@ swagger.bot turns the name of an API into a verified Spec with its Provenance, o
 
 - Terminal and editor people: they arrive with a name, copy a URL or a `curl`, and leave. Many will reach the site from an agent's answer or a README.
 - The HTTP API (`/api/…`) and the MCP endpoint (`/mcp`) are the product's working surfaces; the Web UI shows the same answers, from the same functions.
+- The `swaggerbot` CLI is a third working surface, for people at a terminal: a client of the HTTP API that prints the same answers (`--json` the same JSON) and keeps a key stored by `swaggerbot login`. Where the site shows a `curl` and an MCP call, it shows the CLI line too.
 - Keys are handed out by hand (no accounts in v1): the UI's "request a key" is a `mailto:` link. The UI itself never holds a key, so it shows Index answers only; a name the Index doesn't know is answered with how to run Discovery with a key.
 
 ## Capabilities and Constraints

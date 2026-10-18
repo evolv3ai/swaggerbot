@@ -2,7 +2,7 @@
 
 # swagger.bot
 
-swagger.bot turns the name of an API into a verified OpenAPI/Swagger Spec with its Provenance, or says honestly why it can't. It is a single TanStack Start app (HTTP API, MCP endpoint and web UI) with the Index in SQLite. See [`docs/PRD.md`](docs/PRD.md) for what it does and why, [`CONTEXT.md`](CONTEXT.md) for the glossary and [`docs/adr/`](docs/adr/) for the decisions behind it. To use it rather than run it, read the docs at [swaggerbot.dev/docs](https://swaggerbot.dev/docs): the HTTP API with a `curl` and its answer for each route, the MCP server, the key rules and how to get a key. The `swaggerbot` command-line client is documented in [`cli/README.md`](cli/README.md).
+swagger.bot turns the name of an API into a verified OpenAPI/Swagger Spec with its Provenance, or says honestly why it can't. It is a single TanStack Start app (HTTP API, MCP endpoint and web UI) with the Index in SQLite. See [`docs/PRD.md`](docs/PRD.md) for what it does and why, [`CONTEXT.md`](CONTEXT.md) for the glossary and [`docs/adr/`](docs/adr/) for the decisions behind it. To use it rather than run it, read the docs at [swaggerbot.dev/docs](https://swaggerbot.dev/docs): the HTTP API with a `curl` and its answer for each route, the MCP server, the `swaggerbot` CLI, the key rules and how to get a key. The CLI is summed up under [CLI](#cli) below and documented in full in [`cli/README.md`](cli/README.md).
 
 ## Install
 
@@ -187,6 +187,38 @@ Five tools, each a thin adapter over the HTTP API's code. Each returns `structur
 **Result sizes:** every result stays under 30 kB (its `structuredContent` as JSON plus its text), below Claude Code's 10,000-token warning. `get_spec_outline` holds a page to that and, on a Spec over 100 operations without a filter, gives the tag list and the first page and says to filter. `get_operation` and `get_schema` inline breadth-first to 24 kB; past that a reference is `{ "$ref", "x-truncated": true }`, which `get_schema` follows. A schema that recurs within itself is `{ "$ref", "x-circular": true }`.
 
 To check the MCP server on a deployment, run `pnpm tsx scripts/mcpcheck.ts https://swaggerbot.dev` (`--names "Stripe,GitHub REST API,Cloudflare"` by default, `--json` for the whole report, `--help` for the rest; set `LOADCHECK_KEY` to send it as the bearer). It connects with the MCP SDK's HTTP client, lists the tools (all five must be there) and, for each name, calls `lookup_api` (which must be Resolved), `get_spec_outline` without a filter and then with a `query` taken from its first page, `get_operation` on 3 operations of that filtered page and `get_schema` on one schema reference they left. Calls are paced under the default 60/min per-IP limit. It prints each call's time and result size and exits 0 when no call failed, every result is under 30 kB and every call, the Lookups from the Index included, took at most 2 s; otherwise it exits 1, naming what failed.
+
+## CLI
+
+`swaggerbot` is the command-line client, for people at a terminal: a client of the HTTP API only (`src/cli/`, packaged in `cli/`). It needs Node 20 or later.
+
+```sh
+npx swaggerbot lookup "Val Town"   # run it without installing
+npm install -g swaggerbot          # or keep it
+```
+
+A name the Index answers needs no key. For Discovery and `--fresh`, get a key at [swaggerbot.dev/keys](https://swaggerbot.dev/keys) and store it with `swaggerbot login`: it asks for the key, hidden (or reads it from a pipe, or `--key`), checks it with `GET /api/key` at no cost to its credits and stores it only when it is live. `swaggerbot key` shows the key in use and its credits; `swaggerbot logout` forgets it. A command sends `--key`, else `SWAGGERBOT_API_KEY`, else the stored key.
+
+The stored keys live in a config file readable only by you (`0600`): `$XDG_CONFIG_HOME/swaggerbot/config.json` (`~/.config/swaggerbot/config.json`), `%APPDATA%\swaggerbot\config.json` on Windows, or wherever `SWAGGERBOT_CONFIG` points. Each key is kept under the origin it was checked with and sent to that origin only.
+
+| Command | Gives | Example |
+|---|---|---|
+| `lookup <name> [--api-version V] [--community] [--fresh]` | The Outcome in one line: the API, its Spec's URL and Provenance, or why there is none. | `swaggerbot lookup "Val Town"` |
+| `login [--key K]` | Checks a key and stores it for this swagger.bot. | `swaggerbot login` |
+| `logout` | Forgets the stored key. | `swaggerbot logout` |
+| `key` | The key in use: its id, credits left today, when they reset. | `swaggerbot key` |
+| `spec <name \| apiId \| specId> [--form published\|normalized] [--api-version V] [-o FILE] [--force] [--no-wait]` | Downloads the Spec and checks its sha256 is its Spec id. | `swaggerbot spec "Val Town" -o openapi.json` |
+| `outline <name \| apiId> [--tag T] [--query Q] [--spec-id S] [--limit N] [--all]` | The Spec Outline: title, servers, security schemes, tags, then the operations. | `swaggerbot outline val.town/api --tag me` |
+| `operation <name \| apiId> <method> <path> [--spec-id S]` | One operation, every reference inlined, as JSON. | `swaggerbot operation val.town/api delete /v1/blob/{key}` |
+| `schema <name \| apiId> <schemaName> [--spec-id S]` | One component schema, as JSON. | `swaggerbot schema val.town/api PaginationLinks` |
+| `vendors [<query>] [--all]` | The Vendors in the Index, 50 a page. | `swaggerbot vendors val` |
+| `vendor <vendor>` | A Vendor's APIs in the Index, each with its Current Spec. | `swaggerbot vendor val.town` |
+
+`--json` prints the same JSON as the HTTP API (on a failed request, its error body too), so the [routes](#access) and the examples on [`/docs`](https://swaggerbot.dev/docs) describe it. `--url <origin>` (or `SWAGGERBOT_URL`) points the CLI at a self-hosted swagger.bot; `--no-color` (or `NO_COLOR`) turns colour off.
+
+Exit codes, the same with `--json`: `0` Resolved, or the command did what it was asked; `3` Ambiguous; `4` Unconfirmed; `5` No Spec; `6` Unknown; `1` refused or failed (no key, quota used, the service unreachable, a download that isn't its Spec); `2` usage error.
+
+`pnpm build` bundles it into `cli/dist/swaggerbot.mjs` (`pnpm build:cli` alone); `node cli/dist/swaggerbot.mjs --url http://localhost:3000 lookup stripe` runs it against `pnpm dev`.
 
 ## Crawling etiquette
 

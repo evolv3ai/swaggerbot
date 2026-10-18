@@ -1,5 +1,7 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
+import { cliLogin } from "~/components/docs/cli-reference";
 import {
+  BASE_URL,
   KEY_REQUEST_EMAIL,
   KEY_REQUEST_HREF,
 } from "~/components/docs/reference";
@@ -299,7 +301,8 @@ export function NoKey({
 /**
  * A secret just issued, shown this once: the one highlighted box on the
  * page, focused when it appears, with the key filled into the `curl` and
- * `claude mcp add` lines.
+ * `claude mcp add` lines, and `swaggerbot login` to paste it into (the key
+ * is never put into a shell line for the CLI).
  */
 export function NewSecret({
   secret,
@@ -351,6 +354,10 @@ export function NewSecret({
         <p className="text-sm text-sb-text-muted">Add it to Claude Code:</p>
         <CodeBlock code={usage.mcp} className="rounded-md" />
       </div>
+      <p className="text-sm text-sb-text-muted">
+        In a terminal: run <Code>{cliLogin(baseUrl, BASE_URL)}</Code> and paste
+        the key.
+      </p>
       <p>
         <Button variant="secondary" size="sm" onClick={onDone}>
           I've stored it: hide the key
