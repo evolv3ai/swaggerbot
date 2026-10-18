@@ -160,6 +160,15 @@ docker exec <container> node .output/cli/keys.mjs migrate
 
 A secret is shown only when it is made: neither store keeps it (the Index keeps its sha256). The id (`key_…`) is safe to show and is what `list` and `revoke` use. A key without `--quota` gets the default, 100 a day, or `DAILY_QUOTA` when that is set.
 
+Ask this Spec's turns are counted in the Index: each signed-in person may ask `CHAT_DAILY_TURNS` questions a UTC day (default 30), and each turn is logged in `chat_turns` with its model, tokens, latency, what was sent and how it ended, never the question or the answer unless `CHAT_LOG_TEXT=1`. The Verification worker deletes turns older than 90 days once a day. To see them:
+
+```sh
+pnpm tsx scripts/chatstats.ts [--since YYYY-MM-DD] [--json]   # turns, people, tokens, refusals, errors, estimated cost
+docker exec <container> node .output/cli/chatstats.mjs [--since YYYY-MM-DD] [--json]
+```
+
+The cost is estimated from a price table in `src/index-store/chatstats-cli.ts` (per model, per million tokens, with the day the prices were read); a model missing from it is listed as unpriced.
+
 To check keys on a deployment, run `KEYCHECK_KEY=<secret> pnpm tsx scripts/keycheck.ts https://swaggerbot.dev` (`--name "Val Town"` by default, a name already in the Index; `--json` for the whole report, `--help` for the rest). It checks that a keyless Index Lookup is 200; that the same with the key is 200 and doesn't change the key's credits; that a Discovery (`fresh: true`) with the key is 200 and spends one credit; and that a made-up `sb_` key is 401. With `UNKEY_ROOT_KEY` set it reads the key's credits before and after through Unkey's admin API (`keys.whoami`); without it the credit checks are skipped. It uses one of the key's credits, prints each Lookup with PASS/FAIL and exits 1 when a check fails.
 
 ## MCP

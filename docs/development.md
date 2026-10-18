@@ -7,7 +7,7 @@ One TanStack Start app, TypeScript throughout, pnpm, Node 24 (the pnpm version i
 ## Layout
 
 - `src/domain/`: zod schemas and types for the glossary (Vendor, API, Spec, Source, Provenance, Outcome).
-- `src/index-store/`: the Index in SQLite through Drizzle (`db.ts`, `schema.ts`, `repo.ts`), the key stores (`keys.ts`, `unkey-keys.ts`) and the Spec forms table; migrations in `drizzle/`.
+- `src/index-store/`: the Index in SQLite through Drizzle (`db.ts`, `schema.ts`, `repo.ts`), the key stores (`keys.ts`, `unkey-keys.ts`), the Spec forms table and Ask this Spec's meter and turn log (`chat.ts`); migrations in `drizzle/`.
 - `src/judge/`: the Judge interface, the Jev adapter and the fake judge.
 - `src/fetch/`: the polite fetcher, Spec sniffing, known-path probe.
 - `src/sources/`: APIs.guru, web search, portal finding, GitHub, the Developer Portal crawl.
@@ -16,7 +16,7 @@ One TanStack Start app, TypeScript throughout, pnpm, Node 24 (the pnpm version i
 - `src/mcp/`: the MCP server over the same code ([ADR 0005](adr/0005-mcp-in-process-with-agent-sized-results.md)).
 - `src/routes/`, `src/components/`, `src/styles/`, `src/lib/`: the web UI (TanStack Start routes, shadcn components, Tailwind 4 theme); `src/server/`: request middleware such as the security headers.
 - `src/benchmark/` and `benchmark/entries.json`: the Benchmark and its runner, plus the deployment checks' code.
-- `scripts/`: CLI entry points run with `pnpm tsx` (`bench.ts`, `keys.ts`, the `*check.ts` deployment checks, `lookup.ts`). The README documents each.
+- `scripts/`: CLI entry points run with `pnpm tsx` (`bench.ts`, `keys.ts`, `chatstats.ts`, the `*check.ts` deployment checks, `lookup.ts`). The README documents each.
 - `src/cli/`: the public `swaggerbot` CLI (Slice 8), a client of the HTTP API only: it may import types from `src/domain/` and nothing from the server (Biome enforces it).
 - `cli/`: the npm package around that CLI (`package.json`, `README.md`, `CHANGELOG.md`); `pnpm build:cli` bundles `src/cli/bin.ts` into `cli/dist/swaggerbot.mjs`, which is ignored by git.
 - `docker/` and `Dockerfile`: the production image and its Litestream entrypoint ([`docs/deploy.md`](deploy.md)).
@@ -41,4 +41,5 @@ Never commit values; `.env.example` lists each with a comment, and `cp .env.exam
 - Serving: `PORT`, `FRESHNESS_DAYS`, `DAILY_QUOTA`, `RATE_LIMIT_PER_MINUTE`, `CLIENT_IP_HEADER`, `PUBLIC_BASE_URL`, `MAX_FORMS_BYTES`.
 - Backups, container only: the `LITESTREAM_*` settings read by `docker/entrypoint.sh` (the README's "Running in production" table).
 - Self-service keys ([ADR 0006](adr/0006-keys-in-unkey-accounts-in-workos.md)): `UNKEY_ROOT_KEY`, `UNKEY_API_ID`, `UNKEY_KEYSPACE_ID`, `UNKEY_MIGRATION_ID`, `WORKOS_API_KEY`, `WORKOS_CLIENT_ID`, `WORKOS_COOKIE_PASSWORD`, `WORKOS_REDIRECT_URI`.
+- Ask this Spec (Slice 9): `CHAT_DAILY_TURNS` (questions a signed-in person may ask a UTC day, default 30), `CHAT_LOG_TEXT=1` (keep each turn's question and answer for a tuning period).
 - Diagnostics and the deployment checks: `LOOKUP_TRACE=1` (per-step timings on every Lookup), `LOOKUP_FULL` (`scripts/lookup.ts` prints the whole Outcome), `LOADCHECK_KEY` and `KEYCHECK_KEY` (the bearer the `*check.ts` scripts send).

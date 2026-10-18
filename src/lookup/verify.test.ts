@@ -242,6 +242,42 @@ describe("createVerifier", () => {
       vi.useRealTimers();
     }
   });
+
+  it("runs its daily housekeeping on the first tick, then once a UTC day", async () => {
+    vi.useFakeTimers();
+    let clock = new Date("2026-10-18T23:59:50.000Z");
+    const daily = vi.fn(() => {
+      if (daily.mock.calls.length === 2) throw new Error("disk full");
+    });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const verifier = createVerifier({
+        db,
+        lookup: vi.fn(async () => unknown("payco")),
+        now: () => clock,
+        daily,
+      });
+      verifier.start();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(daily).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(daily).toHaveBeenCalledTimes(1);
+
+      clock = new Date("2026-10-19T00:00:00.000Z");
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(daily).toHaveBeenCalledTimes(2);
+      expect(warn).toHaveBeenCalledWith(
+        "verification worker: daily housekeeping failed (Error)",
+      );
+      // A failed day isn't retried until the next, and the worker goes on.
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(daily).toHaveBeenCalledTimes(2);
+      verifier.stop();
+    } finally {
+      warn.mockRestore();
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe("migration 0006", () => {
