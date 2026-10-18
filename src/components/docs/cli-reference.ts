@@ -63,7 +63,7 @@ export const CLI_COMMANDS: CliCommandRow[] = [
   {
     command: "spec",
     usage:
-      "<name | apiId | specId> [--form published|normalized] [-o FILE] [--force] [--no-wait]",
+      "<name | apiId | specId> [--form published|normalized] [--api-version V] [-o FILE] [--force] [--no-wait]",
     gives:
       "Downloads the Spec, by name (a Lookup, Resolved only), API id or Spec id, and checks its sha256 is its Spec id.",
     example: `swaggerbot spec "Val Town" -o openapi.json`,
@@ -71,7 +71,8 @@ export const CLI_COMMANDS: CliCommandRow[] = [
   },
   {
     command: "outline",
-    usage: "<name | apiId> [--tag T] [--query Q] [--limit N] [--all]",
+    usage:
+      "<name | apiId> [--tag T] [--query Q] [--spec-id S] [--limit N] [--all]",
     gives:
       "The Spec Outline: title, servers, security schemes, tags, then the operations, filtered by tag or a word.",
     example: "swaggerbot outline val.town/api --tag me",
@@ -79,14 +80,14 @@ export const CLI_COMMANDS: CliCommandRow[] = [
   },
   {
     command: "operation",
-    usage: "<name | apiId> <method> <path>",
+    usage: "<name | apiId> <method> <path> [--spec-id S]",
     gives: "One operation, every reference inlined, as JSON.",
     example: "swaggerbot operation val.town/api delete /v1/blob/{key}",
     calls: "operation",
   },
   {
     command: "schema",
-    usage: "<name | apiId> <schemaName>",
+    usage: "<name | apiId> <schemaName> [--spec-id S]",
     gives: "One component schema, as JSON.",
     example: "swaggerbot schema val.town/api PaginationLinks",
     calls: "schema",

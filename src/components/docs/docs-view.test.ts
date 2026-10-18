@@ -3,6 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/server";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { CLI_USAGE, parseCliArgs } from "~/cli/args";
 import { NAV } from "~/components/shell/nav";
 import { splitRoute } from "~/components/ui/method-badge";
 import { MCP_TOOLS, type McpDeps } from "~/mcp/server";
@@ -190,19 +191,25 @@ describe("DocsView", () => {
     }
   });
 
-  it("documents exactly the commands the CLI runs, in --help's order", () => {
-    const usage = readFileSync("src/cli/args.ts", "utf8");
-    const helpOrder = [...usage.matchAll(/^ {2}([a-z]+) /gm)]
-      .map((m) => m[1])
-      .filter((c) => CLI_COMMANDS.some((r) => r.command === c));
-    expect(CLI_COMMANDS.map((r) => r.command)).toEqual(helpOrder);
-    const main = readFileSync("src/cli/main.ts", "utf8");
-    const table = main.slice(main.indexOf("const COMMANDS"));
-    for (const row of CLI_COMMANDS)
-      expect(table, row.command).toContain(`  ${row.command}: run`);
-    expect([...table.matchAll(/^ {2}[a-z]+: run/gm)]).toHaveLength(
-      CLI_COMMANDS.length,
+  it("documents exactly the commands --help lists, in its order", () => {
+    const helpOrder = [...CLI_USAGE.matchAll(/^ {2}([a-z]+)\b/gm)].map(
+      (m) => m[1],
     );
+    expect(CLI_COMMANDS.map((r) => r.command)).toEqual(helpOrder);
+  });
+
+  it("gives examples the CLI parses as their command", () => {
+    for (const row of CLI_COMMANDS) {
+      const words = (row.example.match(/"[^"]*"|\S+/g) ?? []).map((w) =>
+        w.replace(/^"(.*)"$/, "$1"),
+      );
+      expect(words[0]).toBe("swaggerbot");
+      const parsed = parseCliArgs(words.slice(1));
+      expect(parsed, row.example).toMatchObject({
+        ok: true,
+        command: { command: row.command },
+      });
+    }
   });
 
   it("carries no Darkroom styling", () => {

@@ -207,10 +207,10 @@ The stored keys live in a config file readable only by you (`0600`): `$XDG_CONFI
 | `login [--key K]` | Checks a key and stores it for this swagger.bot. | `swaggerbot login` |
 | `logout` | Forgets the stored key. | `swaggerbot logout` |
 | `key` | The key in use: its id, credits left today, when they reset. | `swaggerbot key` |
-| `spec <name \| apiId \| specId> [--form published\|normalized] [-o FILE] [--force] [--no-wait]` | Downloads the Spec and checks its sha256 is its Spec id. | `swaggerbot spec "Val Town" -o openapi.json` |
-| `outline <name \| apiId> [--tag T] [--query Q] [--limit N] [--all]` | The Spec Outline: title, servers, security schemes, tags, then the operations. | `swaggerbot outline val.town/api --tag me` |
-| `operation <name \| apiId> <method> <path>` | One operation, every reference inlined, as JSON. | `swaggerbot operation val.town/api delete /v1/blob/{key}` |
-| `schema <name \| apiId> <schemaName>` | One component schema, as JSON. | `swaggerbot schema val.town/api PaginationLinks` |
+| `spec <name \| apiId \| specId> [--form published\|normalized] [--api-version V] [-o FILE] [--force] [--no-wait]` | Downloads the Spec and checks its sha256 is its Spec id. | `swaggerbot spec "Val Town" -o openapi.json` |
+| `outline <name \| apiId> [--tag T] [--query Q] [--spec-id S] [--limit N] [--all]` | The Spec Outline: title, servers, security schemes, tags, then the operations. | `swaggerbot outline val.town/api --tag me` |
+| `operation <name \| apiId> <method> <path> [--spec-id S]` | One operation, every reference inlined, as JSON. | `swaggerbot operation val.town/api delete /v1/blob/{key}` |
+| `schema <name \| apiId> <schemaName> [--spec-id S]` | One component schema, as JSON. | `swaggerbot schema val.town/api PaginationLinks` |
 | `vendors [<query>] [--all]` | The Vendors in the Index, 50 a page. | `swaggerbot vendors val` |
 | `vendor <vendor>` | A Vendor's APIs in the Index, each with its Current Spec. | `swaggerbot vendor val.town` |
 
