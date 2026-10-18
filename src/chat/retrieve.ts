@@ -37,10 +37,8 @@ export type GroundingRef = { method: string; path: string } | { name: string };
  * One document of a turn's grounding, sent to the model as a document
  * block with citations enabled. `text` is pretty JSON: the expanded
  * operation or schema, or for `facts` the Spec's title, API Version,
- * servers, security schemes and tags with their counts.
- *
- * Wave 1 defines this shape here; the route (Slice 9, #5) reconciles it
- * with the model seam's.
+ * servers, security schemes and tags with their counts. The model seam
+ * (`model.ts`) takes this shape as it is.
  */
 export type GroundingDocument =
   | { kind: "facts"; title: string; ref: null; text: string }
