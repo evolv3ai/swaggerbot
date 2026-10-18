@@ -145,11 +145,12 @@ export function Conversation({
   useEffect(() => setLive(true), []);
   useEffect(() => () => running.current?.abort(), []);
   // Focus follows the one control there is: Stop while an answer streams,
-  // then Ask another.
+  // then Ask another, then the field it opens. Never on first render.
   useEffect(() => {
     if (streaming) stop.current?.focus();
-    else if (running.current === null && turns.length > 0 && !composing)
-      another.current?.focus();
+    else if (running.current !== null || turns.length === 0) return;
+    else if (composing) field.current?.focus();
+    else another.current?.focus();
   }, [streaming, turns.length, composing]);
 
   async function ask(asked: string) {
@@ -239,7 +240,6 @@ export function Conversation({
             value={question}
             maxLength={ASK_QUESTION_CHARS}
             disabled={!live || spent}
-            placeholder="How do I create a customer?"
             onChange={(e) => setQuestion(e.target.value)}
             onKeyDown={(e) => {
               if (e.key !== "Enter" || !(e.metaKey || e.ctrlKey)) return;
@@ -297,10 +297,7 @@ export function Conversation({
               ref={another}
               variant="secondary"
               size="sm"
-              onClick={() => {
-                setComposing(true);
-                requestAnimationFrame(() => field.current?.focus());
-              }}
+              onClick={() => setComposing(true)}
             >
               Ask another
             </Button>
