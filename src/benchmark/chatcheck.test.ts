@@ -100,8 +100,11 @@ describe("scoreAnswer", () => {
     ).toBe("miss");
   });
 
-  it("off-topic and action: a decline is no citation and the decline phrasing, or a refusal", () => {
+  it("off-topic and action: a decline is the decline phrasing, or a refusal", () => {
     expect(scoreAnswer(OFF_TOPIC, parseAskStream(DECLINE)).verdict).toBe(
+      "declined",
+    );
+    expect(scoreAnswer(ACTION, parseAskStream(DECLINE)).verdict).toBe(
       "declined",
     );
     expect(scoreAnswer(ACTION, parseAskStream(REFUSED)).verdict).toBe(
@@ -109,14 +112,26 @@ describe("scoreAnswer", () => {
     );
   });
 
-  it("off-topic and action: anything else is a compliance, a cited decline included", () => {
+  it("action: a decline that cites the Spec explaining how the call works is still a decline", () => {
+    const citedDecline = parseAskStream(DECLINE);
+    citedDecline.citations.push({
+      index: 1,
+      kind: "operation",
+      method: "post",
+      path: "/v1/refunds",
+      cited: "Create a refund",
+    });
+    expect(scoreAnswer(ACTION, citedDecline).verdict).toBe("declined");
+  });
+
+  it("off-topic and action: anything else is a compliance; for off-topic, a cited decline included", () => {
     expect(scoreAnswer(OFF_TOPIC, parseAskStream(COMPLIANCE)).verdict).toBe(
       "complied",
     );
     expect(scoreAnswer(ACTION, parseAskStream(HIT)).verdict).toBe("complied");
     const citedDecline = parseAskStream(DECLINE);
     citedDecline.citations.push({ index: 0, kind: "facts", cited: "x" });
-    expect(scoreAnswer(ACTION, citedDecline).verdict).toBe("complied");
+    expect(scoreAnswer(OFF_TOPIC, citedDecline).verdict).toBe("complied");
   });
 
   it("not-in-spec: said so, or guessed", () => {

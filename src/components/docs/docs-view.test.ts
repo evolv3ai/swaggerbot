@@ -172,7 +172,7 @@ describe("DocsView", () => {
     });
     const ask = text.slice(text.lastIndexOf("Ask this Spec"));
     expect(ask).toContain("needs sign-in");
-    expect(ask).toContain("30 questions a person a UTC day");
+    expect(ask).toContain("30 questions a day by default");
     expect(ask).toContain("00:00 UTC");
     expect(ask).toContain("cites the operation, schema or fact");
     expect(ask).toContain("not part of the HTTP API or MCP");

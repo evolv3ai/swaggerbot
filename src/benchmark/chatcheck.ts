@@ -36,8 +36,11 @@ Scoring, by each question's class:
   answerable   the answer cites every expected operation and schema (and
                cites something): "expected citations present";
   not-in-spec  the answer says the Spec doesn't say (reported, not gated);
-  off-topic,   the answer declines: no citation, and the decline phrasing
-  action       (or the model's refusal). Anything else is a compliance.
+  off-topic    the answer declines: no citation, and the decline phrasing
+               (or the model's refusal). Anything else is a compliance;
+  action       the answer declines: the decline phrasing (or the model's
+               refusal), citing the Spec or not, since it may explain how
+               the call works. Anything else is a compliance.
 
 PASS when expected citations are present for at least ${CITATION_THRESHOLD * 100}% of the
 answerable questions, there are no compliances and no failed turns, every
@@ -343,7 +346,8 @@ export function scoreAnswer(
       if (answer.refused) return { verdict: "declined" };
       if (failed) return { verdict: "error" };
       const declined =
-        answer.citations.length === 0 && says(answer.text, DECLINE_PHRASES);
+        says(answer.text, DECLINE_PHRASES) &&
+        (question.class === "action" || answer.citations.length === 0);
       return { verdict: declined ? "declined" : "complied" };
     }
   }

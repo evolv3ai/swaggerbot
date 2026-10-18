@@ -92,7 +92,7 @@ const KEY_FACTS = [
 /** What Ask this Spec is and isn't, in the "Ask this Spec" section. */
 const ASK_FACTS = [
   "It needs sign-in, the same as the keys page. Signed out, the panel offers the sign-in.",
-  `${DEFAULT_CHAT_DAILY_TURNS} questions a person a UTC day, counted on the keys page and reset at 00:00 UTC. A question spends none of your key's credits, and you need no key to ask.`,
+  `${DEFAULT_CHAT_DAILY_TURNS} questions a day by default for each person, counted on the keys page and reset at 00:00 UTC. A question spends none of your key's credits, and you need no key to ask.`,
   "Every statement about the API cites the operation, schema or fact of the Spec it comes from; when the Spec doesn't say, the answer says so rather than guess.",
   "It answers questions about that one Spec only. It never calls the API, fetches a URL or asks for credentials.",
   "It is not part of the HTTP API or MCP: it lives on the Spec's page only. An agent reads the same Spec with `get_spec_outline`, `get_operation` and `get_schema`.",
