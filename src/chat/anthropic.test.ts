@@ -169,7 +169,13 @@ describe("createAnthropicModel", () => {
       { type: "text", text: "GET /v1/customers " },
       { type: "text", text: "lists customers." },
       { type: "text", text: " That is all." },
-      { type: "usage", input: 1200, cached: 900, output: 42 },
+      {
+        type: "usage",
+        input: 1200,
+        cached: 900,
+        cacheWritten: 300,
+        output: 42,
+      },
       { type: "done", stopReason: "end_turn" },
     ]);
   });
@@ -178,7 +184,7 @@ describe("createAnthropicModel", () => {
     const { messages } = fakeMessages(() => scripted(refusal));
     const events = await collect(model(messages).stream(request()));
     expect(events).toEqual([
-      { type: "usage", input: 800, cached: 0, output: 3 },
+      { type: "usage", input: 800, cached: 0, cacheWritten: 0, output: 3 },
       { type: "refusal", category: "cyber" },
       { type: "done", stopReason: "refusal" },
     ]);

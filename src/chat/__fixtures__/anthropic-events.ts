@@ -5,7 +5,11 @@ import type { RefusalCategory, StreamEvent } from "../anthropic";
  * stream events, for the adapter's tests. Never recorded from the network.
  */
 
-function messageStart(input: number, cached: number): StreamEvent {
+function messageStart(
+  input: number,
+  cached: number,
+  cacheWritten: number,
+): StreamEvent {
   return {
     type: "message_start",
     message: {
@@ -22,7 +26,7 @@ function messageStart(input: number, cached: number): StreamEvent {
       diagnostics: null,
       usage: {
         input_tokens: input,
-        cache_creation_input_tokens: 0,
+        cache_creation_input_tokens: cacheWritten,
         cache_read_input_tokens: cached,
         output_tokens: 1,
         cache_creation: null,
@@ -43,6 +47,7 @@ function messageDelta(
   output: number,
   input: number,
   cached: number,
+  cacheWritten: number,
   category: RefusalCategory = null,
 ): StreamEvent {
   return {
@@ -66,7 +71,7 @@ function messageDelta(
     },
     usage: {
       input_tokens: input,
-      cache_creation_input_tokens: 0,
+      cache_creation_input_tokens: cacheWritten,
       cache_read_input_tokens: cached,
       output_tokens: output,
       server_tool_use: null,
@@ -120,7 +125,7 @@ const blockStop = (index: number): StreamEvent => ({
  * uncited one.
  */
 export const citedAnswer: StreamEvent[] = [
-  messageStart(1200, 0),
+  messageStart(1200, 0, 300),
   textStart(0),
   citationDelta(0, 1, "List all customers."),
   textDelta(0, "GET /v1/customers "),
@@ -129,27 +134,27 @@ export const citedAnswer: StreamEvent[] = [
   textStart(1),
   textDelta(1, " That is all."),
   blockStop(1),
-  messageDelta("end_turn", 42, 1200, 900),
+  messageDelta("end_turn", 42, 1200, 900, 300),
   { type: "message_stop" },
 ];
 
 /** A refusal in the `cyber` category, after no text. */
 export const refusal: StreamEvent[] = [
-  messageStart(800, 0),
-  messageDelta("refusal", 3, 800, 0, "cyber"),
+  messageStart(800, 0, 0),
+  messageDelta("refusal", 3, 800, 0, 0, "cyber"),
   { type: "message_stop" },
 ];
 
 /** A refusal with no named category. */
 export const uncategorizedRefusal: StreamEvent[] = [
-  messageStart(800, 0),
-  messageDelta("refusal", 3, 800, 0, null),
+  messageStart(800, 0, 0),
+  messageDelta("refusal", 3, 800, 0, 0, null),
   { type: "message_stop" },
 ];
 
 /** The start of an answer; the stream then stops or fails. */
 export const answerStart: StreamEvent[] = [
-  messageStart(500, 0),
+  messageStart(500, 0, 0),
   textStart(0),
   textDelta(0, "Partly"),
 ];

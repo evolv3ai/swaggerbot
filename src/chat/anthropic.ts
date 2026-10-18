@@ -135,7 +135,7 @@ async function* streamTurn(
     ? AbortSignal.any([timeout, request.signal])
     : timeout;
   const order = sentDocuments(request).map(({ index }) => index);
-  const usage = { input: 0, cached: 0, output: 0 };
+  const usage = { input: 0, cached: 0, cacheWritten: 0, output: 0 };
   let stopReason: string | null = null;
   let refusalCategory: string | null = null;
   try {
@@ -144,6 +144,8 @@ async function* streamTurn(
         case "message_start":
           usage.input = event.message.usage.input_tokens;
           usage.cached = event.message.usage.cache_read_input_tokens ?? 0;
+          usage.cacheWritten =
+            event.message.usage.cache_creation_input_tokens ?? 0;
           usage.output = event.message.usage.output_tokens;
           break;
         case "content_block_delta": {
@@ -172,6 +174,8 @@ async function* streamTurn(
           // Cumulative counts: the last delta has the turn's totals.
           usage.input = event.usage.input_tokens ?? usage.input;
           usage.cached = event.usage.cache_read_input_tokens ?? usage.cached;
+          usage.cacheWritten =
+            event.usage.cache_creation_input_tokens ?? usage.cacheWritten;
           usage.output = event.usage.output_tokens;
           stopReason = event.delta.stop_reason ?? stopReason;
           if (event.delta.stop_details)

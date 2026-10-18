@@ -68,7 +68,7 @@ describe("FakeModel", () => {
         documentIndex: 1,
         cited: OPERATION.text.slice(0, 80),
       },
-      { type: "usage", input: 100, cached: 0, output: 20 },
+      { type: "usage", input: 100, cached: 0, cacheWritten: 0, output: 20 },
       { type: "done", stopReason: "end_turn" },
     ]);
   });

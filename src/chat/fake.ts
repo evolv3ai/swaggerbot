@@ -38,6 +38,7 @@ export function defaultAnswer(request: ModelRequest): ModelEvent[] {
     type: "usage",
     input: 100,
     cached: 0,
+    cacheWritten: 0,
     output: 20,
   };
   const done: ModelEvent = { type: "done", stopReason: "end_turn" };

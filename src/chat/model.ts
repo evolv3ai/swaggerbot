@@ -54,8 +54,17 @@ export type ModelEvent =
    * index in `ModelRequest.documents`, `cited` the text it quotes.
    */
   | { type: "citation"; documentIndex: number; cited: string }
-  /** Tokens the turn used: uncached input, input read from the cache, output. */
-  | { type: "usage"; input: number; cached: number; output: number }
+  /**
+   * Tokens the turn used: uncached input, input read from the cache, input
+   * written to the cache, output.
+   */
+  | {
+      type: "usage";
+      input: number;
+      cached: number;
+      cacheWritten: number;
+      output: number;
+    }
   /** The model declined to answer; never shown as text. */
   | { type: "refusal"; category?: string }
   /** The turn ended, with the model's stop reason. */
