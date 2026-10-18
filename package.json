@@ -19,6 +19,7 @@
     "build:cli": "vite build -c vite.public-cli.config.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.135.0",
     "@modelcontextprotocol/server": "2.1.0",
     "@scalar/api-reference": "~1.72.1",
     "@scalar/json-magic": "^0.15.0",

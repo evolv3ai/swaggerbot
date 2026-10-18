@@ -14,6 +14,7 @@ One TanStack Start app, TypeScript throughout, pnpm, Node 24 (the pnpm version i
 - `src/lookup/`: the Lookup pipeline, thresholds and the HTTP API (`http.ts`, wired in `app.ts`).
 - `src/spec-forms/`: the Normalized Form, Validity Issues and Spec Outline builder (the only place that may import Scalar, [ADR 0004](adr/0004-normalized-form-built-in-background-with-scalar.md); Biome enforces it).
 - `src/mcp/`: the MCP server over the same code ([ADR 0005](adr/0005-mcp-in-process-with-agent-sized-results.md)).
+- `src/chat/`: Ask this Spec (Slice 9): the `Model` seam, the Anthropic adapter (`anthropic.ts`, the only file that may import `@anthropic-ai/sdk`; Biome enforces it), `FakeModel` for tests and the system prompt.
 - `src/routes/`, `src/components/`, `src/styles/`, `src/lib/`: the web UI (TanStack Start routes, shadcn components, Tailwind 4 theme); `src/server/`: request middleware such as the security headers.
 - `src/benchmark/` and `benchmark/entries.json`: the Benchmark and its runner, plus the deployment checks' code.
 - `scripts/`: CLI entry points run with `pnpm tsx` (`bench.ts`, `keys.ts`, the `*check.ts` deployment checks, `lookup.ts`). The README documents each.
@@ -28,7 +29,7 @@ UI work follows `PRODUCT.md` and `DESIGN.md` at the repo root.
 - Install: `pnpm install`
 - Before opening a PR, all green: `pnpm check` (Biome lint, `tsc --noEmit`, `vitest run`) and `pnpm build` (the app, the operator CLI and, through `pnpm build:cli`, the public CLI bundle). CI (`.github/workflows/ci.yml`) runs the same on every PR and push to `main`, then starts the bundle with `--version`.
 - Releasing the CLI: bump `cli/package.json`, add the changelog entry to `cli/CHANGELOG.md`, tag `cli-v<version>` and push the tag; [`scripts/release-cli.md`](../scripts/release-cli.md) has the steps.
-- Tests are colocated as `src/**/*.test.ts` (`vitest.config.ts` looks nowhere else). No test may call a real external service (TypeSafe, Brave, Tavily, APIs.guru, Unkey, WorkOS, any website). Fake them: the fake judge, a fake WebSearch, fake Unkey and WorkOS clients, fixtures under `src/**/__fixtures__/`, or a local `node:http` server on port 0. `uicheck`'s tests drive a headless Chromium: install it once with `pnpm exec playwright install chromium`.
+- Tests are colocated as `src/**/*.test.ts` (`vitest.config.ts` looks nowhere else). No test may call a real external service (TypeSafe, Brave, Tavily, APIs.guru, Unkey, WorkOS, Anthropic, any website). Fake them: the fake judge, a fake WebSearch, fake Unkey and WorkOS clients, `FakeModel` (or a fake SDK client for the adapter), fixtures under `src/**/__fixtures__/`, or a local `node:http` server on port 0. `uicheck`'s tests drive a headless Chromium: install it once with `pnpm exec playwright install chromium`.
 - Add a dependency only when the work needs it, and say so in the PR.
 - Don't edit `docs/PRD.md`, `CONTEXT.md` or `docs/adr/` as part of a change. If the work shows the design is wrong or silent, say so in the PR description.
 - Never commit `.env`, `.env.local`, `data/` or a database file.
@@ -40,5 +41,6 @@ Never commit values; `.env.example` lists each with a comment, and `cp .env.exam
 - Lookup: `TYPESAFE_API_KEY`, `BRAVE_API_KEY`, `TAVILY_API_KEY`, `SEARCH_PROVIDER`, `DATABASE_PATH`, `GITHUB_SEARCH_TOKEN` (repo metadata works without it; GitHub code search does not; `GITHUB_TOKEN` is read as a fallback), `MAX_SPEC_BYTES`, `SPEC_STEP_BUDGET_MS`.
 - Serving: `PORT`, `FRESHNESS_DAYS`, `DAILY_QUOTA`, `RATE_LIMIT_PER_MINUTE`, `CLIENT_IP_HEADER`, `PUBLIC_BASE_URL`, `MAX_FORMS_BYTES`.
 - Backups, container only: the `LITESTREAM_*` settings read by `docker/entrypoint.sh` (the README's "Running in production" table).
+- Ask this Spec: `ANTHROPIC_API_KEY` (unset, the feature is off), `CHAT_MODEL`, `CHAT_EFFORT`, `CHAT_DAILY_TURNS`, `CHAT_LOG_TEXT`.
 - Self-service keys ([ADR 0006](adr/0006-keys-in-unkey-accounts-in-workos.md)): `UNKEY_ROOT_KEY`, `UNKEY_API_ID`, `UNKEY_KEYSPACE_ID`, `UNKEY_MIGRATION_ID`, `WORKOS_API_KEY`, `WORKOS_CLIENT_ID`, `WORKOS_COOKIE_PASSWORD`, `WORKOS_REDIRECT_URI`.
 - Diagnostics and the deployment checks: `LOOKUP_TRACE=1` (per-step timings on every Lookup), `LOOKUP_FULL` (`scripts/lookup.ts` prints the whole Outcome), `LOADCHECK_KEY` and `KEYCHECK_KEY` (the bearer the `*check.ts` scripts send).
