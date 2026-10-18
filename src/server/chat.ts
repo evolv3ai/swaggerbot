@@ -170,34 +170,40 @@ export async function handleAsk(
         : { "retry-after": String(admitted.retryAfterSeconds) },
     );
 
-  const grounding = groundingFor(
-    body.question,
-    // Retrieval keeps what the conversation cited in; the turns' own text
-    // goes to the model, not to retrieval.
-    [{ role: "assistant", text: "", cited: body.cited }],
-    { outline: outline.outline, doc: opened.doc, apiId: spec.apiId, specId },
-  );
-  const stream = turnStream({
-    deps: { ...deps, chat },
-    request,
-    body,
-    documents: grounding.documents,
-    system: systemPrompt({
-      name: outline.outline.title ?? api.name,
-      apiVersion: spec.apiVersion,
-    }),
-    row: {
-      specId,
-      apiId: spec.apiId,
-      userId: user.id,
-      model: chat.config.model,
-      effort: chat.config.effort,
-      operationsSent: grounding.stats.operations,
-      schemasSent: grounding.stats.schemas,
-      bytesSent: grounding.stats.bytes,
-    },
-    settle: admitted.settle,
-  });
+  let stream: ReadableStream<Uint8Array>;
+  try {
+    const grounding = groundingFor(
+      body.question,
+      // Retrieval keeps what the conversation cited in; the turns' own text
+      // goes to the model, not to retrieval.
+      [{ role: "assistant", text: "", cited: body.cited }],
+      { outline: outline.outline, doc: opened.doc, apiId: spec.apiId, specId },
+    );
+    stream = turnStream({
+      deps: { ...deps, chat },
+      request,
+      body,
+      documents: grounding.documents,
+      system: systemPrompt({
+        name: outline.outline.title ?? api.name,
+        apiVersion: spec.apiVersion,
+      }),
+      row: {
+        specId,
+        apiId: spec.apiId,
+        userId: user.id,
+        model: chat.config.model,
+        effort: chat.config.effort,
+        operationsSent: grounding.stats.operations,
+        schemasSent: grounding.stats.schemas,
+        bytesSent: grounding.stats.bytes,
+      },
+      settle: admitted.settle,
+    });
+  } catch (thrown) {
+    admitted.settle();
+    throw thrown;
+  }
   return new Response(stream, {
     headers: {
       "content-type": "text/event-stream; charset=utf-8",

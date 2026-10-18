@@ -557,6 +557,21 @@ describe("handleAsk", () => {
     expect(used()).toBe(1);
   });
 
+  it("lets the person ask again when a turn throws before it starts streaming", async () => {
+    const broken = depsOf(new FakeModel(), {
+      now: () => {
+        throw new Error("clock gone");
+      },
+    });
+    await expect(ask(broken)).rejects.toThrow("clock gone");
+    expect(used()).toBe(1);
+
+    const again = await ask({ ...broken, now: undefined });
+    expect(again.status).toBe(200);
+    await again.text();
+    expect(used()).toBe(2);
+  });
+
   it("cuts a turn off at its time limit", async () => {
     const response = await ask(
       depsOf(hangingModel([{ type: "text", text: "Slow" }]), { timeoutMs: 20 }),
