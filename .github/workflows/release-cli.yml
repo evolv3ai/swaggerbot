@@ -1,0 +1,61 @@
+name: Release CLI
+
+# Publishes cli/ to npm when a cli-v<version> tag is pushed, by npm trusted
+# publishing: OIDC with provenance, no NPM_TOKEN. scripts/release-cli.md has
+# the steps. A manual run with dry-run does everything but the publish.
+on:
+  push:
+    tags: ["cli-v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "The tag to check, as cli-v<version>"
+        required: true
+        type: string
+      dry-run:
+        description: "Run everything but npm publish"
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      - run: pnpm install --frozen-lockfile
+      # uicheck's tests drive a headless Chromium.
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm check
+      - run: pnpm build:cli
+      - name: The tag is cli/package.json's version
+        id: version
+        run: |
+          version="$(pnpm exec tsx src/cli/release.ts "$TAG")"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: The bundle prints that version
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          printed="$(node cli/dist/swaggerbot.mjs --version)"
+          echo "swaggerbot --version: $printed"
+          test -n "$VERSION" && test "$printed" = "$VERSION"
+      - run: npm pack --dry-run
+        working-directory: cli
+      - name: npm publish
+        # Only a cli-v tag publishes, pushed or run by hand without dry-run.
+        if: startsWith(github.ref, 'refs/tags/cli-v') && (github.event_name == 'push' || inputs.dry-run == false)
+        run: npm publish --provenance --access public
+        working-directory: cli

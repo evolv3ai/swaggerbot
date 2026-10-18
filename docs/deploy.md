@@ -231,6 +231,10 @@ The deploys of 2026-09-23:
 - `/auth/sign-in` redirects to WorkOS. A bad callback redirects to `https://swaggerbot.dev/?signin=failed`.
 - **Not yet checked:** a real sign-in round trip (Wes signs in on `/keys` and creates a key).
 
+## Releasing the CLI
+
+The `swaggerbot` npm package is released from a `cli-v<version>` tag by `.github/workflows/release-cli.yml`, with npm trusted publishing (no `NPM_TOKEN`). The steps are in [`scripts/release-cli.md`](../scripts/release-cli.md).
+
 ## Gotchas
 
 - Unkey refuses an `externalId` outside `^[a-zA-Z0-9_.-]+$` (no `:`, spaces or `@`), with a 400. A fake client won't tell you; `keycheck` against a real keyspace will.
