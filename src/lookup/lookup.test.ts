@@ -778,7 +778,21 @@ describe("lookup", () => {
         snippet: "",
       },
     ]);
-    const { lookup, judge } = setup({}, search);
+    // Neither apex can be fetched, so neither Candidate moves.
+    const failed = (url: string) =>
+      new FetchError("network", url, "connection refused");
+    const { lookup, judge } = setup(
+      {},
+      search,
+      undefined,
+      fakeCrawl(),
+      undefined,
+      fakeVendorCrawl(),
+      fakeApexes({
+        "https://payco.test/": failed("https://payco.test/"),
+        "https://payco-rival.test/": failed("https://payco-rival.test/"),
+      }).wrap,
+    );
 
     expect(await ask(lookup, "payco")).toMatchObject({ outcome: "Unknown" });
 
@@ -1048,6 +1062,13 @@ describe("lookup", () => {
       }
     }
     const judge = new BrokenJudge();
+    // Neither the portal nor its origin can be fetched.
+    const failed = (url: string) =>
+      new FetchError("network", url, "connection refused");
+    const { wrap } = fakeApexes({
+      "https://payco.example/docs": failed("https://payco.example/docs"),
+      "https://payco.example": failed("https://payco.example"),
+    });
     const lookup = createLookup({
       db: openDb(join(dir, "index.db")),
       judge,
@@ -1058,7 +1079,9 @@ describe("lookup", () => {
       webSearch: new FakeWebSearch([
         { url: "https://payco.example/docs", title: "PayCo docs", snippet: "" },
       ]),
-      fetcher: createFetcher({ allowPrivate: true, lookup: fixtureLookup }),
+      fetcher: wrap(
+        createFetcher({ allowPrivate: true, lookup: fixtureLookup }),
+      ),
     });
 
     const outcome = Outcome.parse(await lookup({ name: "payco" }));
@@ -3486,13 +3509,12 @@ describe("lookup with several API Versions", () => {
   // Three live API Versions and a Preview, side by side as Box publishes them.
   const VERSIONS = ["2025.0", "2026.0", "2024.0", "2027.0-beta"];
 
-  const candidate: ApiCandidate = {
+  const candidate: Omit<ApiCandidate, "mirrorUrl"> = {
     key: "boxy.test",
     apiId: API_ID,
     name: "Boxy API",
     vendor: { id: "boxy.test", name: "Boxy", domain: "boxy.test" },
     preferredVersion: "2026.0",
-    mirrorUrl: `http://apis-guru.test/boxy.test/openapi.json`,
     originUrls: [],
     possiblyOfficialUrls: [],
     updated: "2024-01-01T00:00:00.000Z",
@@ -3530,6 +3552,8 @@ describe("lookup with several API Versions", () => {
     });
     const guru = {
       ...candidate,
+      // The fixture server has no mirror, so it answers 404.
+      mirrorUrl: `${server.origin("apis-guru.test")}/boxy.test/openapi.json`,
       originUrls: probe
         ? []
         : versions.map((v) => `${server.origin(HOST)}${pathOf(v)}`),
