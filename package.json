@@ -6,7 +6,7 @@
   "engines": {
     "node": ">=24"
   },
-  "packageManager": "pnpm@10.33.0",
+  "packageManager": "pnpm@12.15.0+sha512.b3951d6d6ff4a9f13dc7cf56cd28d2b8eb37dbcc9c68e52e1e1191873ea9f82a017287ab50baadc5ccc494f036c67c0e47eb13608c2fa36f47711b61ea128e61",
   "scripts": {
     "dev": "vite dev",
     "build": "vite build && vite build -c vite.cli.config.ts && pnpm build:cli",
@@ -64,11 +64,5 @@
     "typescript": "^5.9.3",
     "vite": "^8.3.0",
     "vitest": "^5.0.1"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "better-sqlite3",
-      "esbuild"
-    ]
   }
 }
