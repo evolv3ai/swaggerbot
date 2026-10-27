@@ -1,8 +1,11 @@
 name: Release CLI
 
-# Publishes cli/ to npm when a cli-v<version> tag is pushed, by npm trusted
-# publishing: OIDC with provenance, no NPM_TOKEN. scripts/release-cli.md has
-# the steps. A manual run with dry-run does everything but the publish.
+# Stages cli/ on npm when a cli-v<version> tag is pushed, by npm trusted
+# publishing: OIDC with provenance, no NPM_TOKEN. The trusted publisher only
+# allows `npm stage publish`, so the release waits in Staged Packages until a
+# maintainer approves it; a green run is not a live release.
+# scripts/release-cli.md has the steps. A manual run with dry-run does
+# everything but the upload.
 on:
   push:
     tags: ["cli-v*"]
@@ -13,7 +16,7 @@ on:
         required: true
         type: string
       dry-run:
-        description: "Run everything but npm publish"
+        description: "Run everything but npm stage publish"
         required: true
         default: true
         type: boolean
@@ -54,8 +57,13 @@ jobs:
           test -n "$VERSION" && test "$printed" = "$VERSION"
       - run: npm pack --dry-run
         working-directory: cli
-      - name: npm publish
-        # Only a cli-v tag publishes, pushed or run by hand without dry-run.
+      # npm stage needs npm 11.15.0 or later; Node 24's bundled npm has it.
+      - name: npm has npm stage
+        run: |
+          echo "npm $(npm --version)"
+          npm stage --help > /dev/null
+      - name: npm stage publish
+        # Only a cli-v tag uploads, pushed or run by hand without dry-run.
         if: startsWith(github.ref, 'refs/tags/cli-v') && (github.event_name == 'push' || inputs.dry-run == false)
-        run: npm publish --provenance --access public
+        run: npm stage publish --provenance --access public
         working-directory: cli
