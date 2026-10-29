@@ -37,6 +37,13 @@ const FRAME_VIEWPORT_PATH = "/embed/frame-viewport.js";
  */
 const FRAME_THEME_PATH = "/embed/frame-theme.js";
 
+/**
+ * Scrolls Scalar to an operation when the viewer page asks
+ * (`public/embed/frame-anchor.js`): "Ask this Spec"'s citation chips send
+ * the method and path by `postMessage`, as the page can't reach in.
+ */
+const FRAME_ANCHOR_PATH = "/embed/frame-anchor.js";
+
 import { specFormOf } from "./spec-form";
 
 export { type SpecForm, specFormOf } from "./spec-form";
@@ -184,6 +191,7 @@ export function embedHtml({
 ${LOADING_HTML}
 <script id="api-reference" type="application/json" data-configuration="${escapeHtml(configuration)}"></script>
 <script src="${FRAME_THEME_PATH}"></script>
+<script src="${FRAME_ANCHOR_PATH}"></script>
 <script src="${MEMORY_STORAGE_PATH}"></script>
 <script src="${FRAME_VIEWPORT_PATH}"></script>
 <script src="${SCALAR_SCRIPT_PATH}"></script>

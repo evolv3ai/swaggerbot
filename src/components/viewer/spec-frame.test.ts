@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { sizeOf } from "./size";
-import { frameSrc, SpecFrame } from "./spec-frame";
+import { frameSrc, SpecFrame, showOperation } from "./spec-frame";
 
 describe("SpecFrame", () => {
   it("sandboxes the frame to scripts alone: no same origin, no popups, no forms", () => {
@@ -31,6 +31,50 @@ describe("frameSrc", () => {
     expect(frameSrc("b".repeat(64), "published", "light")).toBe(
       `/embed/specs/${"b".repeat(64)}?form=published&theme=light`,
     );
+  });
+});
+
+describe("showOperation", () => {
+  /** A page with the viewer's frame, recording what is asked of it. */
+  function page(withFrame = true) {
+    const calls: unknown[] = [];
+    const frame = {
+      contentWindow: {
+        postMessage: (message: unknown, target: string) =>
+          calls.push(["postMessage", message, target]),
+      },
+      scrollIntoView: (options: unknown) =>
+        calls.push(["scrollIntoView", options]),
+    };
+    const selectors: string[] = [];
+    const root = {
+      querySelector: (selector: string) => {
+        selectors.push(selector);
+        return withFrame ? frame : null;
+      },
+    } as unknown as ParentNode;
+    return { root, calls, selectors };
+  }
+
+  it("scrolls the page to the frame and sends it the chip's method and path", () => {
+    const { root, calls, selectors } = page();
+
+    expect(showOperation("delete", "/v1/customers/{id}", root)).toBe(true);
+    expect(selectors).toEqual(["iframe[data-spec-frame]"]);
+    expect(calls).toEqual([
+      ["scrollIntoView", { block: "start" }],
+      [
+        "postMessage",
+        { type: "sb-anchor", method: "delete", path: "/v1/customers/{id}" },
+        "*",
+      ],
+    ]);
+  });
+
+  it("does nothing, and says so, without a frame on the page", () => {
+    const { root, calls } = page(false);
+    expect(showOperation("get", "/things", root)).toBe(false);
+    expect(calls).toEqual([]);
   });
 });
 

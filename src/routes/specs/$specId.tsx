@@ -75,6 +75,7 @@ function SpecViewer() {
           apiId={view.api.id}
           specId={view.spec.id}
           headingClassName={H2}
+          reference={view.frame === "show"}
         />
         <section aria-labelledby="reference">
           <div className="mt-10 mb-3.5 flex flex-wrap items-center justify-between gap-3">

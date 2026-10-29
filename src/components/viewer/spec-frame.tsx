@@ -14,6 +14,29 @@ export function frameSrc(specId: string, form: SpecForm, theme: Theme): string {
   return `/embed/specs/${specId}?form=${form}&theme=${theme}`;
 }
 
+/**
+ * Shows an operation in the Spec viewer's frame, for "Ask this Spec"'s
+ * citation chips: scrolls the page to the frame and asks it to scroll
+ * Scalar to `method` `path` and focus its heading
+ * (`public/embed/frame-anchor.js`). The frame's origin is opaque, so this
+ * page can't reach into it; it sends the message to "*", having no origin
+ * to name. False when there is no frame on the page.
+ */
+export function showOperation(
+  method: string,
+  path: string,
+  root: Pick<ParentNode, "querySelector"> = document,
+): boolean {
+  const frame = root.querySelector<HTMLIFrameElement>(
+    `iframe[${SPEC_FRAME_ATTR}]`,
+  );
+  const target = frame?.contentWindow;
+  if (!frame || !target) return false;
+  frame.scrollIntoView({ block: "start" });
+  target.postMessage({ type: "sb-anchor", method, path }, "*");
+  return true;
+}
+
 export function SpecFrame({
   specId,
   form,

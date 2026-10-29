@@ -224,12 +224,16 @@ export async function startAsk(
   };
 }
 
-/** A citation as a chip: its words, and the link to what it cites. */
+/**
+ * A citation as a chip: its words, the link to what it cites and, for an
+ * operation, its method and path, to show it in the API reference.
+ */
 export type CitationChip = {
   key: string;
   label: string;
   href: string;
   external: boolean;
+  operation?: { method: string; path: string };
 };
 
 /**
@@ -237,7 +241,8 @@ export type CitationChip = {
  * operation (`POST /v1/customers`) or a schema (`customer`) links to its
  * JSON from the HTTP API, in a new tab; the Spec's facts to the top of this
  * page. These are the only links the panel makes: nothing in an answer is
- * ever a link.
+ * ever a link. An operation is also shown in the API reference on this
+ * page, when it is there (`TurnView`).
  */
 export function citationChips(
   citations: readonly AskCitation[],
@@ -255,6 +260,7 @@ export function citationChips(
             label: `${c.method.toUpperCase()} ${c.path}`,
             href: `${base}/operation?${new URLSearchParams({ specId: ids.specId, method: c.method.toLowerCase(), path: c.path })}`,
             external: true,
+            operation: { method: c.method.toLowerCase(), path: c.path },
           }
         : c.kind === "schema"
           ? {

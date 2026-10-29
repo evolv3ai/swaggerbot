@@ -1,0 +1,119 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Anchor Co",
+    "version": "1.0.0",
+    "description": "A Spec for scrolling the API reference to an operation."
+  },
+  "tags": [
+    { "name": "Things", "description": "The things." },
+    { "name": "Other Stuff", "description": "Everything else." }
+  ],
+  "paths": {
+    "/things": {
+      "get": {
+        "tags": ["Things"],
+        "summary": "List things",
+        "parameters": [
+          { "name": "limit", "in": "query", "schema": { "type": "integer" } },
+          { "name": "cursor", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "The things.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Thing" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Things"],
+        "summary": "Create a thing",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/Thing" }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Created." } }
+      }
+    },
+    "/things/{id}": {
+      "get": {
+        "tags": ["Things"],
+        "summary": "Get a thing",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The thing.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Thing" }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Things", "Other Stuff"],
+        "summary": "Delete a thing",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": { "204": { "description": "Deleted." } }
+      }
+    },
+    "/others/{id}": {
+      "patch": {
+        "tags": ["Other Stuff"],
+        "summary": "Update an other",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": { "200": { "description": "Updated." } }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Check health",
+        "responses": { "200": { "description": "Healthy." } }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Thing": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "tags": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    }
+  }
+}
