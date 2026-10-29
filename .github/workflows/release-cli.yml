@@ -1,9 +1,10 @@
 name: Release CLI
 
 # Stages cli/ on npm when a cli-v<version> tag is pushed, by npm trusted
-# publishing: OIDC with provenance, no NPM_TOKEN. The trusted publisher only
-# allows `npm stage publish`, so the release waits in Staged Packages until a
-# maintainer approves it; a green run is not a live release.
+# publishing: OIDC with provenance, no NPM_TOKEN. The trusted publisher allows
+# both direct and staged publishing; this workflow uses `npm stage publish` by
+# choice, so the release waits in Staged Packages until a maintainer approves
+# it; a green run is not a live release.
 # scripts/release-cli.md has the steps. A manual run with dry-run does
 # everything but the upload.
 on:
