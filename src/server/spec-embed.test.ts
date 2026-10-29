@@ -8,7 +8,7 @@ import { createRequire } from "node:module";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { type Browser, chromium } from "playwright";
+import { type Browser, chromium, type Frame, type Page } from "playwright";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -25,6 +25,8 @@ import { embedResponse } from "./spec-embed";
  * the viewer page (the app's CSP) frames `/embed/specs/{specId}` (the
  * frame's CSP, the real Scalar bundle), which fetches the real download.
  * No script from the Spec may run, and no request may leave localhost.
+ * Then, on a second Spec, "Ask this Spec"'s citation chips: the frame
+ * scrolls Scalar, as installed, to the operation the page names.
  *
  * Needs Chromium; skipped without it, except in CI (as uicheck's tests).
  */
@@ -46,6 +48,7 @@ const STATIC: Record<string, string> = {
     "memory-storage.js",
   ),
   "/embed/frame-theme.js": join(ROOT, "public", "embed", "frame-theme.js"),
+  "/embed/frame-anchor.js": join(ROOT, "public", "embed", "frame-anchor.js"),
   "/embed/frame-viewport.js": join(
     ROOT,
     "public",
@@ -55,7 +58,7 @@ const STATIC: Record<string, string> = {
 };
 
 describe.skipIf(!probe && !process.env.CI)(
-  "the Spec viewer on a hostile Spec",
+  "the Spec viewer in Chromium",
   () => {
     const dir = mkdtempSync(join(tmpdir(), "swaggerbot-viewer-"));
     const db = openDb(join(dir, "index.db"));
@@ -77,6 +80,20 @@ describe.skipIf(!probe && !process.env.CI)(
       ),
       { specVersion: "3.1.0", apiVersion: "1.0.0", format: "json" },
     ).id;
+    // A Spec with operations under an open tag, a collapsed one and none,
+    // for "Ask this Spec"'s citation chips (`public/embed/frame-anchor.js`).
+    repo.upsertApi({
+      id: "hostile.example/anchor",
+      vendorId: "hostile.example",
+      name: "Anchor Co",
+    });
+    const anchorId = repo.putSpec(
+      "hostile.example/anchor",
+      readFileSync(
+        join(import.meta.dirname, "__fixtures__", "anchor-spec.json"),
+      ),
+      { specVersion: "3.1.0", apiVersion: "1.0.0", format: "json" },
+    ).id;
 
     let origin = "";
     const served: string[] = [];
@@ -93,18 +110,22 @@ describe.skipIf(!probe && !process.env.CI)(
           headers: { "content-type": "text/javascript; charset=utf-8" },
         });
       if (url.pathname === "/viewer") {
+        // `?anchor`: the Spec for the citation chips.
+        const anchor = url.searchParams.has("anchor");
         const frame = renderToStaticMarkup(
           createElement(SpecFrame, {
-            specId,
+            specId: anchor ? anchorId : specId,
             form: "published",
-            apiName: "Hostile Co",
+            apiName: anchor ? "Anchor Co" : "Hostile Co",
           }),
         );
         // `?below`: the frame starts well below the fold, as on the viewer
         // page, and is tall enough to hold the first operation.
         const spacer = url.searchParams.has("below")
           ? '<style>iframe{width:1000px;height:1500px}</style><div style="height:3000px"></div>'
-          : "";
+          : anchor
+            ? "<style>iframe{width:1000px;height:640px}</style>"
+            : "";
         return new Response(
           `<!doctype html><title>viewer</title>${spacer}${frame}`,
           {
@@ -115,10 +136,12 @@ describe.skipIf(!probe && !process.env.CI)(
           },
         );
       }
-      if (url.pathname === `/embed/specs/${specId}`)
-        return embedResponse(request, specId, () => db);
-      if (url.pathname === `/api/specs/${specId}/published`)
-        return publishedResponse(request, specId, () => db);
+      for (const id of [specId, anchorId]) {
+        if (url.pathname === `/embed/specs/${id}`)
+          return embedResponse(request, id, () => db);
+        if (url.pathname === `/api/specs/${id}/published`)
+          return publishedResponse(request, id, () => db);
+      }
       return new Response("not found", { status: 404 });
     }
     async function send(response: Response, res: ServerResponse) {
@@ -269,5 +292,138 @@ describe.skipIf(!probe && !process.env.CI)(
       expect(await page.evaluate(() => window.scrollY)).toBe(0);
       await context.close();
     }, 30_000);
+
+    /** The viewer on the anchor Spec, once Scalar has rendered it. */
+    async function anchorViewer() {
+      const context = await browser.newContext({
+        viewport: { width: 1280, height: 800 },
+      });
+      const page = await context.newPage();
+      await page.goto(`${origin}/viewer?anchor`);
+      await page
+        .frameLocator("iframe")
+        .getByRole("heading", { name: "Anchor Co" })
+        .first()
+        .waitFor({ timeout: 60_000 });
+      const embed = page
+        .frames()
+        .find((f) => f.url().includes("/embed/specs/"));
+      if (!embed) throw new Error("no frame");
+      return { context, page, embed };
+    }
+
+    /** What the viewer page sends the frame for a citation chip. */
+    const ask = (method: string, path: string) => ({
+      type: "sb-anchor",
+      method,
+      path,
+    });
+    function post(page: Page, message: unknown) {
+      return page.evaluate((m) => {
+        document.querySelector("iframe")?.contentWindow?.postMessage(m, "*");
+      }, message);
+    }
+
+    /**
+     * Waits until the frame shows the operation whose Scalar id ends with
+     * `id` at the top of its viewport, focused, labelled by its heading.
+     */
+    function shown(embed: Frame, id: string, heading: string) {
+      return embed.waitForFunction(
+        ({ id, heading }) => {
+          const section = [...document.querySelectorAll("section[id]")].find(
+            (s) => s.id.endsWith(id),
+          );
+          const top = section?.getBoundingClientRect().top;
+          // The section, labelled by its heading (as Scalar focuses it), or
+          // the heading itself.
+          const focused = document.activeElement;
+          const label =
+            focused === section
+              ? document.getElementById(
+                  section.getAttribute("aria-labelledby") ?? "",
+                )
+              : focused;
+          return (
+            top !== undefined &&
+            Math.abs(top) < 2 &&
+            focused !== null &&
+            section?.contains(focused) === true &&
+            label !== null &&
+            /^H[1-6]$/.test(label.tagName) &&
+            label.textContent?.trim() === heading
+          );
+        },
+        { id, heading },
+        { timeout: 10_000 },
+      );
+    }
+
+    it("scrolls Scalar to the operation a citation chip names, under a collapsed tag or none, and focuses its heading", async () => {
+      const { context, page, embed } = await anchorViewer();
+      // Scalar opens the first tag only: this one isn't in its sidebar yet.
+      expect(
+        await embed.evaluate(() =>
+          [...document.querySelectorAll("[data-sidebar-id]")].some((e) =>
+            e.getAttribute("data-sidebar-id")?.endsWith("PATCH/others/{id}"),
+          ),
+        ),
+      ).toBe(false);
+
+      await post(page, ask("patch", "/others/{id}"));
+      await shown(
+        embed,
+        "/tag/other-stuff/PATCH/others/{id}",
+        "Update an other",
+      );
+
+      await post(page, ask("GET", "/health"));
+      await shown(embed, "/GET/health", "Check health");
+
+      // Under two tags: the first.
+      await post(page, ask("delete", "/things/{id}"));
+      await shown(embed, "/tag/things/DELETE/things/{id}", "Delete a thing");
+      await context.close();
+    }, 90_000);
+
+    it("ignores a message not from the viewer page, and a malformed one", async () => {
+      const { context, page, embed } = await anchorViewer();
+      const state = () =>
+        embed.evaluate(() => ({
+          scrollY: window.scrollY,
+          hash: location.hash,
+          focused: document.activeElement?.tagName,
+        }));
+      const before = await state();
+
+      // From the frame itself: not its parent.
+      await embed.evaluate(
+        (m) => window.postMessage(m, "*"),
+        ask("patch", "/others/{id}"),
+      );
+      for (const message of [
+        null,
+        "sb-anchor",
+        { type: "sb-anchor" },
+        { type: "sb-theme", method: "patch", path: "/others/{id}" },
+        { type: "sb-anchor", method: "fetch", path: "/others/{id}" },
+        { type: "sb-anchor", method: ["patch"], path: "/others/{id}" },
+        { type: "sb-anchor", method: "patch", path: "others/{id}" },
+        { type: "sb-anchor", method: "patch", path: 42 },
+        { type: "sb-anchor", method: "patch", path: `/${"a".repeat(2048)}` },
+      ])
+        await post(page, message);
+      await page.waitForTimeout(1_500);
+      expect(await state()).toEqual(before);
+
+      // Still listening: the same ask from the parent is shown.
+      await post(page, ask("patch", "/others/{id}"));
+      await shown(
+        embed,
+        "/tag/other-stuff/PATCH/others/{id}",
+        "Update an other",
+      );
+      await context.close();
+    }, 90_000);
   },
 );

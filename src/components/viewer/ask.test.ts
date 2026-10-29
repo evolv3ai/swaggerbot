@@ -20,13 +20,14 @@ const view = (ask: AskView) =>
     }),
   );
 
-const conversation = (turns: AskTurn[], used = 3) =>
+const conversation = (turns: AskTurn[], used = 3, reference = false) =>
   renderToStaticMarkup(
     createElement(Conversation, {
       apiId: API_ID,
       specId: SPEC_ID,
       meter: { used, limit: 30 },
       suggestions: [],
+      reference,
       start: never,
       initialTurns: turns,
     }),
@@ -149,6 +150,29 @@ describe("Conversation", () => {
     expect(html).not.toContain(">Stop</button>");
     expect(html).not.toContain("<textarea");
     expect(html).toContain('aria-live="polite"');
+  });
+
+  it("with the API reference on the page: an operation's chip shows it there, its JSON beside it; a schema's stays a link", () => {
+    const html = conversation([answered], 3, true);
+    const operation = `/api/apis/${API_ID}/operation?specId=${SPEC_ID}&amp;method=post&amp;path=%2Fv1%2Fcustomers`;
+    // Once, as a button, then "JSON", a link to the same JSON as before.
+    expect(html.match(/>POST \/v1\/customers</g)).toHaveLength(1);
+    expect(html).toMatch(
+      /<button type="button"[^>]*>POST \/v1\/customers<span class="sr-only">, show in the API reference<\/span><\/button>/,
+    );
+    const links = [...html.matchAll(/<a href="([^"]+)"[^>]*>([^<]+)/g)].map(
+      (m) => [m[1], m[2]],
+    );
+    expect(links).toEqual([
+      [operation, "JSON"],
+      [
+        `/api/apis/${API_ID}/schema?specId=${SPEC_ID}&amp;name=customer`,
+        "customer",
+      ],
+    ]);
+    expect(html).toContain(
+      '<span class="sr-only"> for POST /v1/customers (opens in a new tab)</span>',
+    );
   });
 
   it("streaming: the answer so far, and Stop", () => {

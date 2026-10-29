@@ -11,9 +11,11 @@ import {
   ASK_QUESTION_CHARS,
   type AskTurn,
   askBodyOf,
+  type CitationChip,
   citationChips,
   startAsk,
 } from "./ask-stream";
+import { showOperation } from "./spec-frame";
 
 /**
  * "Ask this Spec" on the Spec viewer (Slice 9 #6, D5): a question about this
@@ -29,12 +31,15 @@ export function AskThisSpec({
   apiId,
   specId,
   headingClassName,
+  reference = false,
   start = startAsk,
 }: {
   ask: AskView;
   apiId: string;
   specId: string;
   headingClassName: string;
+  /** Whether the API reference's frame is on the page, to show operations in. */
+  reference?: boolean;
   /** Sends a question; tests pass their own. */
   start?: typeof startAsk;
 }) {
@@ -61,6 +66,7 @@ export function AskThisSpec({
           specId={specId}
           meter={ask.meter}
           suggestions={ask.suggestions}
+          reference={reference}
           start={start}
         />
       )}
@@ -113,6 +119,7 @@ export function Conversation({
   specId,
   meter,
   suggestions,
+  reference = false,
   start,
   initialTurns = [],
 }: {
@@ -120,6 +127,7 @@ export function Conversation({
   specId: string;
   meter: { used: number; limit: number };
   suggestions: string[];
+  reference?: boolean;
   start: typeof startAsk;
   /** Turns to start with; for tests. */
   initialTurns?: AskTurn[];
@@ -219,7 +227,13 @@ export function Conversation({
       ) : (
         <ol className="grid gap-6">
           {turns.map((turn) => (
-            <TurnView key={turn.id} turn={turn} apiId={apiId} specId={specId} />
+            <TurnView
+              key={turn.id}
+              turn={turn}
+              apiId={apiId}
+              specId={specId}
+              reference={reference}
+            />
           ))}
         </ol>
       )}
@@ -335,16 +349,19 @@ function endWords(turn: AskTurn, cited: number): string {
 /**
  * One turn: the question echoed, then the answer as plain text (or one
  * neutral line in its place when it was declined or failed), then the chips
- * of what it cited.
+ * of what it cited. With the API reference on the page, an operation's chip
+ * shows it there, and its JSON is a link beside it.
  */
 export function TurnView({
   turn,
   apiId,
   specId,
+  reference = false,
 }: {
   turn: AskTurn;
   apiId: string;
   specId: string;
+  reference?: boolean;
 }) {
   const chips = citationChips(turn.citations, { apiId, specId });
   const shown = turn.status !== "declined" && turn.status !== "failed";
@@ -374,29 +391,75 @@ export function TurnView({
         <div className={cn("flex flex-wrap items-center gap-2", MUTED)}>
           <span>Cites</span>
           <ul aria-label="Cited" className="contents">
-            {chips.map((chip) => (
-              <li key={chip.key}>
-                <a
-                  href={chip.href}
-                  {...(chip.external
-                    ? { target: "_blank", rel: "noopener noreferrer" }
-                    : {})}
-                  className={cn(
-                    CHIP,
-                    chip.label !== "About this Spec" &&
-                      "font-mono text-[12px] [overflow-wrap:anywhere]",
-                  )}
-                >
-                  {chip.label}
-                  {chip.external ? (
-                    <span className="sr-only"> (opens in a new tab)</span>
-                  ) : null}
-                </a>
-              </li>
-            ))}
+            {chips.map((chip) =>
+              reference && chip.operation ? (
+                <OperationChip
+                  key={chip.key}
+                  chip={chip}
+                  operation={chip.operation}
+                />
+              ) : (
+                <li key={chip.key}>
+                  <a
+                    href={chip.href}
+                    {...(chip.external
+                      ? { target: "_blank", rel: "noopener noreferrer" }
+                      : {})}
+                    className={cn(
+                      CHIP,
+                      chip.label !== "About this Spec" &&
+                        "font-mono text-[12px] [overflow-wrap:anywhere]",
+                    )}
+                  >
+                    {chip.label}
+                    {chip.external ? (
+                      <span className="sr-only"> (opens in a new tab)</span>
+                    ) : null}
+                  </a>
+                </li>
+              ),
+            )}
           </ul>
         </div>
       ) : null}
+    </li>
+  );
+}
+
+/**
+ * An operation's chip with the API reference on the page: the chip scrolls
+ * the reference to it (`showOperation`), or opens its JSON if the frame has
+ * gone; "JSON" beside it opens that in a new tab.
+ */
+function OperationChip({
+  chip,
+  operation,
+}: {
+  chip: CitationChip;
+  operation: { method: string; path: string };
+}) {
+  return (
+    <li className="flex items-center gap-0.5">
+      <button
+        type="button"
+        className={cn(CHIP, "font-mono text-[12px] [overflow-wrap:anywhere]")}
+        onClick={() => {
+          if (!showOperation(operation.method, operation.path))
+            window.open(chip.href, "_blank", "noopener,noreferrer");
+        }}
+      >
+        {chip.label}
+        <span className="sr-only">, show in the API reference</span>
+      </button>
+      <a
+        href={chip.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="rounded px-1.5 py-[3px] text-sb-accent-text pointer-coarse:py-[11px]"
+      >
+        JSON
+        <span className="sr-only"> for {chip.label} (opens in a new tab)</span>
+      </a>
     </li>
   );
 }

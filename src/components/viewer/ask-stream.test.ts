@@ -295,7 +295,7 @@ describe("askBodyOf", () => {
 describe("citationChips", () => {
   const ids = { apiId: "stripe.com/stripe-api", specId: "f".repeat(64) };
 
-  it("links an operation and a schema to their JSON, the facts to this page, each once", () => {
+  it("links an operation and a schema to their JSON, the facts to this page, each once, with the operation's method and path", () => {
     expect(
       citationChips(
         [
@@ -322,6 +322,7 @@ describe("citationChips", () => {
         label: "POST /v1/customers",
         href: `/api/apis/stripe.com/stripe-api/operation?specId=${"f".repeat(64)}&method=post&path=%2Fv1%2Fcustomers`,
         external: true,
+        operation: { method: "post", path: "/v1/customers" },
       },
       {
         key: "schema customer",
