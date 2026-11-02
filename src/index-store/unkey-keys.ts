@@ -6,6 +6,7 @@ import {
   nextUtcMidnight,
   type Verification,
 } from "./keys";
+import type { RevokedKeys } from "./revoked-keys";
 
 /** How long a verification may take before the key is `unavailable` (D3). */
 export const VERIFY_TIMEOUT_MS = 2_000;
@@ -41,6 +42,11 @@ export type UnkeyListedKey = LiveKey & { owner: string | undefined };
  * Revoking deletes the key (D6). Unkey's codes never leave this file: they
  * are mapped to a `Verification`.
  *
+ * Unkey's verification answers from a cache that may go on accepting a
+ * deleted key for "up to 30 seconds" after the deletion (and a rolled-away
+ * one after its expiry), so every key revoked or rolled away here goes into
+ * `revoked` and is refused from then on, whatever Unkey says.
+ *
  * A root key allowed to verify in other keyspaces would accept their keys
  * too, so verification is limited to `keyspaceId` (the API's `ks_…` id,
  * not its `api_…` id) when it is given, and a secret without the `sb_`
@@ -50,6 +56,7 @@ export function createUnkeyKeys({
   client,
   apiId,
   keyspaceId,
+  revoked,
   env = process.env,
   timeoutMs = VERIFY_TIMEOUT_MS,
   now = () => new Date(),
@@ -58,6 +65,8 @@ export function createUnkeyKeys({
   client: UnkeyClient;
   apiId: string;
   keyspaceId?: string;
+  /** The keys revoked or rolled away here, refused at once (`createRevokedKeys`). */
+  revoked: RevokedKeys;
   env?: Record<string, string | undefined>;
   timeoutMs?: number;
   now?: () => Date;
@@ -131,6 +140,8 @@ export function createUnkeyKeys({
           return { ok: false, reason: "unavailable" };
         }
         const { data } = answer;
+        if (data.keyId && revoked.has(data.keyId))
+          return { ok: false, reason: "revoked" };
         // A key whose credits are spent is still live: at cost 0 (a request
         // the Index answers) it passes, as it did before Unkey.
         const spentButLive = cost === 0 && data.code === "USAGE_EXCEEDED";
@@ -206,6 +217,7 @@ export function createUnkeyKeys({
           keyId: id,
           expiration: 0,
         });
+        revoked.add(id);
         return { id: data.keyId, secret: data.key };
       } catch (err) {
         if (isNotFound(err)) return undefined;
@@ -213,7 +225,13 @@ export function createUnkeyKeys({
       }
     },
 
+    /**
+     * Refused here before Unkey is asked, so a deletion that fails or times
+     * out leaves the key refused; it is still listed, and revoking again
+     * deletes it.
+     */
     async revoke(id) {
+      revoked.add(id);
       try {
         await client.keys.deleteKey({ keyId: id });
         return true;

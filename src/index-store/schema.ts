@@ -133,6 +133,17 @@ export const apiKeyUsage = sqliteTable(
   (t) => [primaryKey({ columns: [t.keyId, t.day] })],
 );
 
+/**
+ * Unkey keys revoked or rolled away by swagger.bot, by Unkey's key id, so
+ * they are refused at once: Unkey's verification may go on accepting a
+ * deleted key while its cache catches up ("up to 30 seconds"). Never a
+ * secret or a hash.
+ */
+export const revokedKeys = sqliteTable("revoked_keys", {
+  keyId: text("key_id").primaryKey(),
+  revokedAt: text("revoked_at").notNull().default(now),
+});
+
 /** The background Verification queue (ADR 0002): one row per name. */
 export const verifications = sqliteTable("verifications", {
   /** A name as `normalizeName` leaves it. */

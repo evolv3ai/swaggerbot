@@ -41,6 +41,7 @@ describe("/mcp with Unkey", () => {
     keys = createUnkeyKeys({
       client: unkey.client,
       apiId: "api_test",
+      revoked: new Set(),
       now: () => NOW,
     });
     run = vi.fn(

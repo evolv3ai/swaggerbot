@@ -1,5 +1,6 @@
 import type { Db } from "./db";
 import { createKeys, type KeyStore } from "./keys";
+import { createRevokedKeys } from "./revoked-keys";
 import {
   createUnkeyClient,
   createUnkeyKeys,
@@ -46,6 +47,7 @@ export function createKeyStore(
     client: unkeyClient(unkey.rootKey),
     apiId: unkey.apiId,
     keyspaceId: unkey.keyspaceId,
+    revoked: createRevokedKeys(db),
     env,
   });
 }
