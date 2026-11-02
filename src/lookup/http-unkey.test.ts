@@ -14,11 +14,13 @@ const discovered = { outcome: "Unknown", name: "newco" } as Outcome;
 /** `POST /api/lookup` over the Unkey key store, with a fake Unkey client. */
 describe("handleLookupRequest with Unkey", () => {
   let unkey: ReturnType<typeof fakeUnkey>;
+  let revoked: Set<string>;
   let run: ReturnType<typeof vi.fn>;
   let lookup: IndexedLookup;
   let gate: Gate;
 
   beforeEach(() => {
+    revoked = new Set();
     unkey = fakeUnkey([
       {
         keyId: "key_1",
@@ -55,6 +57,7 @@ describe("handleLookupRequest with Unkey", () => {
     const keys = createUnkeyKeys({
       client: unkey.client,
       apiId: "api_test",
+      revoked,
       now: () => NOW,
     });
     return handleLookupRequest(
@@ -126,6 +129,22 @@ describe("handleLookupRequest with Unkey", () => {
       error: "Unknown or revoked API key.",
     });
     expect(unkey.verifyKey).toHaveBeenCalledTimes(calls);
+  });
+
+  it("answers 401 on an Index answer right after the key is revoked, while Unkey's cache still holds it", async () => {
+    unkey = fakeUnkey(unkey.keys, { cacheMs: 30_000 });
+    expect((await post({ name: INDEXED }, bearer("sb_live"))).status).toBe(200);
+
+    const keys = createUnkeyKeys({
+      client: unkey.client,
+      apiId: "api_test",
+      revoked,
+    });
+    expect(await keys.revoke("key_1")).toBe(true);
+
+    const response = await post({ name: INDEXED }, bearer("sb_live"));
+    expect(response.status).toBe(401);
+    expect(response.headers.get("www-authenticate")).toBe("Bearer");
   });
 
   it("answers 503 with retry-after 30 when Unkey throws, a keyless Index answer still 200", async () => {

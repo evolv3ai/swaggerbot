@@ -82,6 +82,7 @@ beforeEach(() => {
   unkey.store = createUnkeyKeys({
     client: fakeUnkey().client,
     apiId: "api_test",
+    revoked: new Set(),
     env: { DAILY_QUOTA: "100" },
   });
   // A fresh page (and per-person limit) for each test.

@@ -1,14 +1,17 @@
 // Issues, lists and revokes API keys in the configured key store: Unkey when
 // UNKEY_ROOT_KEY and UNKEY_API_ID are set, else the Index at DATABASE_PATH
 // (default ./data/swaggerbot.db). A key's secret is printed once, when it is
-// created; neither store keeps it. `migrate` moves the Index's live keys into
-// Unkey with their secrets unchanged (UNKEY_MIGRATION_ID, D8).
+// created; neither store keeps it. With Unkey, a key revoked here is also
+// written to the Index's revoked_keys, so the app refuses it at once.
+// `migrate` moves the Index's live keys into Unkey with their secrets
+// unchanged (UNKEY_MIGRATION_ID, D8).
 // Usage: pnpm tsx scripts/keys.ts create <owner> [--quota N] | list | revoke <id> | migrate
 // Built into .output/cli/keys.mjs by `pnpm build` (vite.cli.config.ts) for the production image.
 import { openDb } from "../src/index-store/db";
 import { unkeyConfigOf } from "../src/index-store/key-store";
 import { createKeys, dailyQuotaOf, utcDay } from "../src/index-store/keys";
 import { KEYS_USAGE, parseKeysArgs } from "../src/index-store/keys-cli";
+import { createRevokedKeys } from "../src/index-store/revoked-keys";
 import {
   createUnkeyClient,
   createUnkeyKeys,
@@ -85,9 +88,11 @@ if (options.command === "migrate") {
   }
 } else if (unkey) {
   console.error(`keys: unkey (${unkey.apiId})`);
+  const db = openDb();
   const keys = createUnkeyKeys({
     client: createUnkeyClient(unkey.rootKey),
     apiId: unkey.apiId,
+    revoked: createRevokedKeys(db),
   });
   if (options.command === "create") {
     printSecret(
@@ -114,6 +119,7 @@ if (options.command === "migrate") {
     console.error(`No live key ${options.id}.`);
     exitCode = 1;
   }
+  db.$client.close();
 } else {
   console.error("keys: local");
   const db = openDb();

@@ -32,9 +32,43 @@ export type FakeUnkeyKey = {
  * A fake Unkey client, no network: keys in memory, credits spent by
  * `verifyKey`'s cost as Unkey spends them. `mode` makes `verifyKey` throw
  * (as the SDK does for a 5xx or a network error) or never answer.
+ *
+ * With `cacheMs`, `verifyKey` answers from a cache as Unkey's verification
+ * does: a key as it was when a verification last read it, for `cacheMs`
+ * after. A key deleted or rolled away in that time still verifies; Unkey
+ * says a deletion "may take up to 30 seconds to fully propagate". Without
+ * it, every change is seen at once.
  */
-export function fakeUnkey(keys: FakeUnkeyKey[] = []) {
+export function fakeUnkey(
+  keys: FakeUnkeyKey[] = [],
+  { cacheMs = 0 }: { cacheMs?: number } = {},
+) {
   const state = { mode: "ok" as "ok" | "throw" | "hang", next: 1 };
+  /** What a verification read, by secret: the key (or none) and its state then. */
+  const cache = new Map<
+    string,
+    {
+      at: number;
+      key?: FakeUnkeyKey;
+      enabled?: boolean;
+      expires?: number;
+    }
+  >();
+
+  /** The key a verification sees: the cached one while it is fresh, else the key now. */
+  function seen(secret: string) {
+    const hit = cache.get(secret);
+    if (hit && Date.now() - hit.at < cacheMs) return hit;
+    const key = keys.find((k) => k.secret === secret);
+    const read = {
+      at: Date.now(),
+      key,
+      enabled: key?.enabled,
+      expires: key?.expires,
+    };
+    if (cacheMs > 0) cache.set(secret, read);
+    return read;
+  }
 
   const verifyKey = vi.fn(
     async ({
@@ -48,15 +82,15 @@ export function fakeUnkey(keys: FakeUnkeyKey[] = []) {
     }) => {
       if (state.mode === "throw") throw new Error("Unkey is down");
       if (state.mode === "hang") return new Promise<never>(() => {});
-      const found = keys.find((k) => k.secret === key);
+      const { key: found, enabled, expires } = seen(key);
       const data = (() => {
         if (
           !found ||
           (keyspaces && !keyspaces.includes(found.keyspaceId ?? "ks_test"))
         )
           return { valid: false, code: "NOT_FOUND" as const };
-        if (!found.enabled) return { valid: false, code: "DISABLED" as const };
-        if (found.expires !== undefined && found.expires <= Date.now())
+        if (!enabled) return { valid: false, code: "DISABLED" as const };
+        if (expires !== undefined && expires <= Date.now())
           return {
             valid: false,
             code: "EXPIRED" as const,

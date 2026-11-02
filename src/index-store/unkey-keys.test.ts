@@ -7,6 +7,7 @@ import { fakeUnkey } from "./__fixtures__/fake-unkey";
 import { openDb } from "./db";
 import { createKeyStore } from "./key-store";
 import { keyHashOf } from "./keys";
+import { createRevokedKeys } from "./revoked-keys";
 import {
   createUnkeyKeys,
   EXTERNAL_ID,
@@ -25,6 +26,7 @@ function store(unkey = fakeUnkey()) {
     keys: createUnkeyKeys({
       client: unkey.client,
       apiId: "api_test",
+      revoked: new Set(),
       env: {},
       now: () => NOW,
     }),
@@ -171,6 +173,7 @@ describe("createUnkeyKeys: managing keys", () => {
     const keys = createUnkeyKeys({
       client: unkey.client,
       apiId: "api_test",
+      revoked: new Set(),
       env: { DAILY_QUOTA: "7" },
     });
 
@@ -207,7 +210,7 @@ describe("createUnkeyKeys: managing keys", () => {
       expiration: 0,
     });
     expect(await keys.verify("sb_live", { cost: 0 })).toMatchObject({
-      reason: "unknown",
+      reason: "revoked",
     });
     expect(await keys.verify("sb_rolled1", { cost: 0 })).toMatchObject({
       ok: true,
@@ -221,6 +224,7 @@ describe("createUnkeyKeys: managing keys", () => {
     const keys = createUnkeyKeys({
       client: fakeUnkey([live()]).client,
       apiId: "api_test",
+      revoked: new Set(),
       env: {},
     });
 
@@ -254,6 +258,7 @@ describe("createUnkeyKeys: managing keys", () => {
     const keys = createUnkeyKeys({
       client: unkey.client,
       apiId: "api_test",
+      revoked: new Set(),
       keyspaceId: "ks_test",
       env: {},
     });
@@ -292,6 +297,7 @@ describe("createUnkeyKeys: managing keys", () => {
     const keys = createUnkeyKeys({
       client: unkey.client,
       apiId: "api_test",
+      revoked: new Set(),
       env: {},
       warn,
     });
@@ -312,6 +318,55 @@ describe("createUnkeyKeys: managing keys", () => {
       reason: "unknown",
     });
     expect(await keys.revoke("key_1")).toBe(false);
+  });
+
+  describe("while Unkey's verification cache still holds the key", () => {
+    // Unkey: a deletion "may take up to 30 seconds to fully propagate".
+    // Production's revoked key still got a 200 five seconds after.
+    const cached = () => fakeUnkey([live()], { cacheMs: 30_000 });
+
+    it("the fake's Unkey still verifies a deleted key", async () => {
+      const unkey = cached();
+      const verify = () =>
+        unkey.client.keys.verifyKey({ key: "sb_live", credits: { cost: 0 } });
+      await verify();
+      await unkey.client.keys.deleteKey({ keyId: "key_1" });
+
+      expect((await verify()).data).toMatchObject({ valid: true });
+    });
+
+    it("refuses a revoked key at once", async () => {
+      const { keys } = store(cached());
+      expect(await keys.verify("sb_live", { cost: 0 })).toMatchObject({
+        ok: true,
+      });
+
+      expect(await keys.revoke("key_1")).toBe(true);
+
+      for (const cost of [0, 1] as const)
+        expect(await keys.verify("sb_live", { cost })).toEqual({
+          ok: false,
+          reason: "revoked",
+        });
+    });
+
+    it("refuses a rolled-away key at once, and takes the new one", async () => {
+      const { keys } = store(cached());
+      await keys.verify("sb_live", { cost: 0 });
+
+      const rolled = await keys.roll("key_1");
+
+      expect(await keys.verify("sb_live", { cost: 0 })).toEqual({
+        ok: false,
+        reason: "revoked",
+      });
+      expect(
+        await keys.verify(rolled?.secret as string, { cost: 0 }),
+      ).toMatchObject({
+        ok: true,
+        key: { id: rolled?.id },
+      });
+    });
   });
 });
 
@@ -416,6 +471,36 @@ describe("createKeyStore", () => {
     );
     if (line === "keys: unkey")
       expect(unkeyClient).toHaveBeenCalledWith("unkey_root");
+    index.$client.close();
+  });
+
+  it("refuses at once a key that scripts/keys.ts revoked on the same Index", async () => {
+    // The production case: `keys.mjs revoke` in the container, then a
+    // request to the app, while Unkey's cache still holds the key.
+    const index = db();
+    const unkey = fakeUnkey([live()], { cacheMs: 30_000 });
+    const env = { UNKEY_ROOT_KEY: "unkey_root", UNKEY_API_ID: "api_test" };
+    const app = createKeyStore(index, env, {
+      log: () => {},
+      unkeyClient: () => unkey.client,
+    });
+    expect(await app.verify("sb_live", { cost: 0 })).toMatchObject({
+      ok: true,
+    });
+
+    const script = openDb(join(dir as string, "test.db"));
+    const cli = createUnkeyKeys({
+      client: unkey.client,
+      apiId: "api_test",
+      revoked: createRevokedKeys(script),
+    });
+    expect(await cli.revoke("key_1")).toBe(true);
+    script.$client.close();
+
+    expect(await app.verify("sb_live", { cost: 0 })).toEqual({
+      ok: false,
+      reason: "revoked",
+    });
     index.$client.close();
   });
 });
