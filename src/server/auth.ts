@@ -110,11 +110,20 @@ export function signInOff(): Response {
 const PROBE_ORIGIN = "http://return.invalid";
 
 /**
+ * The longest path `returnPath` keeps. AuthKit seals it into the sign-in's
+ * PKCE verifier cookie and refuses a cookie over 3,800 bytes
+ * (`PKCEPayloadTooLargeError`); 1,024 characters make a cookie of about 3,300
+ * bytes even when each one doubles (a backslash in the query).
+ */
+export const MAX_RETURN_PATH = 1024;
+
+/**
  * A path on this site to come back to after signing in or out: `value`'s
  * path and query when it resolves to this site (`/keys`, `/docs?x=1`), else
  * `/`. Never another origin: it is resolved as a browser would, which drops
  * tabs and newlines, so `/\t/evil.example` is `//evil.example`, not a path.
- * The hash is dropped: AuthKit can't carry one through the callback.
+ * The hash is dropped: AuthKit can't carry one through the callback. Longer
+ * than `MAX_RETURN_PATH`, the query goes too, then the path.
  */
 export function returnPath(value: string | null | undefined): string {
   if (!value?.startsWith("/")) return "/";
@@ -125,7 +134,9 @@ export function returnPath(value: string | null | undefined): string {
     return "/";
   }
   if (url.origin !== PROBE_ORIGIN) return "/";
-  return `${url.pathname}${url.search}`;
+  const path = `${url.pathname}${url.search}`;
+  if (path.length <= MAX_RETURN_PATH) return path;
+  return url.pathname.length <= MAX_RETURN_PATH ? url.pathname : "/";
 }
 
 /** A redirect to `location`, for a link followed with GET. */

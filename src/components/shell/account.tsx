@@ -3,9 +3,27 @@ import { cn } from "~/lib/utils";
 import type { ShellAccount } from "~/server/account";
 import { TOP_LINK } from "./nav";
 
-/** Where "Sign in" goes: our sign-in page, back to `returnTo` after. */
+const SIGN_IN_PATH = "/auth/sign-in";
+
+/**
+ * Where "Sign in" goes: our sign-in page, back to `returnTo` after. On the
+ * sign-in page itself, back to where that page goes: wrapping the page in its
+ * own link would nest `returnTo` a level deeper at every click.
+ */
 export function signInHref(returnTo: string): string {
-  return `/auth/sign-in?returnTo=${encodeURIComponent(returnTo)}`;
+  let to = returnTo;
+  // Ends: each `returnTo` is shorter than the link that carries it.
+  for (;;) {
+    let url: URL;
+    try {
+      url = new URL(to, "http://return.invalid");
+    } catch {
+      break;
+    }
+    if (url.pathname !== SIGN_IN_PATH) break;
+    to = url.searchParams.get("returnTo") ?? "/";
+  }
+  return `${SIGN_IN_PATH}?returnTo=${encodeURIComponent(to)}`;
 }
 
 export const SIGN_OUT_HREF = "/auth/sign-out";

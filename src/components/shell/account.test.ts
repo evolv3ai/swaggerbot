@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { ShellAccount } from "~/server/account";
-import { AccountLinks, AccountMenu, initialOf } from "./account";
+import { AccountLinks, AccountMenu, initialOf, signInHref } from "./account";
 
 const menu = (account: ShellAccount) =>
   renderToStaticMarkup(
@@ -34,6 +34,19 @@ describe("the top bar's sign-in", () => {
       expect(html).toContain('href="/auth/sign-in?returnTo=%2Fdocs%3Fx%3D1"');
       expect(html).not.toContain("Sign out");
     }
+  });
+
+  it("on the sign-in page, comes back where that page goes, not to itself", () => {
+    expect(signInHref("/auth/sign-in?returnTo=%2Fdocs%3Fx%3D1")).toBe(
+      "/auth/sign-in?returnTo=%2Fdocs%3Fx%3D1",
+    );
+    expect(signInHref("/auth/sign-in")).toBe("/auth/sign-in?returnTo=%2F");
+    const nested = signInHref(
+      `/auth/sign-in?returnTo=${encodeURIComponent(
+        "/auth/sign-in?returnTo=%2Fkeys",
+      )}`,
+    );
+    expect(nested).toBe("/auth/sign-in?returnTo=%2Fkeys");
   });
 
   it("is the initial and a menu (Your key, Sign out) signed in", () => {

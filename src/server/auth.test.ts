@@ -11,9 +11,8 @@ vi.mock("@workos/authkit-tanstack-react-start", () => ({
   authkitMiddleware: () => ({ options: { server: reader.server } }),
 }));
 
-const { auth, currentUser, returnPath, signInConfigured } = await import(
-  "./auth"
-);
+const { auth, currentUser, MAX_RETURN_PATH, returnPath, signInConfigured } =
+  await import("./auth");
 
 const WORKOS = {
   WORKOS_API_KEY: "sk_test_x",
@@ -174,6 +173,14 @@ describe("returnPath", () => {
   it("drops the hash, which the callback can't carry", () => {
     expect(returnPath("/docs?x=1#keys")).toBe("/docs?x=1");
     expect(returnPath("/docs#keys")).toBe("/docs");
+  });
+
+  it("drops the query, then the path, past MAX_RETURN_PATH", () => {
+    const path = `/${"a".repeat(MAX_RETURN_PATH - 1)}`;
+    expect(returnPath(path)).toBe(path);
+    expect(returnPath(`${path}?x=1`)).toBe(path);
+    expect(returnPath(`/docs?q=${"x".repeat(MAX_RETURN_PATH)}`)).toBe("/docs");
+    expect(returnPath(`${path}a`)).toBe("/");
   });
 
   it("is / for anything else", () => {
